@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+{% block title %}الديون{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+    <h2 style="font-size:22px;font-weight:700;color:#b91c1c;">الديون</h2>
+    <p style="font-size:13px;color:#777;margin-top:4px;">المشتركين الذين عليهم مبالغ غير مسددة</p>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body" style="display:flex;gap:20px;flex-wrap:wrap;">
+        <div><span style="color:#777;">عدد المدينين:</span> <strong id="debtorCount">{{ customers|length }}</strong></div>
+        <div><span style="color:#777;">اجمالي الديون:</span> <strong style="color:#b91c1c;" id="totalDebtAll">{{ total_debt_all }}</strong></div>
+    </div>
+</div>
+
+<div class="card" style="overflow:hidden;">
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>المشترك</th>
+                    <th>الهاتف</th>
+                    <th style="text-align:center;">عدد الفواتير</th>
+                    <th style="text-align:center;">اجمالي الدين</th>
+                    <th style="text-align:center;">اجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in customers %}
+                <tr>
+                    <td style="font-weight:600;">
+                        <a href="/customers?search={{ c.name }}" style="color:#1a1a1a;text-decoration:none;">{{ c.name }}</a>
+                    </td>
+                    <td dir="ltr">{{ c.phone or '—' }}</td>
+                    <td style="text-align:center;">{{ c.unpaid_count }}</td>
+                    <td style="text-align:center;font-weight:700;color:#b91c1c;" class="debt-cell">{{ c.total_debt }}</td>
+                    <td style="text-align:center;">
+                        <button onclick="openPayModal({{ c.id }}, '{{ c.name }}')" class="btn btn-sm btn-success">تسديد</button>
+                        <button data-history-id="{{ c.id }}" class="btn-history btn btn-sm">سجل</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if customers|length == 0 %}
+                <tr><td colspan="5" style="text-align:center;padding:48px;color:#999;">لا توجد ديون حاليا</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="historyModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:650px;max-height:80vh;overflow-y:auto;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:16px;">سجل الفواتير والمدفوعات</h3>
+        <div id="historyContent" style="font-size:13px;color:#555;">جاري التحميل...</div>
+        <div style="margin-top:16px;"><button onclick="document.getElementById('historyModal').style.display='none'" class="btn">اغلاق</button></div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.debt-cell').forEach(function(c){c.textContent=formatDinar(c.textContent);});
+    document.getElementById('totalDebtAll').textContent=formatDinar(document.getElementById('totalDebtAll').textContent);
+    document.querySelectorAll('.btn-history').forEach(function(b){b.addEventListener('click',function(){
+        document.getElementById('historyModal').style.display='flex';
+        document.getElementById('historyContent').innerHTML='جاري التحميل...';
+        fetch('/api/customers/history/'+this.dataset.historyId).then(function(r){return r.json();}).then(function(d){
+            var months=['','يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
+            var h='<h4>الفواتير:</h4><div class="table-responsive"><table><thead><tr><th>الشهر</th><th>السنة</th><th>الاجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>';
+            d.invoices.forEach(function(inv){h+='<tr><td>'+months[inv.month]+'</td><td style="text-align:center;">'+inv.year+'</td><td style="text-align:center;">'+formatDinar(inv.total_amount)+'</td><td style="text-align:center;">'+formatDinar(inv.paid_amount)+'</td><td style="text-align:center;color:#b91c1c;font-weight:700;">'+formatDinar(inv.total_amount-inv.paid_amount)+'</td></tr>';});
+            h+='</tbody></table></div>';
+            if(d.payments&&d.payments.length>0){h+='<h4 style="margin-top:16px;">المدفوعات:</h4><div class="table-responsive"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th></tr></thead><tbody>';
+            d.payments.forEach(function(p){h+='<tr><td>'+p.payment_date+'</td><td style="text-align:center;">'+formatDinar(p.amount)+'</td><td style="text-align:center;">'+p.payment_method+'</td></tr>';});h+='</tbody></table></div>';}
+            document.getElementById('historyContent').innerHTML=h;
+        });
+    });});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')document.getElementById('historyModal').style.display='none';});
+});
+</script>
+{% endblock %}

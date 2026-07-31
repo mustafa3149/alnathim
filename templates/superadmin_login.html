@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}دخول المدير{% endblock %}
+{% block content %}
+<div style="max-width:420px;margin:60px auto;padding:0 16px;">
+    <div class="card" style="border-color:#0d6e3c;">
+        <div class="card-header" style="text-align:center;font-size:16px;font-weight:700;background:#f0fdf4;">🛡️ دخول مدير المنصة</div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div>
+                <label class="f-label">اسم المستخدم</label>
+                <input type="text" id="username" class="input" dir="ltr" placeholder="admin">
+            </div>
+            <div>
+                <label class="f-label">كلمة المرور</label>
+                <input type="password" id="password" class="input" dir="ltr" placeholder="••••••••">
+            </div>
+            <button onclick="doSuperAdminLogin()" class="btn btn-success" style="width:100%;">دخول المدير</button>
+            <p style="text-align:center;font-size:12px;color:#aaa;border-top:1px solid #f0f0f0;padding-top:10px;">
+                <a href="/login" style="color:#1e3a5f;">→ العودة لتسجيل دخول المستخدمين</a>
+            </p>
+        </div>
+    </div>
+</div>
+<style>.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}</style>
+<script>
+async function doSuperAdminLogin() {
+    var u = document.getElementById('username').value.trim();
+    var p = document.getElementById('password').value;
+    if (!u || !p) { showToast('أدخل اسم المستخدم وكلمة المرور', 'error'); return; }
+    showToast('جاري الدخول...');
+    var r = await fetch('/superadmin/login', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: u, password: p})
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast('✅ تم دخول المدير بنجاح');
+        setTimeout(function(){ window.location.href = '/superadmin'; }, 400);
+    } else {
+        showToast('❌ ' + (d.error || 'فشل الدخول'), 'error');
+    }
+}
+document.getElementById('password').addEventListener('keydown', function(e){ if(e.key==='Enter') doSuperAdminLogin(); });
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fallback launcher icon for API 24–25 (below adaptive-icon support).
+     Vector drawable — safe on all minSdk 24+ devices. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- White background -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+
+    <!-- Tower mast -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M52,26 L56,26 L56,70 L52,70 Z" />
+
+    <!-- Antenna top spike -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M53,12 L55,12 L55,26 L53,26 Z" />
+
+    <!-- Base platform -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M40,70 L68,70 L68,76 L40,76 Z" />
+
+    <!-- Crossbar 1 -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M36,38 L72,38 L72,42 L36,42 Z" />
+
+    <!-- Crossbar 2 -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M36,52 L72,52 L72,56 L36,56 Z" />
+
+    <!-- Signal wave left (outer) -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.5"
+        android:fillColor="#00000000"
+        android:pathData="M25,50 A24,24 0 0 1 25,66" />
+
+    <!-- Signal wave left (inner) -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.5"
+        android:fillColor="#00000000"
+        android:pathData="M30,46 A16,16 0 0 1 30,70" />
+
+    <!-- Signal wave right (outer) -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.5"
+        android:fillColor="#00000000"
+        android:pathData="M83,50 A24,24 0 0 0 83,66" />
+
+    <!-- Signal wave right (inner) -->
+    <path
+        android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.5"
+        android:fillColor="#00000000"
+        android:pathData="M78,46 A16,16 0 0 0 78,70" />
+
+</vector>

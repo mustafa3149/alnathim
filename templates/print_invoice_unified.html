@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>طباعة الفاتورة - الناظم</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Cairo', 'Segoe UI', sans-serif;
+            background: #f4f4f4;
+            direction: rtl;
+            text-align: right;
+            font-size: 14px;
+            color: #1a1a1a;
+        }
+
+        /* ── Toggle Bar ── */
+        .toggle-bar {
+            position: sticky; top: 0; z-index: 100;
+            background: #1a1a1a; padding: 14px 20px;
+            display: flex; align-items: center; justify-content: center;
+            gap: 12px; flex-wrap: wrap;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        }
+        .toggle-bar .toggle-btn {
+            padding: 12px 28px; font-size: 15px; font-weight: 700;
+            font-family: inherit; border: 2px solid #555; background: transparent;
+            color: #aaa; cursor: pointer; border-radius: 8px;
+            transition: all 0.2s; min-width: 140px;
+        }
+        .toggle-bar .toggle-btn:hover { border-color: #aaa; color: #fff; }
+        .toggle-bar .toggle-btn.active { background: #fff; color: #1a1a1a; border-color: #fff; }
+        .toggle-bar .print-btn {
+            padding: 12px 36px; font-size: 16px; font-weight: 700;
+            font-family: inherit; border: none; background: #0d6e3c;
+            color: #fff; cursor: pointer; border-radius: 8px;
+            transition: all 0.2s; min-width: 160px;
+        }
+        .toggle-bar .print-btn:hover { background: #0a5c31; }
+        .toggle-bar .close-btn {
+            padding: 12px 20px; font-size: 14px; font-weight: 600;
+            font-family: inherit; border: 2px solid #b91c1c; background: transparent;
+            color: #b91c1c; cursor: pointer; border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .toggle-bar .close-btn:hover { background: #b91c1c; color: #fff; }
+
+        /* ── Layout containers ── */
+        .layout-a4 { display: block; padding: 20px; }
+        .layout-thermal { display: none; padding: 10px; }
+
+        /* ════════════════════════════════════ */
+        /*  A4 LAYOUT                          */
+        /* ════════════════════════════════════ */
+        .layout-a4 .print-area { max-width: 210mm; margin: 0 auto; background: #fff; padding: 24px 28px; border-radius: 8px; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+        .layout-a4 .brand-header {
+            display: flex; align-items: center; gap: 14px;
+            border-bottom: 3px double #1a1a1a;
+            padding-bottom: 14px; margin-bottom: 18px;
+        }
+        .layout-a4 .brand-header img { width: 48px; height: 48px; }
+        .layout-a4 .brand-header .brand-text { flex: 1; }
+        .layout-a4 .brand-header .brand-text h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 0; }
+        .layout-a4 .brand-header .brand-text p { font-size: 12px; color: #555; margin: 2px 0 0 0; }
+        .layout-a4 .contact-row { font-size: 12px; color: #555; text-align: left; }
+        .layout-a4 .doc-title { text-align: center; font-size: 20px; font-weight: 700; padding: 10px 0; margin-bottom: 16px; border-bottom: 2px solid #1a1a1a; letter-spacing: 2px; }
+        .layout-a4 .ref-row { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-bottom: 14px; }
+        .layout-a4 .info-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        .layout-a4 .info-table td { padding: 8px 12px; border: 1px solid #ddd; font-size: 14px; }
+        .layout-a4 .info-table .label { background: #f5f5f5; font-weight: 600; color: #555; width: 30%; }
+        .layout-a4 .info-table .value { font-weight: 600; }
+        .layout-a4 .details-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        .layout-a4 .details-table th { background: #1a1a1a; color: #fff; padding: 10px 12px; font-size: 13px; text-align: center; border: 1px solid #1a1a1a; }
+        .layout-a4 .details-table td { padding: 8px 12px; border: 1px solid #ddd; font-size: 14px; text-align: center; }
+        .layout-a4 .details-table .total-row td { font-weight: 700; font-size: 16px; background: #fafafa; }
+        .layout-a4 .details-table .paid-row td { color: #0d6e3c; font-weight: 600; }
+        .layout-a4 .details-table .remaining-row td { color: #b91c1c; font-weight: 700; }
+        .layout-a4 .payments-section { margin-top: 16px; }
+        .layout-a4 .payments-section h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: #555; }
+        .layout-a4 .payments-table { width: 100%; border-collapse: collapse; }
+        .layout-a4 .payments-table th { background: #555; color: #fff; padding: 8px 12px; font-size: 12px; text-align: center; }
+        .layout-a4 .payments-table td { padding: 6px 10px; border: 1px solid #ddd; font-size: 13px; text-align: center; }
+        .layout-a4 .footer { text-align: center; margin-top: 20px; padding-top: 16px; border-top: 2px solid #ddd; }
+        .layout-a4 .footer .thanks { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-top: 6px; }
+        .layout-a4 .footer .support { font-size: 14px; font-weight: 700; color: #1a1a1a; margin-top: 8px; }
+        .layout-a4 .footer .note { font-size: 12px; color: #777; }
+
+        /* ════════════════════════════════════ */
+        /*  THERMAL LAYOUT (80mm)              */
+        /* ════════════════════════════════════ */
+        .layout-thermal #receipt-card {
+            max-width: 360px; margin: 0 auto; background: #fff;
+            padding: 16px 14px; border-radius: 4px; box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+        }
+        .layout-thermal .receipt-header { text-align: center; border-bottom: 2px dashed #1a1a1a; padding-bottom: 12px; margin-bottom: 12px; }
+        .layout-thermal .receipt-header .owner-name { font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 2px; }
+        .layout-thermal .receipt-header .contact-info { font-size: 11px; color: #555; line-height: 1.5; }
+        .layout-thermal .receipt-title { text-align: center; font-size: 15px; font-weight: 700; padding: 8px 0; margin-bottom: 10px; border-bottom: 1px solid #ddd; letter-spacing: 1px; }
+        .layout-thermal .info-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px dotted #f0f0f0; }
+        .layout-thermal .info-label { color: #777; }
+        .layout-thermal .info-value { font-weight: 600; }
+        .layout-thermal .amount-section { margin-top: 10px; padding-top: 8px; border-top: 2px dashed #ddd; }
+        .layout-thermal .amount-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+        .layout-thermal .amount-row.total { font-size: 17px; font-weight: 700; color: #1a1a1a; padding-top: 6px; border-top: 1px solid #eee; margin-top: 4px; }
+        .layout-thermal .amount-row.paid { color: #0d6e3c; font-weight: 600; }
+        .layout-thermal .amount-row.remaining { color: #b91c1c; font-weight: 700; }
+        .layout-thermal .amount-row.extras { font-size: 12px; color: #555; border-bottom: 1px dotted #eee; }
+        .layout-thermal .payments-section { margin-top: 14px; padding-top: 10px; border-top: 1px solid #eee; }
+        .layout-thermal .payments-section h4 { font-size: 13px; color: #555; margin-bottom: 6px; }
+        .layout-thermal .pay-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; color: #555; }
+        .layout-thermal .receipt-footer { text-align: center; margin-top: 14px; padding-top: 10px; border-top: 1px dashed #ddd; font-size: 11px; color: #777; line-height: 1.6; }
+        .layout-thermal .receipt-footer .thanks { font-size: 12px; font-weight: 600; color: #1a1a1a; margin-top: 4px; }
+        .layout-thermal .receipt-footer .support { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-top: 6px; }
+
+        /* ── Print rules ── */
+        @media print {
+            .toggle-bar { display: none !important; }
+            body { background: #fff; }
+            .layout-a4, .layout-thermal { display: block !important; padding: 0; }
+            .layout-a4 .print-area, .layout-thermal #receipt-card {
+                box-shadow: none; border-radius: 0;
+            }
+            .layout-a4 .print-area { padding: 20px 24px; }
+            .layout-thermal #receipt-card { max-width: 100%; border: none; padding: 16px; }
+        }
+        @media print {
+            @page { margin: 1.5cm; }
+            .layout-thermal { display: none !important; }
+            .layout-a4 { display: block !important; }
+        }
+        @media print and (max-width: 80mm) {
+            @page { margin: 0.5cm; size: 80mm auto; }
+            .layout-a4 { display: none !important; }
+            .layout-thermal { display: block !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══ Toggle Bar ═══ -->
+    <div class="toggle-bar" id="toggleBar">
+        <button class="toggle-btn active" onclick="printLayout('a4')" id="btnA4">📄 طباعة A4</button>
+        <button class="toggle-btn" onclick="printLayout('thermal')" id="btnThermal">🔥 طباعة حرارية</button>
+        <button class="close-btn" onclick="window.close()">✕ إغلاق</button>
+    </div>
+
+    <!-- ═══ A4 LAYOUT ═══ -->
+    <div class="layout-a4" id="layoutA4">
+        <div class="print-area">
+            <div class="brand-header">
+                <img src="/static/assets/al-nazim-icon.svg" alt="الناظم">
+                <div class="brand-text">
+                    <h1>نظام الناظم</h1>
+                    <p>لإدارة أبراج الإنترنت</p>
+                </div>
+                <div class="contact-row">
+                    {% if gen_info and gen_info.phone %}هاتف: {{ gen_info.phone }}<br>{% endif %}
+                    {% if gen_info and gen_info.address %}{{ gen_info.address }}{% endif %}
+                </div>
+            </div>
+            <div class="doc-title">🧾 فاتورة رسمية - كشف حساب</div>
+            <div class="ref-row">
+                <span>رقم: {{ invoice.id|invoice_no }}</span>
+                <span>التاريخ: {{ invoice.created_at[:10] if invoice.created_at else '' }}</span>
+                <span>عن شهر: {{ invoice.month }}/{{ invoice.year }}</span>
+            </div>
+            <table class="info-table">
+                <tr><td class="label">اسم المشترك</td><td class="value">{{ invoice.customer_name }}</td></tr>
+                {% if invoice.username %}<tr><td class="label">اسم المستخدم</td><td class="value">{{ invoice.username }}</td></tr>{% endif %}
+                {% if invoice.phone %}<tr><td class="label">رقم الهاتف</td><td class="value">{{ invoice.phone }}</td></tr>{% endif %}
+                {% if invoice.address %}<tr><td class="label">العنوان</td><td class="value">{{ invoice.address }}</td></tr>{% endif %}
+                {% if invoice.renewal_date %}<tr><td class="label">تاريخ التجديد</td><td class="value">{{ invoice.renewal_date|datetime_display }}</td></tr>{% endif %}
+            </table>
+            <table class="details-table">
+                <thead><tr><th>البيان</th><th style="width:25%;">المبلغ</th></tr></thead>
+                <tbody>
+                    <tr><td>قيمة الباقة ({{ invoice.package_name or '—' }})</td><td>{{ (invoice.package_price or 0)|dinar }}</td></tr>
+                    {% if invoice.previous_debt and invoice.previous_debt > 0 %}
+                    <tr style="color:#c27803;"><td>ديون سابقة مرحّلة</td><td>{{ invoice.previous_debt|dinar }}</td></tr>
+                    {% endif %}
+                    {% if extras %}{% for e in extras %}
+                    <tr><td>عنصر إضافي: {{ e.item_name }}</td><td>{{ e.item_price|dinar }}</td></tr>
+                    {% endfor %}{% endif %}
+                    {% if invoice.outage_deduction and invoice.outage_deduction > 0 %}
+                    <tr style="color:#0d6e3c;"><td>خصم انقطاع</td><td>-{{ invoice.outage_deduction|dinar }}</td></tr>
+                    {% endif %}
+                    <tr class="total-row"><td>🔹 الإجمالي النهائي</td><td>{{ invoice.total_amount|dinar }}</td></tr>
+                    <tr class="paid-row"><td>✅ المدفوع</td><td>{{ invoice.paid_amount|dinar }}</td></tr>
+                    {% if remaining > 0 %}
+                    <tr class="remaining-row"><td>⚠️ المتبقي</td><td>{{ remaining|dinar }}</td></tr>
+                    {% else %}
+                    <tr class="paid-row"><td>✅ الحالة</td><td>مسدد بالكامل</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            {% if payments %}
+            <div class="payments-section">
+                <h3>سجل المدفوعات لهذه الفاتورة</h3>
+                <table class="payments-table">
+                    <thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead>
+                    <tbody>{% for p in payments %}
+                    <tr><td>{{ p.payment_date }}</td><td>{{ p.amount|dinar }}</td><td>{{ p.payment_method }}</td><td style="font-size:12px;color:#777;">{{ p.notes or '—' }}</td></tr>
+                    {% endfor %}</tbody>
+                </table>
+            </div>
+            {% endif %}
+            <div class="footer">
+                {% if gen_info and gen_info.footer_note %}<div class="note">{{ gen_info.footer_note }}</div>{% endif %}
+                <div class="thanks">شكراً لالتزامكم بالتسديد في الوقت المحدد</div>
+                {% if gen_info and gen_info.phone %}<div class="support">📞 الدعم الفني: {{ gen_info.phone }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ THERMAL LAYOUT ═══ -->
+    <div class="layout-thermal" id="layoutThermal">
+        <div id="receipt-card">
+            <div class="receipt-header">
+                <div class="owner-name">{{ gen_info.owner_name if gen_info and gen_info.owner_name else 'نظام الناظم لإدارة أبراج الإنترنت' }}</div>
+                <div class="contact-info">
+                    {% if gen_info and gen_info.phone %}هاتف: {{ gen_info.phone }}{% endif %}
+                    {% if gen_info and gen_info.phone and gen_info.address %} | {% endif %}
+                    {% if gen_info and gen_info.address %}{{ gen_info.address }}{% endif %}
+                </div>
+            </div>
+            <div class="receipt-title">وصل تسديد فاتورة</div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;padding:0 0 6px 0;border-bottom:1px dotted #ddd;margin-bottom:8px;">
+                <span>رقم: {{ invoice.id|invoice_no }}</span>
+                <span>{{ invoice.created_at[:10] if invoice.created_at else '' }}</span>
+                <span>{{ invoice.month }}/{{ invoice.year }}</span>
+            </div>
+            <div class="info-row"><span class="info-label">اسم المشترك:</span><span class="info-value">{{ invoice.customer_name }}</span></div>
+            {% if invoice.username %}<div class="info-row"><span class="info-label">اسم المستخدم:</span><span class="info-value">{{ invoice.username }}</span></div>{% endif %}
+            <div class="info-row"><span class="info-label">الباقة:</span><span class="info-value">{{ invoice.package_name or '—' }}</span></div>
+            <div class="info-row"><span class="info-label">السعر:</span><span class="info-value">{{ (invoice.package_price or 0)|dinar }}</span></div>
+            {% if invoice.renewal_date %}<div class="info-row"><span class="info-label">تاريخ الانتهاء:</span><span class="info-value" style="font-size:12px;">{{ invoice.renewal_date|datetime_display }}</span></div>{% endif %}
+            <div class="amount-section">
+                <div class="amount-row"><span>قيمة الباقة:</span><span>{{ (invoice.package_price or 0)|dinar }}</span></div>
+                {% if extras %}{% for e in extras %}
+                <div class="amount-row extras"><span>+ {{ e.item_name }}:</span><span>{{ e.item_price|dinar }}</span></div>
+                {% endfor %}{% endif %}
+                {% if invoice.previous_debt and invoice.previous_debt > 0 %}
+                <div class="amount-row" style="color:#c27803;font-weight:600;"><span>ديون سابقة:</span><span>{{ invoice.previous_debt|dinar }}</span></div>
+                {% endif %}
+                <div class="amount-row total"><span>الإجمالي:</span><span>{{ invoice.total_amount|dinar }}</span></div>
+                <div class="amount-row paid"><span>المدفوع:</span><span>{{ invoice.paid_amount|dinar }}</span></div>
+                {% if remaining > 0 %}
+                <div class="amount-row remaining"><span>المتبقي:</span><span>{{ remaining|dinar }}</span></div>
+                {% endif %}
+            </div>
+            {% if payments %}
+            <div class="payments-section">
+                <h4>سجل المدفوعات:</h4>
+                {% for p in payments %}
+                <div class="pay-row"><span>{{ p.payment_date }}</span><span>{{ p.amount|dinar }} ({{ p.payment_method }})</span></div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div class="receipt-footer">
+                {% if gen_info and gen_info.footer_note %}<div>{{ gen_info.footer_note }}</div>{% endif %}
+                <div class="thanks">شكراً لالتزامكم بالتسديد</div>
+                {% if gen_info and gen_info.phone %}<div class="support">📞 الدعم الفني: {{ gen_info.phone }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function printLayout(type) {
+            document.getElementById('layoutA4').style.display = type === 'a4' ? 'block' : 'none';
+            document.getElementById('layoutThermal').style.display = type === 'thermal' ? 'block' : 'none';
+            document.getElementById('btnA4').classList.toggle('active', type === 'a4');
+            document.getElementById('btnThermal').classList.toggle('active', type === 'thermal');
+            setTimeout(function() { window.print(); }, 100);
+        }
+    </script>
+
+</body>
+</html>

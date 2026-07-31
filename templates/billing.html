@@ -1,0 +1,206 @@
+{% extends "layout.html" %}
+{% block title %}الفواتير{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h2 style="font-size:20px;font-weight:700;color:#1a1a1a;margin:0;">سجل الفواتير</h2>
+        <p style="font-size:12px;color:#777;margin-top:2px;">سجل الفواتير — جميع الفواتير المولدة تلقائياً عند تجديد كل مشترك</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:12px;">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;padding:10px 12px;">
+        <div>
+            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">الشهر</label>
+            <select id="monthSelect" onchange="changeMonthYear()" class="input" style="width:100px;font-size:12px;">
+                {% set months=['يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'] %}
+                {% for i in range(1,13) %}<option value="{{ i }}" {% if month==i %}selected{% endif %}>{{ months[i-1] }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">السنة</label>
+            <select id="yearSelect" onchange="changeMonthYear()" class="input" style="width:80px;font-size:12px;">
+                {% for y in range(2024,2031) %}<option value="{{ y }}" {% if year==y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select>
+        </div>
+        <div style="flex:1;min-width:120px;position:relative;">
+            <input type="text" id="billSearch" placeholder="بحث باسم المشترك..." class="input" onkeydown="if(event.key==='Enter')searchBill()" style="font-size:12px;padding-left:30px;">
+            <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:#aaa;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <button onclick="searchBill()" class="btn btn-primary btn-sm">بحث</button>
+        <span style="font-size:11px;color:#888;margin-right:auto;">يتم توليد الفواتير تلقائياً عند تجديد كل مشترك</span>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+    <div class="card" style="text-align:center;"><div class="card-body" style="padding:10px 6px;"><div style="font-size:18px;font-weight:700;" class="sum-total">{{ total_all }}</div><div style="font-size:9px;color:#777;">الاجمالي</div></div></div>
+    <div class="card" style="text-align:center;"><div class="card-body" style="padding:10px 6px;"><div style="font-size:18px;font-weight:700;color:#0d6e3c;" class="sum-paid">{{ total_paid }}</div><div style="font-size:9px;color:#777;">المدفوع</div></div></div>
+    <div class="card" style="text-align:center;"><div class="card-body" style="padding:10px 6px;"><div style="font-size:18px;font-weight:700;color:#b91c1c;" class="sum-remaining">{{ total_remaining }}</div><div style="font-size:9px;color:#777;">المتبقي</div></div></div>
+</div>
+
+<!-- Desktop Table -->
+<div class="desktop-table">
+    <div class="card" style="overflow:hidden;">
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>المشترك</th><th style="text-align:center;">الباقة</th><th style="text-align:center;">السعر</th><th style="text-align:center;">الاجمالي</th><th style="text-align:center;">المدفوع</th><th style="text-align:center;">المتبقي</th><th style="text-align:center;">الحالة</th></tr></thead>
+                <tbody>
+                {% for inv in invoices %}
+                <tr{% if inv.is_paid %} style="background:#f0fdf4;"{% endif %}>
+                    <td style="font-weight:600;cursor:pointer;" onclick="openDetailModal({{ inv.cust_id }},'{{ inv.customer_name }}')" title="كشف حساب">{{ inv.customer_name }}</td>
+                    <td style="text-align:center;">{{ inv.package_name or '—' }}</td>
+                    <td style="text-align:center;" class="price-cell">{{ inv.package_price }}</td>
+                    <td style="text-align:center;font-weight:700;" class="total-cell">{{ inv.total_amount }}</td>
+                    <td style="text-align:center;color:#0d6e3c;" class="paid-cell">{{ inv.paid_amount }}</td>
+                    <td style="text-align:center;color:#b91c1c;font-weight:700;" class="remaining-cell">{{ inv.total_amount-inv.paid_amount }}</td>
+                    <td style="text-align:center;">
+                        {% if inv.is_paid %}<span class="badge badge-green">مسدد</span>{% else %}<button data-pay-id="{{ inv.id }}" data-pay-total="{{ inv.total_amount }}" data-pay-paid="{{ inv.paid_amount }}" data-pay-name="{{ inv.customer_name }}" class="btn-pay btn btn-success btn-sm">تسديد</button>{% endif %}
+                        <a href="/print/invoice/{{ inv.id }}" target="_blank" class="btn btn-sm">🖨️ طباعة</a>
+                        <button onclick="openExtrasModal({{ inv.id }}, {{ inv.cust_id }})" class="btn btn-sm" style="background:#1e3a5f;color:#fff;border-color:#1e3a5f;">+ عناصر</button>
+                    </td>
+                </tr>{% endfor %}</tbody></table></div></div></div>
+
+<!-- Mobile Cards -->
+<div class="mobile-cards">
+{% for inv in invoices %}
+<div class="m-card{% if inv.is_paid %} paid-bg{% endif %}">
+    <div class="m-row">
+        <span style="font-weight:700;">👤 {{ inv.customer_name }}</span>
+        <span>📦 <strong>{{ inv.package_name or '—' }}</strong></span>
+    </div>
+    <div class="m-row">
+        <span>📊 اجمالي: <strong class="total-cell">{{ inv.total_amount }}</strong></span>
+        <span>💵 مدفوع: <strong style="color:#0d6e3c;" class="paid-cell">{{ inv.paid_amount }}</strong></span>
+    </div>
+    <div class="m-row">
+        <span style="font-size:11px;">السعر: <span class="price-cell">{{ inv.package_price }}</span></span>
+        <span>❌ متبقي: <strong style="color:#b91c1c;" class="remaining-cell">{{ inv.total_amount-inv.paid_amount }}</strong></span>
+    </div>
+    <div class="m-actions">
+        {% if inv.is_paid %}<span class="badge badge-green">مسدد</span>{% else %}<button data-pay-id="{{ inv.id }}" data-pay-total="{{ inv.total_amount }}" data-pay-paid="{{ inv.paid_amount }}" data-pay-name="{{ inv.customer_name }}" class="btn-pay btn btn-success btn-sm">تسديد</button>{% endif %}
+        <a href="/print/invoice/{{ inv.id }}" target="_blank" class="btn btn-sm">🖨️ طباعة</a>
+        <button onclick="openExtrasModal({{ inv.id }}, {{ inv.cust_id }})" class="btn btn-sm" style="background:#1e3a5f;color:#fff;border-color:#1e3a5f;">+ عناصر</button>
+    </div>
+</div>{% endfor %}
+{% if invoices|length==0 %}<div style="text-align:center;padding:40px;color:#999;">لا توجد فواتير</div>{% endif %}
+</div>
+
+<!-- Extras Modal -->
+<div id="extrasModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:480px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">عناصر اضافية على الفاتورة</h3>
+        <input type="hidden" id="extrasInvoiceId">
+        <div id="extrasList" style="margin-bottom:12px;font-size:13px;"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="flex:2;min-width:120px;"><label class="f-label">العنصر</label><input type="text" id="extraItemName" class="input" placeholder="مثال: راوتر, كيبل, رسوم تركيب"></div>
+            <div style="flex:1;min-width:80px;"><label class="f-label">السعر</label><input type="number" id="extraItemPrice" class="input" min="1000" step="1000" value="5000"></div>
+            <button onclick="addExtra()" class="btn btn-primary btn-sm">اضافة</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="document.getElementById('extrasModal').style.display='none'" class="btn">اغلاق</button>
+        </div>
+    </div>
+</div>
+
+<style>.field-label{font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;}.f-label{font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;}</style>
+{% endblock %}
+{% block extra_scripts %}
+<style>
+.desktop-table{display:block;}
+.mobile-cards{display:none;}
+.paid-bg{background:#f0fdf4 !important;}
+.m-card{border:1px solid #e5e5e5;background:#fff;padding:12px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:8px;display:flex;flex-direction:column;gap:6px;}
+.m-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.m-actions{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
+.m-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
+@media (max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:block;}}
+</style>
+<script>
+var todayStr=new Date().toISOString().split('T')[0];
+document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.price-cell,.total-cell,.paid-cell,.remaining-cell').forEach(function(c){c.textContent=formatDinar(c.textContent);});
+    document.querySelectorAll('.sum-total,.sum-paid,.sum-remaining').forEach(function(c){c.textContent=formatDinar(c.textContent);});
+    document.querySelectorAll('.btn-pay').forEach(function(b){b.addEventListener('click',function(){var r=parseFloat(this.dataset.payTotal)-parseFloat(this.dataset.payPaid);document.getElementById('payInvoiceId').value=this.dataset.payId;document.getElementById('payRemaining').value=r;document.getElementById('payAmount').value=r;document.getElementById('payDate').value=todayStr;document.getElementById('payNotes').value='';document.getElementById('payCustName').textContent=this.dataset.payName||'—';document.getElementById('paymentModal').style.display='flex';});});
+});
+function searchBill(){window.location.href='/billing?month='+document.getElementById('monthSelect').value+'&year='+document.getElementById('yearSelect').value+'&search='+encodeURIComponent(document.getElementById('billSearch').value);}
+function changeMonthYear(){window.location.href='/billing?month='+document.getElementById('monthSelect').value+'&year='+document.getElementById('yearSelect').value;}
+var extrasCustId = null;
+function openExtrasModal(invId, custId){
+    extrasCustId = custId;
+    document.getElementById('extrasInvoiceId').value=invId;
+    document.getElementById('extraItemName').value='';
+    document.getElementById('extraItemPrice').value='5000';
+    document.getElementById('extrasModal').style.display='flex';
+    loadExtras(invId);
+}
+async function loadExtras(invId){
+    if (!extrasCustId) {
+        document.getElementById('extrasList').innerHTML='<div style="color:#999;text-align:center;padding:8px;font-size:12px;">لا توجد عناصر اضافية</div>';
+        return;
+    }
+    var r=await fetch('/api/customers/history/'+extrasCustId);
+    var d=await r.json();
+    var found=null;
+    d.invoices.forEach(function(inv){if(inv.id==invId)found=inv;});
+    var h='<div style="font-size:12px;color:#888;margin-bottom:6px;">العناصر الحالية:</div>';
+    if(found&&found.extras&&found.extras.length>0){
+        found.extras.forEach(function(e){
+            h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid #e5e5e5;margin-bottom:3px;border-radius:6px;font-size:13px;">';
+            h+='<span>'+e.item_name+' — <strong>'+formatDinar(e.item_price)+'</strong></span>';
+            h+='<button onclick="deleteExtra('+e.id+')" class="btn btn-sm btn-danger" style="font-size:10px;padding:2px 6px;">✕</button>';
+            h+='</div>';
+        });
+    }else{
+        h+='<div style="color:#999;text-align:center;padding:8px;font-size:12px;">لا توجد عناصر اضافية</div>';
+    }
+    document.getElementById('extrasList').innerHTML=h;
+}
+async function addExtra(){
+    var invId=document.getElementById('extrasInvoiceId').value;
+    var name=document.getElementById('extraItemName').value.trim();
+    var price=parseInt(document.getElementById('extraItemPrice').value)||0;
+    if(!name||price<=0){showToast('البيانات غير صالحة','error');return;}
+    var r=await fetch('/api/invoice/extras/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_id:parseInt(invId),item_name:name,item_price:price})});
+    var d=await r.json();
+    if(d.ok){showToast('تمت الاضافة');loadExtras(invId);document.getElementById('extraItemName').value='';document.getElementById('extraItemPrice').value='5000';setTimeout(function(){location.reload();},800);}
+    else{showToast(d.error||'خطأ','error');}
+}
+async function deleteExtra(extraId){
+    showConfirm('حذف العنصر؟',async function(){
+        var r=await fetch('/api/invoice/extras/delete/'+extraId,{method:'POST'});
+        var d=await r.json();
+        if(d.ok){showToast('تم الحذف');loadExtras(document.getElementById('extrasInvoiceId').value);setTimeout(function(){location.reload();},600);}
+        else{showToast(d.error||'خطأ','error');}
+    });
+}
+function openDetailModal(custId, name) {
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = '<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto;"><h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">كشف حساب — '+name+'</h3><div id="billDetailContent" style="font-size:13px;color:#555;">جاري التحميل...</div><div style="margin-top:14px;"><button onclick="this.closest(\'.modal-overlay\').remove()" class="btn">اغلاق</button></div></div>';
+    document.body.appendChild(modal);
+    fetch('/api/customers/history/' + custId)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var months = ['','يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
+            var h = '<h4 style="font-size:14px;margin-bottom:10px;color:#555;">الفواتير</h4><div class="table-responsive"><table><thead><tr><th>الشهر</th><th>السنة</th><th>الباقة</th><th>الاجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>';
+            d.invoices.forEach(function(inv) {
+                var rem = inv.total_amount - inv.paid_amount;
+                var sb = inv.is_paid ? '<span class="badge badge-green">مدفوع</span>' : (inv.paid_amount > 0 ? '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#fcd34d;">جزئي</span>' : '<span class="badge badge-red">غير</span>');
+                h += '<tr><td>'+months[inv.month]+'</td><td>'+inv.year+'</td><td>'+(inv.package_name||'—')+'</td><td><strong>'+formatDinar(inv.total_amount)+'</strong></td><td>'+formatDinar(inv.paid_amount)+'</td><td style="'+(rem>0?'color:#b91c1c;font-weight:700;':'color:#0d6e3c;')+'">'+formatDinar(rem)+'</td><td>'+sb+'</td></tr>';
+            });
+            h += '</tbody></table></div>';
+            if (d.payments && d.payments.length > 0) {
+                h += '<h4 style="font-size:14px;margin-top:16px;margin-bottom:10px;color:#555;">المدفوعات</h4><div class="table-responsive"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead><tbody>';
+                d.payments.forEach(function(p) {
+                    h += '<tr><td>'+p.payment_date+'</td><td><strong>'+formatDinar(p.amount)+'</strong></td><td>'+p.payment_method+'</td><td style="font-size:11px;color:#777;">'+(p.notes||'—')+'</td></tr>';
+                });
+                h += '</tbody></table></div>';
+            }
+            document.getElementById('billDetailContent').innerHTML = h;
+        });
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')document.getElementById('paymentModal').style.display='none';});
+</script>
+{% endblock %}

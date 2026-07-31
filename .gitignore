@@ -1,0 +1,31 @@
+# ── Secrets ──────────────────────────────
+# Local environment file with real credentials — NEVER commit
+.env
+
+# ── Python ───────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── One-off scripts ──────────────────────
+generate_icons.py
+
+# ── Editor / OS ──────────────────────────
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ── Local databases / backups (customer data) ──
+*.db
+*.db.backup
+mawlidati_backup_*.db
+backup_*.db
+
+# ── Build artifacts ──────────────────────
+dist/
+build/
+*.spec.bak

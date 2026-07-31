@@ -1,0 +1,559 @@
+`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>الناظم - {% block title %}لوحة القيادة{% endblock %}</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="الناظم">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:{DEFAULT:'#1a1a1a',light:'#333',dark:'#000'},accent:'#1e3a5f'}}}};</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Cairo', 'Segoe UI', system-ui, sans-serif;
+            background: #f4f4f4; color: #1a1a1a; -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+        .nav-link { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 14px; font-weight: 500; color: #555; text-decoration: none; border-right: 3px solid transparent; transition: all 0.15s; }
+        .nav-link:hover { color: #000; background: #f9f9f9; border-right-color: #ccc; }
+        .nav-link.active { color: #000; background: #eee; border-right-color: #1a1a1a; font-weight: 600; }
+        .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .card-header { padding: 14px 20px; border-bottom: 1px solid #e5e5e5; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
+        .card-body { padding: 20px; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 20px; font-size: 13px; font-weight: 600; border: 1px solid #d5d5d5; background: #fff; color: #333; cursor: pointer; transition: all 0.15s; font-family: inherit; min-height: 42px; }
+        .btn:hover { background: #f5f5f5; border-color: #bbb; }
+        .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; } .btn-primary:hover { background: #333; border-color: #333; color: #fff; }
+        .btn-success { background: #0d6e3c; color: #fff; border-color: #0d6e3c; } .btn-success:hover { background: #0a5c31; border-color: #0a5c31; }
+        .btn-warning { background: #c27803; color: #fff; border-color: #c27803; } .btn-warning:hover { background: #a56602; border-color: #a56602; }
+        .btn-danger { background: #b91c1c; color: #fff; border-color: #b91c1c; } .btn-danger:hover { background: #991b1b; border-color: #991b1b; }
+        .btn-sm { padding: 6px 14px; font-size: 12px; min-height: 36px; }
+        .input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #d5d5d5; background: #fff; color: #1a1a1a; font-family: inherit; transition: border-color 0.15s; min-height: 42px; }
+        .input:focus { outline: none; border-color: #1a1a1a; } .input::placeholder { color: #aaa; }
+        select.input { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 12px center; padding-left: 32px; }
+        table { width: 100%; border-collapse: collapse; }
+        table th { text-align: right; padding: 10px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #777; background: #fafafa; border-bottom: 2px solid #e5e5e5; white-space: nowrap; }
+        table td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; }
+        table tr:hover td { background: #fafafa; }
+        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 14px; font-size: 12px !important; font-weight: 700 !important; border-radius: 4px; border: 1px solid; white-space: nowrap; }
+        .badge-green { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+        .badge-amber { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+        .badge-red { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .badge-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .badge-dot-green { background: #10b981; } .badge-dot-red { background: #ef4444; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; display: flex; align-items: center; justify-content: center; }
+        .modal-box { background: #fff; border: 1px solid #e5e5e5; padding: 28px; max-width: 500px; width: 95%; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 90vh; overflow-y: auto; }
+        .stat-value { font-size: 32px; font-weight: 700; color: #1a1a1a; line-height: 1; }
+        .stat-label { font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+        .toast { position: fixed; bottom: 24px; left: 24px; z-index: 100; padding: 14px 24px; font-size: 13px; font-weight: 600; background: #1a1a1a; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.25); opacity: 0; transform: translateY(10px); transition: all 0.25s; pointer-events: none; border-radius: 4px; }
+        .toast.show { opacity: 1; transform: translateY(0); } .toast.error { background: #b91c1c; }
+        .sidebar { width: 240px; min-height: 100vh; background: #fff; border-left: 1px solid #e5e5e5; flex-shrink: 0; transition: transform 0.3s ease; z-index: 40; }
+        #sidebarOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 39; }
+        #burgerBtn { display: none; }
+        .separator { height: 1px; background: #e5e5e5; margin: 16px 0; }
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+        @media (max-width: 767px) {
+            body { font-size: 14px; }
+            h2 { font-size: 18px !important; }
+            #burgerBtn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; background: none; cursor: pointer; color: #1a1a1a; font-size: 22px; }
+            .sidebar { position: fixed; top: 0; right: 0; height: 100vh; width: 260px; transform: translateX(100%); box-shadow: -4px 0 20px rgba(0,0,0,0.15); overflow-y: auto; }
+            .sidebar.open { transform: translateX(0); }
+            #sidebarOverlay.active { display: block; }
+            .mobile-header { display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; position: sticky; top: 0; z-index: 30; }
+            .mobile-header h1 { font-size: 16px; font-weight: 700; }
+            .main-content { padding: 10px !important; }
+            .main-content .max-w-6xl { max-width: 100%; padding: 0 !important; }
+            .main-content > div { padding: 10px !important; }
+            .card-body { padding: 10px; }
+            .card-header { padding: 10px 14px; font-size: 11px; }
+            table thead { display: none; }
+            table tbody { display: flex; flex-direction: column; gap: 8px; }
+            table tr { border: 1px solid #e5e5e5; background: #fff; padding: 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 6px; }
+            table td { display: block; padding: 0; border: none; font-size: 12px; text-align: right; }
+            table td::before { content: attr(data-label); font-weight: 600; color: #888; font-size: 10px; display: inline-block; margin-left: 4px; }
+            table td[data-label=""]::before { content: ''; }
+            .modal-box { max-width: 100%; width: 100%; height: 100vh; max-height: 100vh; border-radius: 0; border: none; padding: 20px 14px; }
+            .btn { min-height: 44px; font-size: 13px; padding: 12px 16px; }
+            .btn-sm { min-height: 40px; font-size: 12px; padding: 10px 14px; }
+            .input { min-height: 42px; font-size: 15px; padding: 10px 12px; }
+            .nav-link { padding: 12px 16px; font-size: 14px; min-height: 44px; }
+            .stat-value { font-size: 22px !important; }
+            .badge { padding: 3px 8px; font-size: 10px; }
+        }
+        /* Mobile Bottom Navigation */
+        .bottom-nav { display: none; }
+        @media (max-width: 767px) {
+            .bottom-nav {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: #fff;
+                border-top: 1px solid #e5e5e5;
+                z-index: 35;
+                justify-content: space-around;
+                align-items: center;
+                height: 60px;
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+            }
+            .bottom-nav-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 3px;
+                padding: 6px 10px;
+                color: #999;
+                text-decoration: none;
+                font-size: 10px;
+                font-weight: 500;
+                transition: color 0.15s;
+            }
+            .bottom-nav-item.active { color: #1a1a1a; font-weight: 600; }
+            .bottom-nav-item svg { stroke-width: 2; }
+            .main-content { padding-bottom: 80px !important; }
+        }
+        .desktop-container { max-width: 1300px; margin: 0 auto; width: 100%; }
+
+        /* Desktop-specific styles */
+        @media (min-width: 768px) {
+            .mobile-header { display: none; }
+            .bottom-nav { display: none !important; }
+            .sidebar { display: flex !important; flex-direction: column; position: sticky; top: 0; }
+            .main-content { padding: 24px 32px !important; }
+            .main-content > div { max-width: 100%; padding: 0 !important; }
+            table th { font-size: 12px; padding: 12px 16px; background: #f5f5f5; border-bottom: 2px solid #ddd; position: sticky; top: 0; z-index: 1; }
+            table td { padding: 12px 16px; font-size: 14px; }
+            table tr:hover td { background: #f9f9f9; }
+            .card { border-radius: 8px; border: 1px solid #e8e8e8; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+            .card-header { font-size: 14px; padding: 16px 24px; }
+            .card-body { padding: 24px; }
+            .btn { min-height: 44px; font-size: 14px; padding: 10px 24px; }
+            .btn-sm { min-height: 38px; font-size: 13px; padding: 8px 16px; }
+            .input { min-height: 44px; font-size: 14px; padding: 10px 14px; }
+            .sidebar { width: 260px; box-shadow: 1px 0 8px rgba(0,0,0,0.04); }
+            .nav-link { padding: 14px 20px; font-size: 15px; }
+            .nav-link:hover { background: #f5f5f5; border-right-color: #aaa; }
+            h2 { font-size: 24px !important; }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <header class="mobile-header">
+        <button id="burgerBtn" aria-label="القائمة" onclick="toggleSidebar()">☰</button>
+        <h1 style="display:flex;align-items:center;gap:8px;">
+            <img src="/static/assets/al-nazim-icon.svg" alt="الناظم" style="height:32px;width:32px;">
+            الناظم
+        </h1>
+    </header>
+
+    <div style="display:flex; min-height:100vh;">
+        <aside class="sidebar" id="sidebar">
+            <div class="px-5 py-6 border-b border-gray-200 shrink-0" style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+                <img src="/static/assets/al-nazim-icon.svg" alt="الناظم" style="width:48px;height:48px;margin-bottom:8px;">
+                <div class="text-lg font-bold text-black tracking-tight">الناظم</div>
+                <div class="text-xs text-gray-400 mt-0.5">لإدارة أبراج الإنترنت</div>
+            </div>
+            <nav class="flex-1 py-3">
+                <a href="/" class="nav-link{% if request.path == '/' %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    لوحة القيادة
+                </a>
+            <a href="/customers" class="nav-link{% if request.path.startswith('/customers') %} active{% endif %}" onclick="closeSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+                المشتركين
+            </a>
+            <a href="/debts" class="nav-link{% if request.path.startswith('/debts') %} active{% endif %}" onclick="closeSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                الديون
+            </a>
+            <a href="/reminders" class="nav-link{% if request.path.startswith('/reminders') %} active{% endif %}" onclick="closeSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                تنبيهات الديون
+            </a>
+            <a href="/payments" class="nav-link{% if request.path.startswith('/payments') %} active{% endif %}" onclick="closeSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                المدفوعات
+            </a>
+            <a href="/billing" class="nav-link{% if request.path.startswith('/billing') %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    الفواتير
+                </a>
+                <a href="/expenses" class="nav-link{% if request.path.startswith('/expenses') %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v2H6a2 2 0 00-2 2v7a2 2 0 002 2h1l-1 4h14l-1-4h1a2 2 0 002-2V8a2 2 0 00-2-2h-3V4a3 3 0 00-3-3zm-2 5V4a2 2 0 014 0v2h-4z"/><line x1="8" y1="15" x2="16" y2="15"/></svg>
+                    المصروفات
+                </a>
+                <a href="/tickets" class="nav-link{% if request.path.startswith('/tickets') %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    طلبات الصيانة
+                </a>
+                <a href="/report" class="nav-link{% if request.path.startswith('/report') %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/></svg>
+                    التقرير الشهري
+                </a>
+                <a href="/packages" class="nav-link{% if request.path.startswith('/packages') %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+                    الباقات
+                </a>
+                <a href="/settings" class="nav-link{% if request.path.startswith('/settings') %} active{% endif %}" onclick="closeSidebar()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                    الإعدادات
+                </a>
+            </nav>
+            <div class="px-5 py-4 border-t border-gray-200 text-xs text-gray-400 shrink-0">v2.0 · ISP Tower Management</div>
+        </aside>
+
+        <div id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+        <main class="flex-1 overflow-y-auto main-content">
+            <div class="p-8 max-w-6xl" style="padding:32px;">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <!-- Shared Payment Modal (for debts تسديد) -->
+    <div id="paymentModal" class="modal-overlay" style="display:none;">
+        <div class="modal-box" style="max-width:420px;">
+            <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">تسديد — <span id="payCustName">—</span></h3>
+            <input type="hidden" id="payInvoiceId"><input type="hidden" id="payRemaining"><input type="hidden" id="payCustId">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div id="payInvoiceInfo" style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #eee;">
+                    <span style="color:#888;">الكلي: <strong style="color:#1a1a1a;">—</strong></span>
+                    <span style="color:#888;">مدفوع: <strong style="color:#0d6e3c;">—</strong></span>
+                    <span style="color:#888;">متبقي: <strong style="color:#b91c1c;">—</strong></span>
+                </div>
+                <div style="max-height:200px;overflow-y:auto;" id="payInvoiceList"></div>
+                <div><label class="modal-label">المبلغ</label><div style="display:flex;gap:6px;align-items:stretch;">
+                    <button onclick="adjustPayAmount(-1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">−</button>
+                    <input type="number" id="payAmount" class="input" style="font-weight:700;font-size:16px;text-align:center;flex:1;" step="1000" min="1000">
+                    <button onclick="adjustPayAmount(1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">+</button>
+                    <button onclick="document.getElementById('payAmount').value=document.getElementById('payRemaining').value" class="btn btn-sm btn-success">كامل</button>
+                </div></div>
+                <div><label class="modal-label">طريقة الدفع</label><select id="payMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
+                <div><label class="modal-label">تاريخ الدفع</label><input type="date" id="payDate" class="input"></div>
+                <div><label class="modal-label">ملاحظات</label><input type="text" id="payNotes" class="input" placeholder="اي ملاحظة"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:14px;">
+                <button onclick="submitSharedPayment()" class="btn btn-primary" style="flex:1;">تاكيد الدفع</button>
+                <button onclick="document.getElementById('paymentModal').style.display='none'" class="btn">الغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Pay Modal (unified payment) -->
+    <div id="quickPayModal" class="modal-overlay" style="display:none;">
+        <div class="modal-box" style="max-width:420px;">
+            <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">دفع</h3>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #eee;">
+                    <span style="color:#888;">الكلي: <strong id="quickPayFullAmount" style="color:#1a1a1a;">—</strong></span>
+                    <span style="color:#888;">مدفوع: <strong id="quickPayAlreadyPaid" style="color:#0d6e3c;">—</strong></span>
+                    <span style="color:#888;">متبقي: <strong id="quickPayRemaining" style="color:#b91c1c;">—</strong></span>
+                </div>
+                <div><label class="modal-label">المبلغ المراد دفعه</label>
+                    <input type="hidden" id="quickPayMaxAmount" value="0">
+                    <div style="display:flex;gap:6px;align-items:stretch;">
+                        <button onclick="adjustQuickPay(-1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">−</button>
+                        <input type="number" id="quickPayAmount" class="input" style="font-weight:700;font-size:16px;text-align:center;flex:1;" step="1000" min="1000">
+                        <button onclick="adjustQuickPay(1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">+</button>
+                        <button onclick="document.getElementById('quickPayAmount').value=document.getElementById('quickPayMaxAmount').value" class="btn btn-sm btn-success">كامل</button>
+                    </div>
+                </div>
+                <div><label class="modal-label">تاريخ الدفع</label><input type="date" id="quickPayDate" class="input"></div>
+                <div><label class="modal-label">طريقة الدفع</label><select id="quickPayMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
+                <div><label class="modal-label">ملاحظات</label><input type="text" id="quickPayNotes" class="input" placeholder="اي ملاحظة"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:14px;">
+                <button onclick="submitQuickPay()" class="btn btn-success" style="flex:1;">تاكيد الدفع</button>
+                <button onclick="document.getElementById('quickPayModal').style.display='none'" class="btn">الغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="confirmModal" class="modal-overlay" style="display:none;z-index:60;">
+        <div class="modal-box" style="max-width:360px;text-align:center;padding:24px 20px;">
+            <div id="confirmMsg" style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:18px;">تاكيد</div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+                <button onclick="confirmYes()" class="btn btn-danger" style="flex:1;min-width:80px;">تاكيد</button>
+                <button onclick="confirmNo()" class="btn" style="flex:1;min-width:80px;">الغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // ── Shared Payment Functions ──
+        var todayStr = new Date().toISOString().split('T')[0];
+
+        function openPayModal(custId, custName) {
+            document.getElementById('payCustName').textContent = custName;
+            document.getElementById('payCustId').value = custId;
+            document.getElementById('payInvoiceList').innerHTML = 'جاري التحميل...';
+            document.getElementById('paymentModal').style.display = 'flex';
+            document.getElementById('payInvoiceId').value = '';
+            document.getElementById('payAmount').value = '';
+            document.getElementById('payDate').value = todayStr;
+            document.getElementById('payNotes').value = '';
+
+            fetch('/api/customers/history/' + custId)
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    var unpaid = d.invoices.filter(function(inv) { return !inv.is_paid; });
+                    if (unpaid.length === 0) {
+                        document.getElementById('payInvoiceList').innerHTML = '<p style="color:#999;text-align:center;padding:10px;">لا توجد فواتير غير مسددة</p>';
+                        updatePayInvoiceInfoTotals(0, 0, 0);
+                        return;
+                    }
+                    var totalAll = 0, totalPaid = 0, totalRemaining = 0;
+                    unpaid.forEach(function(inv) {
+                        totalAll += inv.total_amount;
+                        totalPaid += inv.paid_amount;
+                        totalRemaining += (inv.total_amount - inv.paid_amount);
+                    });
+                    updatePayInvoiceInfoTotals(totalAll, totalPaid, totalRemaining);
+
+                    var months = ['','يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
+                    var h = '<div style="font-size:11px;color:#888;margin-bottom:6px;">اختر فاتورة للتسديد:</div>';
+                    unpaid.forEach(function(inv, idx) {
+                        var rem = inv.total_amount - inv.paid_amount;
+                        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid #e5e5e5;margin-bottom:3px;border-radius:6px;cursor:pointer;font-size:13px;' + (idx===0?'background:#f0fdf4;border-color:#0d6e3c;':'') + '" class="inv-select" data-inv-id="'+inv.id+'" data-remaining="'+rem+'">';
+                        h += '<span><strong>'+months[inv.month]+' '+inv.year+'</strong></span>';
+                        h += '<span style="color:#888;">اجمالي: <strong>'+formatDinar(inv.total_amount)+'</strong></span>';
+                        h += '<span style="color:#b91c1c;">متبقي: <strong>'+formatDinar(rem)+'</strong></span>';
+                        h += '</div>';
+                    });
+                    document.getElementById('payInvoiceList').innerHTML = h;
+
+                    var first = unpaid[0];
+                    document.getElementById('payInvoiceId').value = first.id;
+                    document.getElementById('payRemaining').value = first.total_amount - first.paid_amount;
+                    document.getElementById('payAmount').value = first.total_amount - first.paid_amount;
+
+                    document.querySelectorAll('.inv-select').forEach(function(el) {
+                        el.addEventListener('click', function() {
+                            document.querySelectorAll('.inv-select').forEach(function(e) { e.style.background=''; e.style.borderColor='#e5e5e5'; });
+                            this.style.background='#f0fdf4'; this.style.borderColor='#0d6e3c';
+                            document.getElementById('payInvoiceId').value = this.dataset.invId;
+                            document.getElementById('payRemaining').value = this.dataset.remaining;
+                            document.getElementById('payAmount').value = this.dataset.remaining;
+                        });
+                    });
+                });
+        }
+
+        function updatePayInvoiceInfoTotals(totalAll, totalPaid, totalRemaining) {
+            var info = document.getElementById('payInvoiceInfo');
+            info.innerHTML = '<span style="color:#888;">الكلي: <strong style="color:#1a1a1a;">'+formatDinar(totalAll)+'</strong></span>' +
+                '<span style="color:#888;">مدفوع: <strong style="color:#0d6e3c;">'+formatDinar(totalPaid)+'</strong></span>' +
+                '<span style="color:#888;">متبقي: <strong style="color:#b91c1c;">'+formatDinar(totalRemaining)+'</strong></span>';
+        }
+        function updatePayInvoiceInfo(inv) {
+            var info = document.getElementById('payInvoiceInfo');
+            info.innerHTML = '<span style="color:#888;">الكلي: <strong style="color:#1a1a1a;">'+formatDinar(inv.total_amount)+'</strong></span>' +
+                '<span style="color:#888;">مدفوع: <strong style="color:#0d6e3c;">'+formatDinar(inv.paid_amount)+'</strong></span>' +
+                '<span style="color:#888;">متبقي: <strong style="color:#b91c1c;">'+formatDinar(inv.total_amount-inv.paid_amount)+'</strong></span>';
+        }
+        function adjustPayAmount(delta) {
+            var inp = document.getElementById('payAmount');
+            var val = parseInt(inp.value) || 0;
+            var newVal = val + delta;
+            if (newVal < 0) newVal = 0;
+            inp.value = newVal;
+        }
+        function adjustQuickPay(delta) {
+            var inp = document.getElementById('quickPayAmount');
+            var val = parseInt(inp.value) || 0;
+            var newVal = val + delta;
+            if (newVal < 0) newVal = 0;
+            inp.value = newVal;
+        }
+
+        var quickPayCustId = null;
+
+function openQuickPayModal(custId, fullAmount) {
+            quickPayCustId = custId;
+            document.getElementById('quickPayFullAmount').textContent = 'جاري التحميل...';
+            document.getElementById('quickPayAlreadyPaid').textContent = 'جاري التحميل...';
+            document.getElementById('quickPayRemaining').textContent = 'جاري التحميل...';
+            document.getElementById('quickPayAmount').value = '';
+            document.getElementById('quickPayDate').value = todayStr;
+            document.getElementById('quickPayNotes').value = '';
+            document.getElementById('quickPayModal').style.display = 'flex';
+
+            fetch('/api/payment/current-invoice/' + custId)
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.ok) {
+                        var realTotal = (d.total !== undefined && d.total !== null) ? d.total : fullAmount;
+                        var realPaid = (d.paid !== undefined && d.paid !== null) ? d.paid : 0;
+                        var realRemaining = (d.remaining !== undefined && d.remaining !== null) ? d.remaining : realTotal;
+                        document.getElementById('quickPayFullAmount').textContent = formatDinar(realTotal);
+                        document.getElementById('quickPayAlreadyPaid').textContent = formatDinar(realPaid);
+                        document.getElementById('quickPayRemaining').textContent = formatDinar(realRemaining);
+                        document.getElementById('quickPayMaxAmount').value = realRemaining;
+                        if (realRemaining <= 0) {
+                            document.getElementById('quickPayAmount').value = 0;
+                            document.getElementById('quickPayAmount').disabled = true;
+                            showToast('الفاتورة مدفوعة بالكامل', 'error');
+                        } else {
+                            document.getElementById('quickPayAmount').value = realRemaining;
+                            document.getElementById('quickPayAmount').disabled = false;
+                        }
+                    }
+                });
+        }
+
+        async function submitQuickPay() {
+            var amount = parseFloat(document.getElementById('quickPayAmount').value);
+            if (!amount || amount <= 0) { showToast('الرجاء ادخال مبلغ صحيح', 'error'); return; }
+            var r = await fetch('/api/payment/quick-pay/' + quickPayCustId, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    amount: amount,
+                    payment_date: document.getElementById('quickPayDate').value,
+                    payment_method: document.getElementById('quickPayMethod').value,
+                    notes: document.getElementById('quickPayNotes').value.trim()
+                })
+            });
+            var d = await r.json();
+            if (d.ok) {
+                var msg = 'تم الدفع بنجاح — ' + formatDinar(d.amount);
+                if (d.remaining > 0) msg += ' | المتبقي: ' + formatDinar(d.remaining);
+                showToast(msg);
+                document.getElementById('quickPayModal').style.display = 'none';
+                setTimeout(function() { location.reload(); }, 800);
+            } else {
+                showToast(d.error || 'حدث خطأ', 'error');
+            }
+        }
+
+        async function submitSharedPayment() {
+            var id = document.getElementById('payInvoiceId').value;
+            var amount = parseFloat(document.getElementById('payAmount').value);
+            if (!id) { showToast('الرجاء اختيار فاتورة','error'); return; }
+            if (!amount || amount <= 0) { showToast('الرجاء ادخال مبلغ صحيح','error'); return; }
+            var r = await fetch('/api/payment/make', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    invoice_id: parseInt(id), amount: amount,
+                    payment_date: document.getElementById('payDate').value,
+                    payment_method: document.getElementById('payMethod').value,
+                    notes: document.getElementById('payNotes').value.trim()
+                })
+            });
+            var d = await r.json();
+            if (d.ok) {
+                showToast('تم التسديد بنجاح');
+                document.getElementById('paymentModal').style.display = 'none';
+                setTimeout(function() { location.reload(); }, 500);
+            } else {
+                showToast(d.error || 'حدث خطأ', 'error');
+            }
+        }
+
+        // Close modals on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.getElementById('paymentModal').style.display = 'none';
+                document.getElementById('quickPayModal').style.display = 'none';
+                document.getElementById('confirmModal').style.display = 'none';
+            }
+        });
+
+function showToast(msg, type) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast' + (type === 'error' ? ' error' : '');
+            t.classList.add('show');
+            setTimeout(function() { t.classList.remove('show'); }, 8000);
+        }
+        var numeralStyle = '{{ numeral_style }}';
+        var arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        function toArabicNum(n) {
+            if (numeralStyle === 'EN') return String(n);
+            return String(n).replace(/[0-9]/g, function(d) { return arabicDigits[parseInt(d)]; });
+        }
+        function formatDinar(amount) {
+            var n = parseInt(amount) || 0;
+            var formatted = n.toLocaleString('en-US');
+            return (numeralStyle === 'EN' ? formatted : toArabicNum(formatted)) + ' د.ع';
+        }
+        function formatArabicNumber(amount) {
+            var n = parseInt(amount) || 0;
+            var formatted = n.toLocaleString('en-US');
+            return numeralStyle === 'EN' ? formatted : toArabicNum(formatted);
+        }
+        function toggleSidebar() {
+            var s = document.getElementById('sidebar');
+            var o = document.getElementById('sidebarOverlay');
+            s.classList.toggle('open');
+            o.classList.toggle('active');
+        }
+        var _confirmCallback = null;
+        function showConfirm(msg, callback) {
+            document.getElementById('confirmMsg').textContent = msg;
+            _confirmCallback = callback;
+            document.getElementById('confirmModal').style.display = 'flex';
+        }
+        function confirmYes() {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (_confirmCallback) _confirmCallback();
+        }
+        function confirmNo() {
+            document.getElementById('confirmModal').style.display = 'none';
+            _confirmCallback = null;
+        }
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeSidebar();
+        });
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/service-worker.js');
+        }
+    </script>
+    <!-- Mobile Bottom Navigation (visible only on phones) -->
+    <nav class="bottom-nav">
+        <a href="/" class="bottom-nav-item{% if request.path == '/' %} active{% endif %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>الرئيسية</span>
+        </a>
+        <a href="/customers" class="bottom-nav-item{% if request.path.startswith('/customers') %} active{% endif %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            <span>المشتركين</span>
+        </a>
+        <a href="/tickets" class="bottom-nav-item{% if request.path.startswith('/tickets') %} active{% endif %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>الصيانة</span>
+        </a>
+        <a href="/reminders" class="bottom-nav-item{% if request.path.startswith('/reminders') %} active{% endif %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+            <span>تنبيهات</span>
+        </a>
+        <a href="/billing" class="bottom-nav-item{% if request.path.startswith('/billing') %} active{% endif %}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+            <span>الفواتير</span>
+        </a>
+    </nav>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,435 @@
+{% extends "layout.html" %}
+{% block title %}المشتركين{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">المشتركين</h2>
+        <p style="font-size:13px;color:#888;margin-top:4px;">ادارة المشتركين والاشتراكات والمدفوعات</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="/api/export/excel" class="btn btn-sm" style="background:#0d6e3c;color:#fff;border-color:#0d6e3c;">📥 تصدير Excel</a>
+        <button onclick="openAddModal()" class="btn btn-primary icon-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            اضافة مشترك
+        </button>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;">
+    <div class="stat-card"><div class="stat-num" id="statTotal">{{ stats.total }}</div><div class="stat-txt">المشتركين</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#0d6e3c;" id="statActive">{{ stats.active }}</div><div class="stat-txt">نشطين</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#b91c1c;" id="statExpired">{{ stats.expired }}</div><div class="stat-txt">منتهي</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#888;" id="statSuspended">{{ stats.suspended }}</div><div class="stat-txt">موقوف</div></div>
+    <div class="stat-card" style="background:#fff5f5;border-color:#fecaca;"><div class="stat-num" style="color:#b91c1c;" id="debtsTotalCard">{{ total_debt_all }}</div><div class="stat-txt" style="color:#b91c1c;">الديون</div></div>
+</div>
+
+<div class="card filter-bar">
+    <div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;">
+        <div style="flex:1;min-width:160px;position:relative;">
+            <input type="text" id="searchInput" value="{{ search }}" placeholder="بحث بالاسم او الهاتف..." class="input" onkeydown="if(event.key==='Enter')doSearch()" style="padding-left:36px;">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aaa;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <button onclick="doSearch()" class="btn btn-primary btn-sm">بحث</button>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button onclick="filterStatus('all')" class="btn btn-sm filter-btn {% if status_filter=='all' %}filter-active{% endif %}">الكل</button>
+            <button onclick="filterStatus('active')" class="btn btn-sm filter-btn {% if status_filter=='active' %}filter-active{% endif %}" style="color:#0d6e3c;">نشط</button>
+            <button onclick="filterStatus('expired')" class="btn btn-sm filter-btn {% if status_filter=='expired' %}filter-active{% endif %}" style="color:#b91c1c;">منتهي</button>
+            <button onclick="filterStatus('suspended')" class="btn btn-sm filter-btn {% if status_filter=='suspended' %}filter-active{% endif %}" style="color:#888;">موقوف</button>
+            <button onclick="{% if debt_filter=='yes' %}filterDebt(''){% else %}filterDebt('yes'){% endif %}" class="btn btn-sm filter-btn {% if debt_filter=='yes' %}filter-active filter-active-red{% endif %}">{% if debt_filter=='yes' %}✕ ديون{% else %}عليهم ديون{% endif %}</button>
+        </div>
+    </div>
+</div>
+
+<div class="desktop-table">
+    <div class="card" style="overflow:hidden;">
+        <div class="table-responsive">
+            <table class="customer-table">
+                <thead><tr><th>المشترك</th><th>الاشتراك</th><th>الوضع المالي</th><th style="width:200px;">اجراءات</th></tr></thead>
+                <tbody>{% for c in customers %}
+                {% set is_expired = false %}
+                {% if c.renewal_date %}
+            {% set exp_dt = c.renewal_date|string %}
+            {% if exp_dt <= now_str and c.subscription_status == 'active' %}
+                {% set is_expired = true %}
+            {% endif %}
+        {% endif %}
+        <tr class="{% if c.total_debt and c.total_debt>0 %}row-debt{% endif %}">
+                    <td>
+                        <div style="font-weight:700;font-size:14px;">{{ c.name }}
+                            {% set status_class = 'badge-red' %}
+                            {% set status_text = 'منتهي' %}
+                            {% if c.subscription_status=='active' %}{% set status_class = 'badge-green' %}{% set status_text = 'نشط' %}
+                            {% elif c.subscription_status=='suspended' %}{% set status_class = '' %}{% set status_text = 'موقوف' %}
+                            {% endif %}
+                            <span class="badge {{ status_class }}" style="margin-right:6px;">{{ status_text }}</span>
+                        </div>
+                        <div style="font-size:12px;color:#888;margin-top:2px;">{{ c.phone or '—' }} &nbsp;|&nbsp; <strong>{% if c.package_name %}{{ c.package_name }}{% else %}—{% endif %}</strong>{% if c.package_price and c.package_price>0 %} <span class="badge badge-amber" style="font-size:10px;padding:1px 5px;">{{ c.package_price|dinar }}</span>{% endif %}</div>
+                        {% if c.notes %}<div style="font-size:11px;color:#aaa;">{{ c.notes[:40] }}</div>{% endif %}
+                    </td>
+                    <td style="font-size:12px;">
+                        <div>فعل: {{ c.subscription_date|datetime_display if c.subscription_date else '—' }}</div>
+                        <div>ينتهي: {{ c.renewal_date|datetime_display if c.renewal_date else '—' }}</div>
+                        {% if c.renewal_date and c.subscription_status == 'active' %}
+                        <div style="margin-top:3px;{% if is_expired %}color:#b91c1c;font-weight:700;{% else %}color:#0d6e3c;{% endif %}">
+                            {% if is_expired %}⚠️ منتهي{% else %}✅ نشط{% endif %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:12px;">
+                        <div>الدفع: {% if c.current_month_paid==1 %}<span class="badge badge-green" style="font-size:10px;padding:1px 6px;">مدفوع</span>{% elif c.current_month_paid_amount and c.current_month_paid_amount>0 %}<span class="badge badge-amber" style="font-size:10px;padding:1px 6px;">مدفوع جزئياً</span>{% else %}<span class="badge badge-red" style="font-size:10px;padding:1px 6px;">غير مدفوع</span>{% endif %}</div>
+                        <div>الدين: {% if c.total_debt and c.total_debt>0 %}<strong style="color:#b91c1c;" class="debt-cell">{{ c.total_debt }}</strong>{% else %}<span style="color:#888;">—</span>{% endif %}</div>
+                    </td>
+                    <td class="actions-cell" style="text-align:center;">
+                        <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">
+                            {% if c.current_month_paid != 1 %}<button onclick="openQuickPayModal({{ c.id }},{{ c.package_price or 0 }})" class="btn btn-sm btn-success" style="font-size:11px;padding:4px 8px;">دفع</button>{% endif %}
+                            <button data-edit-id="{{ c.id }}" data-edit-name="{{ c.name }}" data-edit-phone="{{ c.phone or '' }}" data-edit-phone2="{{ c.phone2 or '' }}" data-edit-whatsapp="{{ c.whatsapp_phone or '' }}" data-edit-address="{{ c.address or '' }}" data-edit-region="{{ c.region or '' }}" data-edit-notes="{{ c.notes or '' }}" data-edit-username="{{ c.username or '' }}" data-edit-password="{{ c.password or '' }}" data-edit-ip="{{ c.ip_address or '' }}" data-edit-device="{{ c.device_type or '' }}" data-edit-package="{{ c.package_name or '' }}" data-edit-price="{{ c.package_price or '' }}" class="btn-edit btn btn-sm" style="font-size:11px;padding:4px 8px;">تعديل</button>
+                            <button data-renew-id="{{ c.id }}" data-renew-price="{{ c.package_price or 0 }}" class="btn-renew btn btn-sm" style="font-size:11px;padding:4px 8px;">تجديد</button>
+                            <button data-history-id="{{ c.id }}" class="btn-history btn btn-sm" style="font-size:11px;padding:4px 8px;">سجل</button>
+                            <button data-delete-id="{{ c.id }}" data-delete-name="{{ c.name }}" class="btn-delete btn btn-sm btn-danger" style="font-size:11px;padding:4px 8px;">حذف</button>
+                        </div>
+                    </td>
+                </tr>{% endfor %}</tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mobile-cards">
+{% for c in customers %}
+{% set is_expired = false %}
+{% if c.renewal_date %}
+    {% set exp_dt = c.renewal_date|string %}
+    {% if exp_dt <= now_str and c.subscription_status == 'active' %}
+        {% set is_expired = true %}
+    {% endif %}
+{% endif %}
+<div class="m-card{% if c.total_debt and c.total_debt>0 %} card-debt{% endif %}">
+    <div class="m-card-header">
+        <span class="m-card-name" onclick="openDetailModal({{ c.id }},'{{ c.name }}')">{{ c.name }}</span>
+        <span>{% if c.subscription_status=='active' %}<span class="badge badge-green">نشط</span>{% elif c.subscription_status=='suspended' %}<span class="badge" style="background:#f3f4f6;color:#6b7280;border-color:#d1d5db;">موقوف</span>{% else %}<span class="badge badge-red">منتهي</span>{% endif %}</span>
+    </div>
+    <div class="m-card-row">
+        <span class="text-muted">{{ c.phone or '—' }}</span>
+        <span><strong>{{ c.package_name or '—' }}</strong>{% if c.package_price %} — {{ c.package_price|dinar }}{% endif %}</span>
+    </div>
+    <div class="m-card-row">
+        <span>{% if c.total_debt and c.total_debt>0 %}<span style="color:#b91c1c;font-weight:700;">دين: <span class="debt-cell">{{ c.total_debt }}</span></span>{% else %}<span class="text-muted">لا يوجد دين</span>{% endif %}</span>
+        <span>{% if c.current_month_paid==1 %}<span class="badge badge-green">مدفوع</span>{% elif c.current_month_paid_amount and c.current_month_paid_amount>0 %}<span class="badge badge-amber">مدفوع جزئياً</span>{% else %}<span class="badge badge-red">غير مدفوع</span>{% endif %}</span>
+    </div>
+    {% if c.renewal_date %}<div class="m-card-row"><span class="text-muted">ينتهي: {{ c.renewal_date|datetime_display }}</span><span>{% if is_expired %}<span style="color:#b91c1c;">⚠️ منتهي</span>{% else %}<span style="color:#0d6e3c;">✅ نشط</span>{% endif %}</span></div>{% endif %}
+    <div class="m-card-actions">
+        {% if c.current_month_paid != 1 %}<button onclick="openQuickPayModal({{ c.id }},{{ c.package_price or 0 }})" class="btn btn-sm btn-success" style="flex:1;">دفع</button>{% endif %}
+        <button data-edit-id="{{ c.id }}" data-edit-name="{{ c.name }}" data-edit-phone="{{ c.phone or '' }}" data-edit-phone2="{{ c.phone2 or '' }}" data-edit-whatsapp="{{ c.whatsapp_phone or '' }}" data-edit-address="{{ c.address or '' }}" data-edit-region="{{ c.region or '' }}" data-edit-notes="{{ c.notes or '' }}" data-edit-username="{{ c.username or '' }}" data-edit-password="{{ c.password or '' }}" data-edit-ip="{{ c.ip_address or '' }}" data-edit-device="{{ c.device_type or '' }}" data-edit-package="{{ c.package_name or '' }}" data-edit-price="{{ c.package_price or '' }}" class="btn-edit btn btn-sm">تعديل</button>
+        <button data-renew-id="{{ c.id }}" data-renew-price="{{ c.package_price or 0 }}" class="btn-renew btn btn-sm">تجديد</button>
+        <button data-history-id="{{ c.id }}" class="btn-history btn btn-sm">سجل</button>
+        <button data-delete-id="{{ c.id }}" data-delete-name="{{ c.name }}" class="btn-delete btn btn-sm btn-danger">حذف</button>
+    </div>
+</div>{% endfor %}
+{% if customers|length==0 %}<div style="text-align:center;padding:48px;color:#999;">لا يوجد مشتركين</div>{% endif %}
+</div>
+
+<div id="customerModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:820px;padding:16px 22px;overflow-y:visible;">
+        <h3 id="modalTitle" style="font-size:16px;font-weight:700;margin-bottom:10px;">اضافة مشترك جديد</h3>
+        <input type="hidden" id="editCustomerId" value="">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:start;">
+            <div><label class="f-label">الاسم *</label><input type="text" id="custName" placeholder="الاسم الرباعي" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">الهاتف</label><input type="text" id="custPhone" placeholder="07xxxxxxxxx" dir="ltr" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">هاتف 2</label><input type="text" id="custPhone2" placeholder="07xxxxxxxxx" dir="ltr" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">واتساب</label><input type="text" id="custWhatsapp" placeholder="+9647xxxxxxxxx او 07xxxxxxxxx" dir="ltr" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">المنطقة</label><input type="text" id="custRegion" placeholder="المنطقة" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div style="grid-column:1/-1;"><label class="f-label">العنوان</label><input type="text" id="custAddress" placeholder="العنوان" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">اسم الباقة</label>
+                <select id="custPackage" class="input" style="font-size:13px;min-height:36px;" onchange="onPackageSelect()">
+                    <option value="">— اختر الباقة —</option>
+                </select>
+            </div>
+            <div><label class="f-label">سعر الباقة</label><input type="number" id="custPrice" value="0" min="0" class="input" style="font-size:13px;min-height:36px;" step="1000" onchange="updateTotalPrice()" oninput="updateTotalPrice()"></div>
+            <div><label class="f-label">المدة (اشهر)</label><input type="number" id="durationMonths" value="1" min="1" max="24" class="input" style="font-size:13px;min-height:36px;" onchange="updateTotalPrice()" oninput="updateTotalPrice()">
+                <div style="font-size:11px;color:#0d6e3c;font-weight:600;margin-top:4px;" id="totalPriceDisplay">الإجمالي: 0 د.ع</div>
+            </div>
+            <div><label class="f-label">اسم المستخدم</label><input type="text" id="custUsername" placeholder="PPPoE Username" dir="ltr" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">كلمة المرور</label><input type="text" id="custPassword" placeholder="PPPoE Password" dir="ltr" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">IP Address</label><input type="text" id="custIp" placeholder="192.168.x.x" dir="ltr" class="input" style="font-size:13px;min-height:36px;"></div>
+            <div><label class="f-label">نوع الربط</label>
+                <select id="custDevice" class="input" style="font-size:13px;min-height:36px;">
+                    <option value="كيبل ضوئي">كيبل ضوئي</option>
+                    <option value="نانو">نانو</option>
+                </select>
+            </div>
+            <div style="grid-column:1/-1;"><label class="f-label">ملاحظات</label><input type="text" id="custNotes" placeholder="ملاحظات..." class="input" style="font-size:13px;min-height:36px;"></div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="saveCustomer()" class="btn btn-primary" style="flex:1;padding:8px 16px;font-size:14px;">حفظ</button>
+            <button onclick="closeModal()" class="btn" style="padding:8px 16px;font-size:14px;">الغاء</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enter key saves the form when the Add/Edit modal is open
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && document.getElementById('customerModal').style.display === 'flex') {
+        e.preventDefault();
+        saveCustomer();
+    }
+});
+</script>
+
+<div id="renewModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:400px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">تجديد الاشتراك</h3>
+        <input type="hidden" id="renewCustomerId" value="">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">سعر الباقة الشهري</label>
+                <div style="font-size:18px;font-weight:700;" id="renewPrice">0 د.ع</div>
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">عدد الأشهر</label>
+                <input type="number" id="renewMonths" value="1" min="1" max="24" class="input" onchange="updateRenewTotal()" oninput="updateRenewTotal()">
+            </div>
+            <div style="padding:10px;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:6px;text-align:center;">
+                <div style="font-size:12px;color:#065f46;">الإجمالي المتوقع</div>
+                <div style="font-size:20px;font-weight:700;color:#065f46;" id="renewTotal">0 د.ع</div>
+                <div style="font-size:11px;color:#065f46;">سيتم إنشاء فاتورة لكل شهر</div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+            <button onclick="submitRenew()" class="btn btn-success" style="flex:1;">تأكيد التجديد</button>
+            <button onclick="document.getElementById('renewModal').style.display='none'" class="btn">الغاء</button>
+        </div>
+    </div>
+</div>
+
+<div id="detailModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;" id="detailTitle">تفاصيل المشترك</h3>
+        <div id="detailContent"></div>
+        <div style="margin-top:14px;"><button onclick="document.getElementById('detailModal').style.display='none'" class="btn">اغلاق</button></div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<style>
+.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
+.stat-card{background:#fff;border:1px solid #e5e5e5;text-align:center;padding:12px 8px;border-radius:8px;}
+.stat-num{font-size:20px;font-weight:700;}
+.stat-txt{font-size:10px;color:#888;margin-top:3px;}
+.text-muted{color:#888;font-size:12px;}
+.row-debt{background:#fff5f5 !important;}
+.filter-btn{font-size:11px;padding:6px 12px;border-color:#ddd;color:#666;}
+.filter-active{background:#1a1a1a !important;color:#fff !important;border-color:#1a1a1a !important;}
+.filter-active-red{background:#b91c1c !important;border-color:#b91c1c !important;}
+.badge-amber{background:#fffbeb;color:#92400e;border-color:#fcd34d;}
+.actions-cell .btn-sm{font-size:12px;padding:10px 14px;min-height:40px;}
+.desktop-table{display:block;}.mobile-cards{display:none;}
+.m-card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.card-debt{background:#fff5f5;border-color:#fecaca;}
+.m-card-header{display:flex;justify-content:space-between;align-items:center;}
+.m-card-name{font-weight:700;font-size:15px;cursor:pointer;}
+.m-card-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.m-card-actions{display:flex;gap:4px;margin-top:2px;flex-wrap:wrap;}
+.m-card-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
+.filter-bar .card-body{padding:10px 14px !important;}
+.customer-table { table-layout: fixed; width: 100%; }
+.customer-table th { white-space: nowrap; text-align: center; }
+.customer-table th:nth-child(1) { text-align: right; }
+.customer-table td { vertical-align: top; padding: 12px 14px; }
+.customer-table th:nth-child(1) { width: 35%; }
+.customer-table th:nth-child(2) { width: 18%; }
+.customer-table th:nth-child(3) { width: 17%; }
+.customer-table th:nth-child(4) { width: 30%; }
+@media(max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:flex;flex-direction:column;gap:10px;}}
+</style>
+<script>
+var packagesMap = {};
+function loadPackagesDropdown(selectedPkg){
+    fetch('/api/packages/list')
+        .then(function(r){return r.json();})
+        .then(function(d){
+            var sel = document.getElementById('custPackage');
+            sel.innerHTML = '<option value="">— اختر الباقة —</option>';
+            packagesMap = {};
+            d.packages.forEach(function(p){
+                packagesMap[p.name] = p.price;
+                var selAttr = (selectedPkg && selectedPkg === p.name) ? ' selected' : '';
+                sel.innerHTML += '<option value="'+p.name+'"'+selAttr+'>'+p.name+' - '+toArabicNum(p.price.toLocaleString('en-US'))+'</option>';
+            });
+            if(selectedPkg && packagesMap[selectedPkg]){
+                document.getElementById('custPrice').value = packagesMap[selectedPkg];
+            }
+        });
+}
+function onPackageSelect(){
+    var name = document.getElementById('custPackage').value;
+    if(packagesMap[name]){
+        document.getElementById('custPrice').value = packagesMap[name];
+    }
+    updateTotalPrice();
+}
+function updateTotalPrice(){
+    var price = parseInt(document.getElementById('custPrice').value) || 0;
+    var months = parseInt(document.getElementById('durationMonths').value) || 1;
+    var total = price * months;
+    document.getElementById('totalPriceDisplay').textContent = 'الإجمالي: ' + formatDinar(total);
+}
+function updateRenewTotal(){
+    var priceText = document.getElementById('renewPrice').textContent.replace(/[^0-9]/g, '');
+    var price = parseInt(priceText) || 0;
+    var months = parseInt(document.getElementById('renewMonths').value) || 1;
+    var total = price * months;
+    document.getElementById('renewTotal').textContent = formatDinar(total);
+}
+async function submitRenew(){
+    var id = document.getElementById('renewCustomerId').value;
+    var months = parseInt(document.getElementById('renewMonths').value) || 1;
+    if (!id) return;
+    var r = await fetch('/api/customers/renew/' + id, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({months: months})
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast('تم التجديد لـ ' + months + ' شهر: ' + d.renewal_date);
+        document.getElementById('renewModal').style.display = 'none';
+        setTimeout(function() { location.reload(); }, 500);
+    } else {
+        showToast(d.error || 'خطأ', 'error');
+    }
+}
+function openAddModal(){
+    document.getElementById('modalTitle').textContent='اضافة مشترك جديد';
+    document.getElementById('editCustomerId').value='';
+    document.getElementById('custName').value='';
+    document.getElementById('custPhone').value='';
+    document.getElementById('custPhone2').value='';
+    document.getElementById('custWhatsapp').value='';
+    document.getElementById('custRegion').value='';
+    document.getElementById('custAddress').value='';
+    document.getElementById('custPrice').value='0';
+    document.getElementById('durationMonths').value='1';
+    document.getElementById('custUsername').value='';
+    document.getElementById('custPassword').value='';
+    document.getElementById('custIp').value='';
+    document.getElementById('custDevice').value='كيبل ضوئي';
+    document.getElementById('custNotes').value='';
+    loadPackagesDropdown(null);
+    updateTotalPrice();
+    document.getElementById('customerModal').style.display='flex';
+}
+function closeModal(){document.getElementById('customerModal').style.display='none';}
+function closeDetailModal(){document.getElementById('detailModal').style.display='none';}
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.getElementById('customerModal').style.display = 'none';
+        document.getElementById('detailModal').style.display = 'none';
+        document.getElementById('renewModal').style.display = 'none';
+    }
+});
+function doSearch(){window.location.href='/customers?search='+encodeURIComponent(document.getElementById('searchInput').value)+'&status={{ status_filter }}&debt={{ debt_filter }}';}
+function filterStatus(s){window.location.href='/customers?search={{ search }}&status='+s+'&debt={{ debt_filter }}';}
+function filterDebt(d){window.location.href='/customers?search={{ search }}&status={{ status_filter }}&debt='+d;}
+function openDetailModal(id,name){
+    document.getElementById('detailTitle').textContent='تفاصيل — '+name;
+    document.getElementById('detailContent').innerHTML='<div class="text-muted" style="text-align:center;padding:20px;">جاري التحميل...</div>';
+    document.getElementById('detailModal').style.display='flex';
+    fetch('/api/customers/history/'+id).then(function(r){return r.json();}).then(function(d){
+        var months=['','يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
+        var h='<h4 style="font-size:14px;margin-bottom:10px;color:#555;">الفواتير</h4><div class="table-responsive"><table><thead><tr><th>الشهر</th><th>السنة</th><th>الباقة</th><th>الاجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>';
+        d.invoices.forEach(function(inv){
+            var rem=inv.total_amount-inv.paid_amount;
+            var sb='';
+            if(inv.is_paid){sb='<span class="badge badge-green">مدفوع</span>';}
+            else if(inv.paid_amount>0){sb='<span class="badge badge-amber">جزئي</span>';}
+            else{sb='<span class="badge badge-red">غير</span>';}
+            h+='<tr><td>'+months[inv.month]+'</td><td>'+inv.year+'</td><td>'+(inv.package_name||'—')+'</td><td><strong>'+formatDinar(inv.total_amount)+'</strong></td><td>'+formatDinar(inv.paid_amount)+'</td><td style="'+(rem>0?'color:#b91c1c;font-weight:700;':'color:#0d6e3c;')+'">'+formatDinar(rem)+'</td><td>'+sb+'</td></tr>';
+        });
+        h+='</tbody></table></div>';
+        if(d.payments&&d.payments.length>0){
+            h+='<h4 style="font-size:14px;margin-top:16px;margin-bottom:10px;color:#555;">المدفوعات</h4><div class="table-responsive"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead><tbody>';
+            d.payments.forEach(function(p){h+='<tr><td>'+p.payment_date+'</td><td><strong>'+formatDinar(p.amount)+'</strong></td><td>'+p.payment_method+'</td><td class="text-muted">'+(p.notes||'—')+'</td></tr>';});
+            h+='</tbody></table></div>';
+        }
+        document.getElementById('detailContent').innerHTML=h;
+    });
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.debt-cell').forEach(function(c){c.textContent=formatDinar(c.textContent);});
+    document.getElementById('debtsTotalCard').textContent=formatDinar(document.getElementById('debtsTotalCard').textContent);
+    document.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){
+        document.getElementById('modalTitle').textContent='تعديل بيانات المشترك';
+        document.getElementById('editCustomerId').value=this.dataset.editId;
+        document.getElementById('custName').value=this.dataset.editName;
+        document.getElementById('custPhone').value=this.dataset.editPhone;
+        document.getElementById('custPhone2').value=this.dataset.editPhone2;
+        document.getElementById('custWhatsapp').value=this.dataset.editWhatsapp||'';
+        document.getElementById('custAddress').value=this.dataset.editAddress;
+        document.getElementById('custRegion').value=this.dataset.editRegion;
+        document.getElementById('custPrice').value=this.dataset.editPrice||'0';
+        document.getElementById('durationMonths').value='1';
+        document.getElementById('custUsername').value=this.dataset.editUsername||'';
+        document.getElementById('custPassword').value=this.dataset.editPassword||'';
+        document.getElementById('custIp').value=this.dataset.editIp||'';
+        document.getElementById('custDevice').value=this.dataset.editDevice||'كيبل ضوئي';
+        document.getElementById('custNotes').value=this.dataset.editNotes;
+        loadPackagesDropdown(this.dataset.editPackage||null);
+        document.getElementById('customerModal').style.display='flex';
+    });});
+document.querySelectorAll('.btn-renew').forEach(function(b){b.addEventListener('click',function(){
+    var self = this;
+    document.getElementById('renewCustomerId').value = self.dataset.renewId;
+    document.getElementById('renewMonths').value = 1;
+    document.getElementById('renewPrice').textContent = '0';
+    // Get customer price from the card/row without crashing on mobile cards
+    var container = self.closest('tr') || self.closest('.m-card') || null;
+    var priceEl = container ? container.querySelector('.badge-amber') : null;
+    var price = 0;
+    if (priceEl && priceEl.textContent) {
+        price = parseInt(String(priceEl.textContent).replace(/[^0-9]/g, '')) || 0;
+    }
+    if (!price) {
+        // Fallback to the data attribute bound at render time
+        price = parseInt(self.dataset.renewPrice) || 0;
+    }
+    document.getElementById('renewPrice').textContent = price + ' د.ع';
+    document.getElementById('renewMonths').value = 1;
+    updateRenewTotal();
+    document.getElementById('renewModal').style.display = 'flex';
+});});
+document.querySelectorAll('.btn-history').forEach(function(b){b.addEventListener('click',function(){openDetailModal(this.dataset.historyId,'');});});
+document.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){var self=this;showConfirm('حذف '+self.dataset.deleteName+'؟',function(){fetch('/api/customers/delete/'+self.dataset.deleteId,{method:'POST'}).then(function(r){return r.json();}).then(function(d){if(d.ok){showToast('تم الحذف');setTimeout(function(){location.reload();},500);}else{showToast(d.error||'خطأ','error');}});});});});
+});
+
+async function saveCustomer(){
+    var id=document.getElementById('editCustomerId').value;
+    var data={
+        name:document.getElementById('custName').value.trim(),
+        phone:document.getElementById('custPhone').value.trim(),
+        phone2:document.getElementById('custPhone2').value.trim(),
+        whatsapp_phone:document.getElementById('custWhatsapp').value.trim(),
+        region:document.getElementById('custRegion').value.trim(),
+        address:document.getElementById('custAddress').value.trim(),
+        package_name:document.getElementById('custPackage').value,
+        package_price:parseInt(document.getElementById('custPrice').value)||0,
+        duration_months:parseInt(document.getElementById('durationMonths').value)||1,
+        username:document.getElementById('custUsername').value.trim(),
+        password:document.getElementById('custPassword').value.trim(),
+        ip_address:document.getElementById('custIp').value.trim(),
+        device_type:document.getElementById('custDevice').value,
+        notes:document.getElementById('custNotes').value.trim()
+    };
+    if(!data.name){showToast('الاسم مطلوب','error');return;}
+    var url=id?'/api/customers/edit/'+id:'/api/customers/add';
+    var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    var d=await r.json();
+    if(d.ok){showToast(id?'تم التعديل':'تم الاضافة');closeModal();setTimeout(function(){location.reload();},600);}
+    else{showToast(d.error||'خطأ','error');}
+}
+</script>
+{% endblock %}

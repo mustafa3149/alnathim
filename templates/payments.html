@@ -1,0 +1,160 @@
+    {% extends "layout.html" %}
+{% block title %}المدفوعات{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h2 style="font-size:20px;font-weight:700;color:#0d6e3c;margin:0;">المدفوعات</h2>
+        <p style="font-size:12px;color:#777;margin-top:2px;">سجل جميع المدفوعات</p>
+    </div>
+    <a href="/api/export/payments/excel" class="btn btn-sm" style="background:#0d6e3c;color:#fff;border-color:#0d6e3c;">📥 تصدير Excel</a>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+    <div class="card" style="text-align:center;"><div class="card-body" style="padding:10px 6px;"><div style="font-size:18px;font-weight:700;color:#0d6e3c;" id="totalAllDisplay">{{ total_all }}</div><div style="font-size:9px;color:#777;">اجمالي المدفوعات</div></div></div>
+    <div class="card" style="text-align:center;"><div class="card-body" style="padding:10px 6px;"><div style="font-size:18px;font-weight:700;" id="totalTodayDisplay">{{ total_today }}</div><div style="font-size:9px;color:#777;">مدفوعات اليوم</div></div></div>
+    <div class="card" style="text-align:center;"><div class="card-body" style="padding:10px 6px;"><div style="font-size:18px;font-weight:700;" id="totalCountDisplay">{{ payments|length }}</div><div style="font-size:9px;color:#777;">عدد العمليات</div></div></div>
+</div>
+
+<div class="card" style="margin-bottom:12px;">
+    <div class="card-body" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:10px 12px;">
+        <div style="flex:1;min-width:140px;position:relative;">
+            <input type="text" id="searchInput" value="{{ search }}" placeholder="بحث باسم المشترك..." class="input" onkeydown="if(event.key==='Enter')doSearch()" style="padding-left:36px;font-size:13px;">
+            <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:#aaa;" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <button onclick="doSearch()" class="btn btn-primary btn-sm">بحث</button>
+        <div style="display:flex;gap:3px;flex-wrap:wrap;">
+            <button onclick="filterMethod('')" class="btn btn-sm {% if method_filter=='' %}btn-primary{% endif %}" style="font-size:12px;padding:10px 14px;min-height:40px;">الكل</button>
+            <button onclick="filterMethod('نقدي')" class="btn btn-sm {% if method_filter=='نقدي' %}btn-primary{% endif %}" style="font-size:12px;padding:10px 14px;min-height:40px;">نقدي</button>
+            <button onclick="filterMethod('تحويل')" class="btn btn-sm {% if method_filter=='تحويل' %}btn-primary{% endif %}" style="font-size:12px;padding:10px 14px;min-height:40px;">تحويل</button>
+            <button onclick="filterMethod('بطاقة')" class="btn btn-sm {% if method_filter=='بطاقة' %}btn-primary{% endif %}" style="font-size:12px;padding:10px 14px;min-height:40px;">بطاقة</button>
+        </div>
+    </div>
+</div>
+
+<!-- Desktop Table -->
+<div class="desktop-table">
+    <div class="card" style="overflow:hidden;">
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>#</th><th>المشترك</th><th style="text-align:center;">المبلغ</th><th style="text-align:center;">التاريخ</th><th style="text-align:center;">الطريقة</th><th>ملاحظات</th><th style="text-align:center;">ايصال</th><th style="text-align:center;">تعديل</th></tr></thead>
+                <tbody>
+                {% for p in payments %}
+                <tr>
+                    <td style="color:#999;font-size:11px;">#{{ p.id }}</td>
+                    <td style="font-weight:600;cursor:pointer;" onclick="openDetailModal({{ p.cust_id }},'{{ p.customer_name }}')" title="كشف حساب"><strong>{{ p.customer_name }}</strong></td>
+                    <td style="text-align:center;color:#0d6e3c;font-weight:700;" class="pay-amount">{{ p.amount }}</td>
+                    <td style="text-align:center;font-size:11px;">{{ p.payment_date }}</td>
+                    <td style="text-align:center;">{% if p.payment_method=='نقدي' %}<span class="badge badge-green">نقدي</span>{% else %}<span class="badge">{{ p.payment_method }}</span>{% endif %}</td>
+                    <td style="font-size:11px;color:#777;">{{ p.notes or '—' }}</td>
+                    <td style="text-align:center;"><a href="/print/receipt/{{ p.id }}" target="_blank" class="btn btn-sm" style="padding:10px 14px;font-size:12px;min-height:40px;">طباعة</a></td>
+                    <td style="text-align:center;">
+                        <button data-edit-id="{{ p.id }}" data-edit-amount="{{ p.amount }}" data-edit-date="{{ p.payment_date }}" data-edit-method="{{ p.payment_method }}" data-edit-notes="{{ p.notes or '' }}" class="btn-edit-pay btn btn-sm" style="padding:10px 14px;font-size:12px;min-height:40px;">تعديل</button>
+                        <button onclick="deletePayment({{ p.id }})" class="btn btn-sm btn-danger" style="padding:10px 14px;font-size:12px;min-height:40px;">حذف</button>
+                    </td>
+                </tr>{% endfor %}</tbody></table></div></div></div>
+
+<!-- Mobile Cards -->
+<div class="mobile-cards">
+{% for p in payments %}
+<div class="m-card">
+    <div class="m-row">
+        <span><strong>#{{ p.id }}</strong></span>
+        <span style="font-weight:700;color:#0d6e3c;">💰 <span class="pay-amount">{{ p.amount }}</span></span>
+    </div>
+    <div class="m-row">
+        <span>👤 {{ p.customer_name }}</span>
+        <span>📅 {{ p.payment_date }}</span>
+    </div>
+    <div class="m-row">
+        <span>💳 {% if p.payment_method=='نقدي' %}<span class="badge badge-green" style="font-size:10px;">نقدي</span>{% else %}<span class="badge" style="font-size:10px;">{{ p.payment_method }}</span>{% endif %}</span>
+        <span style="font-size:11px;color:#777;">{{ p.notes or '—' }}</span>
+    </div>
+    <div class="m-actions">
+        <a href="/print/receipt/{{ p.id }}" target="_blank" class="btn btn-sm">🖨️</a>
+        <button data-edit-id="{{ p.id }}" data-edit-amount="{{ p.amount }}" data-edit-date="{{ p.payment_date }}" data-edit-method="{{ p.payment_method }}" data-edit-notes="{{ p.notes or '' }}" class="btn-edit-pay btn btn-sm">✏️ تعديل</button>
+        <button onclick="deletePayment({{ p.id }})" class="btn btn-sm btn-danger">🗑️</button>
+    </div>
+</div>{% endfor %}
+{% if payments|length==0 %}<div style="text-align:center;padding:40px;color:#999;">لا توجد مدفوعات</div>{% endif %}
+</div>
+
+<!-- Edit Payment Modal -->
+<div id="editPaymentModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:420px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">تعديل الدفعة</h3>
+        <input type="hidden" id="editPaymentId">
+        <input type="hidden" id="editOriginalAmount">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div><label class="field-label">المبلغ</label><div style="display:flex;gap:6px;align-items:stretch;">
+                <button onclick="adjEditPay(-1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">−</button>
+                <input type="number" id="editPayAmount" class="input" style="font-weight:700;font-size:16px;text-align:center;flex:1;" step="1000" min="1000">
+                <button onclick="adjEditPay(1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">+</button>
+                <button onclick="document.getElementById('editPayAmount').value=document.getElementById('editOriginalAmount').value" class="btn btn-sm btn-success">كامل</button>
+            </div></div>
+            <div><label class="field-label">التاريخ</label><input type="date" id="editPayDate" class="input"></div>
+            <div><label class="field-label">الطريقة</label><select id="editPayMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
+            <div><label class="field-label">ملاحظات</label><input type="text" id="editPayNotes" class="input" placeholder="ملاحظة"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="submitEditPayment()" class="btn btn-primary" style="flex:1;">حفظ</button>
+            <button onclick="document.getElementById('editPaymentModal').style.display='none'" class="btn">الغاء</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<style>
+.field-label{font-size:11px;font-weight:600;color:#555;display:block;margin-bottom:3px;}
+.desktop-table{display:block;}
+.mobile-cards{display:none;}
+.m-card{border:1px solid #e5e5e5;background:#fff;padding:12px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:8px;display:flex;flex-direction:column;gap:6px;}
+.m-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.m-actions{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
+.m-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
+@media (max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:block;}}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+    document.getElementById('totalAllDisplay').textContent=formatDinar(document.getElementById('totalAllDisplay').textContent);
+    document.getElementById('totalTodayDisplay').textContent=formatDinar(document.getElementById('totalTodayDisplay').textContent);
+    document.getElementById('totalCountDisplay').textContent=toArabicNum(document.getElementById('totalCountDisplay').textContent);
+    document.querySelectorAll('.pay-amount').forEach(function(c){c.textContent=formatDinar(c.textContent);});
+});
+function doSearch(){window.location.href='/payments?search='+encodeURIComponent(document.getElementById('searchInput').value)+'&method={{ method_filter }}';}
+function filterMethod(m){window.location.href='/payments?search={{ search }}&method='+m;}
+function adjEditPay(delta){var inp=document.getElementById('editPayAmount');var val=parseInt(inp.value)||0;var newVal=val+delta;if(newVal<0)newVal=0;inp.value=newVal;}
+document.querySelectorAll('.btn-edit-pay').forEach(function(b){b.addEventListener('click',function(){var id=this.dataset.editId;var amount=this.dataset.editAmount;document.getElementById('editPaymentId').value=id;document.getElementById('editPayAmount').value=amount;document.getElementById('editOriginalAmount').value=amount;document.getElementById('editPayDate').value=this.dataset.editDate;document.getElementById('editPayMethod').value=this.dataset.editMethod;document.getElementById('editPayNotes').value=this.dataset.editNotes||'';document.getElementById('editPaymentModal').style.display='flex';});});
+async function submitEditPayment(){var id=document.getElementById('editPaymentId').value;var data={amount:parseFloat(document.getElementById('editPayAmount').value),payment_date:document.getElementById('editPayDate').value,payment_method:document.getElementById('editPayMethod').value,notes:document.getElementById('editPayNotes').value.trim()};if(!data.amount||data.amount<=0){showToast('المبلغ غير صالح','error');return;}var r=await fetch('/api/payment/edit/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});var d=await r.json();if(d.ok){showToast('تم التعديل');document.getElementById('editPaymentModal').style.display='none';setTimeout(function(){location.reload();},500);}else{showToast(d.error||'خطأ','error');}}
+async function deletePayment(id){showConfirm('حذف الدفعة؟',async function(){var r=await fetch('/api/payment/delete/'+id,{method:'POST'});var d=await r.json();if(d.ok){showToast('تم الحذف');setTimeout(function(){location.reload();},500);}else{showToast(d.error||'خطأ','error');}});}
+function openDetailModal(custId, name) {
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = '<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto;"><h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">كشف حساب — '+name+'</h3><div id="payDetailContent" style="font-size:13px;color:#555;">جاري التحميل...</div><div style="margin-top:14px;"><button onclick="this.closest(\'.modal-overlay\').remove()" class="btn">اغلاق</button></div></div>';
+    document.body.appendChild(modal);
+    fetch('/api/customers/history/' + custId)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var months = ['','يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
+            var h = '<h4 style="font-size:14px;margin-bottom:10px;color:#555;">الفواتير</h4><div class="table-responsive"><table><thead><tr><th>الشهر</th><th>السنة</th><th>الاجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>';
+            d.invoices.forEach(function(inv) {
+                var rem = inv.total_amount - inv.paid_amount;
+                var sb = inv.is_paid ? '<span class="badge badge-green">مدفوع</span>' : (inv.paid_amount > 0 ? '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#fcd34d;">جزئي</span>' : '<span class="badge badge-red">غير</span>');
+                h += '<tr><td>'+months[inv.month]+'</td><td>'+inv.year+'</td><td><strong>'+formatDinar(inv.total_amount)+'</strong></td><td>'+formatDinar(inv.paid_amount)+'</td><td style="'+(rem>0?'color:#b91c1c;font-weight:700;':'color:#0d6e3c;')+'">'+formatDinar(rem)+'</td><td>'+sb+'</td></tr>';
+            });
+            h += '</tbody></table></div>';
+            if (d.payments && d.payments.length > 0) {
+                h += '<h4 style="font-size:14px;margin-top:16px;margin-bottom:10px;color:#555;">المدفوعات</h4><div class="table-responsive"><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead><tbody>';
+                d.payments.forEach(function(p) {
+                    h += '<tr><td>'+p.payment_date+'</td><td><strong>'+formatDinar(p.amount)+'</strong></td><td>'+p.payment_method+'</td><td style="font-size:11px;color:#777;">'+(p.notes||'—')+'</td></tr>';
+                });
+                h += '</tbody></table></div>';
+            }
+            document.getElementById('payDetailContent').innerHTML = h;
+        });
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')document.getElementById('editPaymentModal').style.display='none';});
+</script>
+{% endblock %}

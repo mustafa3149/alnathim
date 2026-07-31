@@ -1,0 +1,24 @@
+{
+  "name": "الناظم - لإدارة أبراج الإنترنت",
+  "short_name": "الناظم",
+  "description": "نظام الناظم لإدارة أبراج الإنترنت - المشتركين والفواتير والمدفوعات",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f4f4",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "lang": "ar",
+  "dir": "rtl"
+}

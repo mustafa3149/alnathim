@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ايصال دفع - A4</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Cairo', 'Segoe UI', sans-serif;
+            background: #fff;
+            direction: rtl;
+            text-align: right;
+            font-size: 14px;
+            color: #1a1a1a;
+            padding: 20px;
+        }
+        .print-area { max-width: 210mm; margin: 0 auto; }
+        .brand-header {
+            display: flex; align-items: center; gap: 14px;
+            border-bottom: 3px double #1a1a1a;
+            padding-bottom: 14px; margin-bottom: 18px;
+        }
+        .brand-header img { width: 48px; height: 48px; }
+        .brand-header .brand-text { flex: 1; }
+        .brand-header .brand-text h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 0; }
+        .brand-header .brand-text p { font-size: 12px; color: #555; margin: 2px 0 0 0; }
+        .contact-row { font-size: 12px; color: #555; text-align: left; }
+
+        .doc-title {
+            text-align: center; font-size: 20px; font-weight: 700;
+            padding: 10px 0; margin-bottom: 16px;
+            border-bottom: 2px solid #1a1a1a;
+            letter-spacing: 2px;
+        }
+
+        .info-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        .info-table td { padding: 8px 12px; border: 1px solid #ddd; font-size: 14px; }
+        .info-table .label { background: #f5f5f5; font-weight: 600; color: #555; width: 30%; }
+        .info-table .value { font-weight: 600; }
+
+        .amount-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        .amount-table td { padding: 8px 12px; border: 1px solid #ddd; font-size: 14px; }
+        .amount-table .label { background: #f5f5f5; font-weight: 600; color: #555; }
+        .amount-table .total-row td { font-size: 18px; font-weight: 700; background: #fafafa; }
+        .amount-table .paid-row td { color: #0d6e3c; font-weight: 600; }
+        .amount-table .remaining-row td { color: #b91c1c; font-weight: 700; }
+
+        .footer { text-align: center; margin-top: 20px; padding-top: 16px; border-top: 2px solid #ddd; }
+        .footer .thanks { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-top: 6px; }
+        .footer .support { font-size: 14px; font-weight: 700; color: #1a1a1a; margin-top: 8px; }
+        .footer .note { font-size: 12px; color: #777; }
+
+        .btn-bar { text-align: center; margin-bottom: 20px; }
+        .btn-bar button {
+            padding: 12px 36px; margin: 0 6px;
+            background: #1a1a1a; color: #fff; border: none;
+            font-size: 14px; font-weight: 700; font-family: inherit;
+            cursor: pointer; border-radius: 6px;
+        }
+        .btn-bar button:hover { background: #333; }
+
+        @media print {
+            @page { margin: 1.5cm; size: A4; }
+            body { padding: 0; margin: 0; }
+            .btn-bar { display: none !important; }
+            .print-area { max-width: 100%; }
+            .info-table td, .amount-table td { border-color: #000; }
+            .brand-header { border-bottom-color: #000; }
+            .doc-title { border-bottom-color: #000; }
+            .footer { border-top-color: #000; }
+        }
+    </style>
+</head>
+<body>
+    <div class="btn-bar">
+        <button onclick="window.print()">🖨️ طباعة A4</button>
+        <button onclick="window.location.href='/print/receipt/{{ payment.id }}'">📄 طباعة حرارية</button>
+    </div>
+
+    <div class="print-area">
+        <div class="brand-header">
+            <img src="/static/assets/al-nazim-icon.svg" alt="الناظم">
+            <div class="brand-text">
+                <h1>نظام الناظم</h1>
+                <p>لإدارة أبراج الإنترنت</p>
+            </div>
+            <div class="contact-row">
+                {% if gen_info and gen_info.phone %}هاتف: {{ gen_info.phone }}<br>{% endif %}
+                {% if gen_info and gen_info.address %}{{ gen_info.address }}{% endif %}
+            </div>
+        </div>
+
+        <div class="doc-title">📋 وصل تسديد - فاتورة رسمية</div>
+
+        <table class="info-table">
+            <tr><td class="label">رقم الوصل</td><td class="value">{{ payment.id|invoice_no }}</td></tr>
+            <tr><td class="label">اسم المشترك</td><td class="value">{{ payment.customer_name }}</td></tr>
+            {% if payment.username %}
+            <tr><td class="label">اسم المستخدم</td><td class="value">{{ payment.username }}</td></tr>
+            {% endif %}
+            {% if payment.package_name %}
+            <tr><td class="label">الباقة</td><td class="value">{{ payment.package_name }}</td></tr>
+            {% endif %}
+            <tr><td class="label">طريقة الدفع</td><td class="value">{{ payment.payment_method }}</td></tr>
+            <tr><td class="label">تاريخ الدفع</td><td class="value">{{ payment.created_at|datetime_display if payment.created_at else payment.payment_date }}</td></tr>
+            {% if payment.renewal_date %}
+            <tr><td class="label">تاريخ التجديد</td><td class="value">{{ payment.renewal_date|datetime_display }}</td></tr>
+            {% endif %}
+            {% if payment.notes %}
+            <tr><td class="label">ملاحظات</td><td class="value">{{ payment.notes }}</td></tr>
+            {% endif %}
+        </table>
+
+        <table class="amount-table">
+            {% if invoice and invoice.previous_debt and invoice.previous_debt > 0 %}
+            <tr><td class="label">ديون سابقة</td><td style="text-align:left;color:#c27803;font-weight:600;">{{ invoice.previous_debt|dinar }}</td></tr>
+            {% endif %}
+            <tr class="total-row"><td>🔹 إجمالي الفاتورة</td><td style="text-align:left;">{{ invoice.total_amount|dinar }}</td></tr>
+            <tr class="paid-row"><td>✅ المبلغ المدفوع</td><td style="text-align:left;">{{ payment.amount|dinar }}</td></tr>
+            {% if remaining > 0 %}
+            <tr class="remaining-row"><td>⚠️ المتبقي</td><td style="text-align:left;">{{ remaining|dinar }}</td></tr>
+            {% else %}
+            <tr class="paid-row"><td>✅ المتبقي</td><td style="text-align:left;">0 د.ع - مسدد بالكامل</td></tr>
+            {% endif %}
+        </table>
+
+        <div class="footer">
+            {% if gen_info and gen_info.footer_note %}
+            <div class="note">{{ gen_info.footer_note }}</div>
+            {% endif %}
+            <div class="thanks">شكراً لالتزامكم بالتسديد في الوقت المحدد</div>
+            {% if gen_info and gen_info.phone %}
+            <div class="support">📞 الدعم الفني: {{ gen_info.phone }}</div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

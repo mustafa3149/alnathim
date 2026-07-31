@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block title %}الإعدادات{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:32px;">
+    <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;">الإعدادات</h2>
+    <p style="font-size:13px;color:#777;margin-top:4px;">تعديل بيانات الشركة والتصدير وإعدادات الإشعارات</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-1 gap-6">
+    <div class="flex flex-col gap-6">
+
+        <!-- Owner & Contact Info -->
+        <div class="card">
+            <div class="card-header">بيانات الشركة (تظهر في الوصل)</div>
+            <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div><label class="f-label">اسم المالك</label><input type="text" id="ownerName" class="input" value="{{ gen_info.owner_name if gen_info else '' }}" placeholder="مثال: أبو فهد"></div>
+                    <div><label class="f-label">رقم الهاتف</label><input type="text" id="ownerPhone" class="input" dir="ltr" value="{{ gen_info.phone if gen_info else '' }}" placeholder="مثال: 07801234567"></div>
+                    <div><label class="f-label">العنوان / المنطقة</label><input type="text" id="ownerAddress" class="input" value="{{ gen_info.address if gen_info else '' }}" placeholder="مثال: البصرة - حي الحسين"></div>
+                    <div><label class="f-label">ملاحظة أسفل الوصل</label><input type="text" id="footerNote" class="input" value="{{ gen_info.footer_note if gen_info else '' }}" placeholder="مثال: يرجى الاحتفاظ بالوصل للتأكد"></div>
+                    <button onclick="saveGeneratorInfo()" class="btn btn-primary" style="width:100%;">حفظ بيانات الشركة</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Other Settings -->
+        <div class="card">
+            <div class="card-header">إعدادات أخرى</div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="f-label">نوع الربط الافتراضي للمشتركين الجدد</label>
+                    <select id="defaultConnectionType" class="input">
+                        <option value="كيبل ضوئي" {% if default_connection_type=='كيبل ضوئي' %}selected{% endif %}>كيبل ضوئي</option>
+                        <option value="نانو" {% if default_connection_type=='نانو' %}selected{% endif %}>نانو</option>
+                    </select>
+                </div>
+                <button onclick="saveDefaultConnection()" class="btn btn-primary" style="width:100%;">حفظ</button>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="saveNumeralStyle('AR')" class="btn btn-sm{% if numeral_style=='AR' %} btn-primary{% endif %}" style="flex:1;">أرقام عربية (١٢٣)</button>
+                    <button onclick="saveNumeralStyle('EN')" class="btn btn-sm{% if numeral_style=='EN' %} btn-primary{% endif %}" style="flex:1;">English (123)</button>
+                </div>
+                <a href="/api/export/excel" class="btn btn-primary" style="text-decoration:none;text-align:center;">تصدير Excel</a>
+                <a href="/api/backup" class="btn btn-primary" style="text-decoration:none;text-align:center;background:#0d6e3c;border-color:#0d6e3c;">تحميل النسخة الاحتياطية</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<style>.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}</style>
+<script>
+async function saveGeneratorInfo(){var d={owner_name:document.getElementById('ownerName').value.trim(),phone:document.getElementById('ownerPhone').value.trim(),address:document.getElementById('ownerAddress').value.trim(),footer_note:document.getElementById('footerNote').value.trim()};var r=await fetch('/api/generator/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});var j=await r.json();showToast(j.ok?'تم حفظ بيانات الشركة':(j.error||'خطأ'),j.ok?'':'error');}
+async function saveDefaultConnection(){var r=await fetch('/api/settings/default-connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_connection_type:document.getElementById('defaultConnectionType').value})});var j=await r.json();showToast(j.ok?'تم الحفظ':(j.error||'خطأ'),j.ok?'':'error');}
+async function saveNumeralStyle(s){var r=await fetch('/api/settings/numeral-style',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numeral_style:s})});var j=await r.json();if(j.ok){numeralStyle=s;showToast('تم تغيير نمط الأرقام');setTimeout(function(){location.reload();},300);}else{showToast(j.error||'خطأ','error');}}
+</script>
+{% endblock %}

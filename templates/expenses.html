@@ -1,0 +1,247 @@
+{% extends "layout.html" %}
+{% block title %}المصروفات{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div>
+        <h2 style="font-size:20px;font-weight:700;color:#1a1a1a;margin:0;">المصروفات</h2>
+        <p style="font-size:12px;color:#777;margin-top:2px;">تسجيل ومتابعة المصروفات (سحب انترنت، ايجار برج، اجهزة وكيبلات، رواتب)</p>
+    </div>
+    <button onclick="openAddExpenseModal()" class="btn btn-primary">+ اضافة مصروف</button>
+</div>
+
+<div class="card" style="margin-bottom:12px;">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;padding:10px 12px;">
+        <div>
+            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">الشهر</label>
+            <select id="monthSelect" onchange="changeMonth()" class="input" style="width:100px;font-size:12px;">
+                {% set months=['يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'] %}
+                {% for i in range(1,13) %}<option value="{{ i }}" {% if month==i %}selected{% endif %}>{{ months[i-1] }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">السنة</label>
+            <select id="yearSelect" onchange="changeMonth()" class="input" style="width:80px;font-size:12px;">
+                {% for y in range(2024,2031) %}<option value="{{ y }}" {% if year==y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select>
+        </div>
+        <div style="flex:1;min-width:120px;">
+            <input type="text" id="searchInput" value="{{ search }}" placeholder="بحث..." class="input" onkeydown="if(event.key==='Enter')doSearch()" style="font-size:12px;">
+        </div>
+        <button onclick="doSearch()" class="btn btn-primary btn-sm">بحث</button>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px;">
+    <div class="card" style="text-align:center;">
+        <div class="card-body" style="padding:10px 6px;">
+            <div style="font-size:18px;font-weight:700;color:#b91c1c;" id="totalExpensesDisplay">{{ total_expenses }}</div>
+            <div style="font-size:9px;color:#777;">اجمالي المصروفات</div>
+        </div>
+    </div>
+    {% for cat in categories %}
+    <div class="card" style="text-align:center;">
+        <div class="card-body" style="padding:8px 4px;">
+            <div style="font-size:14px;font-weight:700;" class="cat-total">{{ cat.total }}</div>
+            <div style="font-size:9px;color:#777;">{{ cat.category }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card" style="overflow:hidden;">
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>التاريخ</th>
+                    <th>التصنيف</th>
+                    <th style="text-align:center;">المبلغ</th>
+                    <th>البيان</th>
+                    <th>الجهة المستلمة</th>
+                    <th>المشترك المرتبط</th>
+                    <th style="text-align:center;">حذف</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in expenses %}
+                <tr>
+                    <td style="font-size:12px;">{{ e.expense_date }}</td>
+                    <td><span class="badge">{{ e.category }}</span></td>
+                    <td style="text-align:center;font-weight:700;color:#b91c1c;" class="expense-amount">{{ e.amount }}</td>
+                    <td style="font-size:12px;color:#555;">{{ e.description or '—' }}</td>
+                    <td style="font-size:12px;color:#555;">{{ e.recipient_name or '—' }}</td>
+                    <td style="font-size:12px;color:#555;">{{ e.subscriber_name or '—' }}</td>
+                    <td style="text-align:center;">
+                        <button onclick="openEditExpenseModal({{ e.id }}, '{{ e.expense_date }}', '{{ e.category }}', {{ e.amount }}, '{{ e.description if e.description else '' }}', '{{ e.recipient_name if e.recipient_name else '' }}', {{ e.subscriber_id if e.subscriber_id else '' }})" class="btn btn-sm" style="padding:10px 14px;font-size:12px;min-height:40px;">تعديل</button>
+                        <button onclick="deleteExpense({{ e.id }})" class="btn btn-sm btn-danger" style="padding:10px 14px;font-size:12px;min-height:40px;">حذف</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if expenses|length==0 %}
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد مصروفات لهذا الشهر</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="addExpenseModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:420px;">
+        <h3 id="expenseModalTitle" style="font-size:18px;font-weight:700;margin-bottom:14px;">اضافة مصروف</h3>
+        <input type="hidden" id="editExpenseId" value="">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">التاريخ</label>
+                <input type="date" id="expenseDate" class="input">
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">التصنيف</label>
+                <input type="text" id="expenseCategory" class="input" list="categoryList" placeholder="اكتب او اختر تصنيف..." autocomplete="off">
+                <datalist id="categoryList">
+                    <option value="سحب انترنت">
+                    <option value="ايجار برج">
+                    <option value="اجهزة وكيبلات">
+                    <option value="رواتب">
+                    <option value="صيانة">
+                    <option value="كهرباء">
+                    <option value="مصاريف تشغيل">
+                </datalist>
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">المبلغ</label>
+                <input type="number" id="expenseAmount" class="input" step="1000" min="1000" placeholder="المبلغ بالدينار">
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">البيان</label>
+                <input type="text" id="expenseDescription" class="input" placeholder="وصف المصروف">
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">الجهة المستلمة للمبلغ (مثلاً: ايرثلك، عامل صيانة)</label>
+                <input type="text" id="expenseRecipient" class="input" placeholder="اسم الجهة المستلمة">
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">مرتبط بمشترك (اختياري)</label>
+                <select id="expenseSubscriberId" class="input" style="font-size:12px;">
+                    <option value="">— غير مرتبط —</option>
+                    {% for s in subscribers %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="submitExpense()" class="btn btn-primary" style="flex:1;">حفظ</button>
+            <button onclick="closeExpenseModal()" class="btn">الغاء</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.badge{display:inline-flex;padding:3px 10px;font-size:11px;font-weight:600;border-radius:4px;background:#f0f0f0;color:#555;border:1px solid #ddd;}
+</style>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+var todayStr = new Date().toISOString().split('T')[0];
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('totalExpensesDisplay').textContent = formatDinar(document.getElementById('totalExpensesDisplay').textContent);
+    document.querySelectorAll('.expense-amount').forEach(function(c) { c.textContent = formatDinar(c.textContent); });
+    document.querySelectorAll('.cat-total').forEach(function(c) { c.textContent = formatDinar(c.textContent); });
+});
+
+function changeMonth() {
+    var m = document.getElementById('monthSelect').value;
+    var y = document.getElementById('yearSelect').value;
+    window.location.href = '/expenses?month=' + m + '&year=' + y;
+}
+
+function doSearch() {
+    var m = document.getElementById('monthSelect').value;
+    var y = document.getElementById('yearSelect').value;
+    var s = encodeURIComponent(document.getElementById('searchInput').value);
+    window.location.href = '/expenses?month=' + m + '&year=' + y + '&search=' + s;
+}
+
+function openAddExpenseModal() {
+    document.getElementById('expenseModalTitle').textContent = 'اضافة مصروف';
+    document.getElementById('editExpenseId').value = '';
+    document.getElementById('expenseDate').value = todayStr;
+    document.getElementById('expenseCategory').value = '';
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseDescription').value = '';
+    document.getElementById('expenseRecipient').value = '';
+    document.getElementById('expenseSubscriberId').value = '';
+    document.getElementById('addExpenseModal').style.display = 'flex';
+}
+
+function openEditExpenseModal(id, date, category, amount, description, recipient, subscriberId) {
+    document.getElementById('expenseModalTitle').textContent = 'تعديل المصروف';
+    document.getElementById('editExpenseId').value = id;
+    document.getElementById('expenseDate').value = date;
+    document.getElementById('expenseCategory').value = category;
+    document.getElementById('expenseAmount').value = amount;
+    document.getElementById('expenseDescription').value = description;
+    document.getElementById('expenseRecipient').value = recipient;
+    document.getElementById('expenseSubscriberId').value = subscriberId || '';
+    document.getElementById('addExpenseModal').style.display = 'flex';
+}
+
+function closeExpenseModal() {
+    document.getElementById('addExpenseModal').style.display = 'none';
+}
+
+async function submitExpense() {
+    var editId = document.getElementById('editExpenseId').value;
+    var categoryVal = document.getElementById('expenseCategory').value.trim();
+    if (!categoryVal) {
+        showToast('الرجاء ادخال التصنيف', 'error');
+        return;
+    }
+    var data = {
+        expense_date: document.getElementById('expenseDate').value,
+        category: categoryVal,
+        amount: parseFloat(document.getElementById('expenseAmount').value),
+        description: document.getElementById('expenseDescription').value.trim(),
+        recipient_name: document.getElementById('expenseRecipient').value.trim(),
+        subscriber_id: document.getElementById('expenseSubscriberId').value || null
+    };
+    if (!data.amount || data.amount <= 0) {
+        showToast('الرجاء ادخال مبلغ صحيح', 'error');
+        return;
+    }
+    var url = editId ? '/api/expenses/edit/' + editId : '/api/expenses/add';
+    var r = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast(editId ? 'تم التعديل' : 'تم اضافة المصروف');
+        closeExpenseModal();
+        setTimeout(function() { location.reload(); }, 500);
+    } else {
+        showToast(d.error || 'حدث خطأ', 'error');
+    }
+}
+
+async function deleteExpense(id) {
+    showConfirm('حذف هذا المصروف؟', async function() {
+        var r = await fetch('/api/expenses/delete/' + id, { method: 'POST' });
+        var d = await r.json();
+        if (d.ok) {
+            showToast('تم الحذف');
+            setTimeout(function() { location.reload(); }, 500);
+        } else {
+            showToast(d.error || 'خطأ', 'error');
+        }
+    });
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeExpenseModal();
+});
+</script>
+{% endblock %}

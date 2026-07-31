@@ -1,0 +1,217 @@
+{% extends "layout.html" %}
+{% block title %}طلبات الصيانة{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">طلبات الصيانة</h2>
+        <p style="font-size:13px;color:#888;margin-top:4px;">متابعة طلبات صيانة المشتركين</p>
+    </div>
+    <button onclick="openAddTicketModal()" class="btn btn-primary icon-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        اضافة طلب صيانة
+    </button>
+</div>
+
+<div class="card filter-bar">
+    <div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;">
+        <div style="flex:1;min-width:160px;position:relative;">
+            <input type="text" id="searchInput" value="{{ search }}" placeholder="بحث باسم المشترك او وصف المشكلة..." class="input" onkeydown="if(event.key==='Enter')doSearch()" style="padding-left:36px;">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aaa;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <button onclick="doSearch()" class="btn btn-primary btn-sm">بحث</button>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button onclick="filterStatus('all')" class="btn btn-sm filter-btn {% if status_filter=='all' %}filter-active{% endif %}">الكل</button>
+            <button onclick="filterStatus('pending')" class="btn btn-sm filter-btn {% if status_filter=='pending' %}filter-active{% endif %}">قيد الانتظار</button>
+            <button onclick="filterStatus('resolved')" class="btn btn-sm filter-btn {% if status_filter=='resolved' %}filter-active{% endif %}">تم الحل</button>
+        </div>
+    </div>
+</div>
+
+<div class="desktop-table">
+    <div class="card" style="overflow:hidden;">
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>المشترك</th><th>وصف المشكلة</th><th>التاريخ</th><th>الحالة</th><th style="width:120px;">اجراءات</th></tr></thead>
+                <tbody>
+                {% for t in tickets %}
+                <tr{% if t.status=='resolved' %} style="background:#f0fdf4;"{% endif %}>
+                    <td style="font-weight:600;">{{ t.customer_name }}{% if t.phone %} <span style="font-size:11px;color:#888;">{{ t.phone }}</span>{% endif %}</td>
+                    <td style="font-size:13px;">{{ t.issue_description[:60] }}{% if t.issue_description|length>60 %}...{% endif %}</td>
+                    <td style="text-align:center;font-size:12px;">{{ t.created_at[:10] }}</td>
+                    <td style="text-align:center;">
+                        {% if t.status=='pending' %}
+                        <span class="badge badge-amber">قيد الانتظار</span>
+                        {% else %}
+                        <span class="badge badge-green">تم الحل</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions-cell" style="text-align:center;">
+                        <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">
+                            <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm {% if t.status=='pending' %}btn-success{% else %}btn-warning{% endif %}" style="font-size:12px;padding:10px 14px;min-height:40px;">
+                                {% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}
+                            </button>
+                            <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger" style="font-size:12px;padding:10px 14px;min-height:40px;">حذف</button>
+                        </div>
+                    </td>
+                </tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Mobile Cards -->
+<div class="mobile-cards">
+{% for t in tickets %}
+<div class="m-card{% if t.status=='resolved' %} paid-bg{% endif %}">
+    <div class="m-card-header">
+        <span class="m-card-name">{{ t.customer_name }}</span>
+        <span>{% if t.status=='pending' %}<span class="badge badge-amber">قيد الانتظار</span>{% else %}<span class="badge badge-green">تم الحل</span>{% endif %}</span>
+    </div>
+    <div class="m-card-row"><span class="text-muted">{{ t.created_at[:10] }}</span></div>
+    <div class="m-card-row"><span>{{ t.issue_description }}</span></div>
+    <div class="m-card-actions">
+        <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm {% if t.status=='pending' %}btn-success{% else %}btn-warning{% endif %}">{% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}</button>
+        <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger">حذف</button>
+    </div>
+</div>{% endfor %}
+{% if tickets|length==0 %}<div style="text-align:center;padding:48px;color:#999;">لا توجد طلبات صيانة</div>{% endif %}
+</div>
+
+<!-- Add Ticket Modal -->
+<div id="ticketModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:500px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">اضافة طلب صيانة</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="position:relative;">
+                <label class="f-label">المشترك *</label>
+                <input type="text" id="ticketCustomerSearch" class="input" placeholder="اكتب اسم المشترك او اسم المستخدم للبحث..." autocomplete="off" oninput="searchCustomers()" onfocus="searchCustomers()" style="font-size:14px;min-height:38px;">
+                <input type="hidden" id="ticketCustomerId" value="">
+                <div id="searchResults" style="position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1px solid #d5d5d5;border-top:none;max-height:200px;overflow-y:auto;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);"></div>
+            </div>
+            <div>
+                <label class="f-label">وصف المشكلة *</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+                    <button type="button" onclick="setTicketIssue('برمجة راوتر')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">برمجة راوتر</button>
+                    <button type="button" onclick="setTicketIssue('قطع بالكيبل')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">قطع بالكيبل</button>
+                    <button type="button" onclick="setTicketIssue('ضعف اشارة')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">ضعف اشارة</button>
+                    <button type="button" onclick="setTicketIssue('انقطاع خدمة')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">انقطاع خدمة</button>
+                </div>
+                <textarea id="ticketDescription" rows="4" class="input" style="resize:none;" placeholder="مثال: انقطاع الكيبل، اشارة ضعيفة، جهاز معطل..."></textarea>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="submitTicket()" class="btn btn-primary" style="flex:1;">حفظ</button>
+            <button onclick="document.getElementById('ticketModal').style.display='none'" class="btn">الغاء</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<style>
+.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
+.desktop-table{display:block;}
+.mobile-cards{display:none;}
+.paid-bg{background:#f0fdf4 !important;}
+.m-card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:8px;}
+.m-card-header{display:flex;justify-content:space-between;align-items:center;}
+.m-card-name{font-weight:700;font-size:15px;}
+.m-card-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.m-card-actions{display:flex;gap:4px;margin-top:2px;flex-wrap:wrap;}
+.m-card-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
+.text-muted{color:#888;font-size:12px;}
+.filter-btn{font-size:11px;padding:6px 12px;border-color:#ddd;color:#666;}
+.filter-active{background:#1a1a1a !important;color:#fff !important;border-color:#1a1a1a !important;}
+.filter-bar .card-body{padding:10px 14px !important;}
+.badge-amber{background:#fffbeb;color:#92400e;border-color:#fcd34d;}
+@media(max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:flex;flex-direction:column;gap:10px;}}
+</style>
+<script>
+var searchTimeout = null;
+function searchCustomers(){
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(doSearchCustomers, 200);
+}
+function doSearchCustomers(){
+    var q = document.getElementById('ticketCustomerSearch').value.trim();
+    fetch('/api/customers/search?q=' + encodeURIComponent(q))
+        .then(function(r){return r.json();})
+        .then(function(d){
+            var div = document.getElementById('searchResults');
+            if(!d.ok||!d.customers.length){
+                div.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:12px;">لا توجد نتائج</div>';
+                div.style.display='block';
+                return;
+            }
+            var h='';
+            d.customers.forEach(function(c){
+                h+='<div onclick="selectCustomer('+c.id+',\''+c.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;transition:background 0.1s;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'\'">';
+                h+='<strong>'+c.name+'</strong>';
+                if(c.username)h+=' <span style="color:#888;font-size:11px;">@'+c.username+'</span>';
+                if(c.phone)h+=' <span style="color:#aaa;font-size:11px;">'+c.phone+'</span>';
+                h+='</div>';
+            });
+            div.innerHTML=h;
+            div.style.display='block';
+        });
+}
+function setTicketIssue(text) {
+    document.getElementById('ticketDescription').value = text;
+}
+function selectCustomer(id, name){
+    document.getElementById('ticketCustomerId').value = id;
+    document.getElementById('ticketCustomerSearch').value = name;
+    document.getElementById('searchResults').style.display='none';
+}
+function openAddTicketModal(){
+    document.getElementById('ticketCustomerId').value='';
+    document.getElementById('ticketCustomerSearch').value='';
+    document.getElementById('ticketDescription').value='';
+    document.getElementById('searchResults').style.display='none';
+    document.getElementById('ticketModal').style.display='flex';
+}
+// Close search dropdown on outside click
+document.addEventListener('click', function(e){
+    var sr = document.getElementById('searchResults');
+    var inp = document.getElementById('ticketCustomerSearch');
+    if(sr && inp && e.target !== inp && !sr.contains(e.target)){
+        sr.style.display = 'none';
+    }
+});
+function doSearch(){
+    window.location.href='/tickets?search='+encodeURIComponent(document.getElementById('searchInput').value)+'&status={{ status_filter }}';
+}
+function filterStatus(s){
+    window.location.href='/tickets?search={{ search }}&status='+s;
+}
+async function submitTicket(){
+    var custId=document.getElementById('ticketCustomerId').value;
+    var desc=document.getElementById('ticketDescription').value.trim();
+    if(!custId){showToast('يرجى اختيار المشترك','error');return;}
+    if(!desc){showToast('يرجى كتابة وصف المشكلة','error');return;}
+    var r=await fetch('/api/tickets/add',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({customer_id:parseInt(custId),issue_description:desc})
+    });
+    var d=await r.json();
+    if(d.ok){showToast('تم اضافة طلب الصيانة');document.getElementById('ticketModal').style.display='none';setTimeout(function(){location.reload();},500);}
+    else{showToast(d.error||'خطأ','error');}
+}
+async function toggleResolve(ticketId){
+    var r=await fetch('/api/tickets/resolve/'+ticketId,{method:'POST'});
+    var d=await r.json();
+    if(d.ok){showToast(d.new_status==='resolved'?'تم حل الطلب':'تم اعادة فتح الطلب');setTimeout(function(){location.reload();},400);}
+    else{showToast(d.error||'خطأ','error');}
+}
+async function deleteTicket(ticketId){
+    showConfirm('حذف طلب الصيانة؟',async function(){
+        var r=await fetch('/api/tickets/delete/'+ticketId,{method:'POST'});
+        var d=await r.json();
+        if(d.ok){showToast('تم الحذف');setTimeout(function(){location.reload();},400);}
+        else{showToast(d.error||'خطأ','error');}
+    });
+}
+</script>
+{% endblock %}

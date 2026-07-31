@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+{% block title %}الباقات{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">إدارة الباقات</h2>
+        <p style="font-size:13px;color:#888;margin-top:4px;">اضافة وتعديل وحذف باقات الإنترنت</p>
+    </div>
+    <button onclick="openAddModal()" class="btn btn-primary icon-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        اضافة باقة
+    </button>
+</div>
+
+<div class="card" style="overflow:hidden;">
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th style="text-align:center;">#</th><th>اسم الباقة</th><th style="text-align:center;">السعر</th><th style="text-align:center;width:140px;">اجراءات</th></tr></thead>
+            <tbody>
+            {% for p in packages %}
+            <tr>
+                <td style="text-align:center;color:#999;font-size:12px;">{{ p.id }}</td>
+                <td style="font-weight:600;">{{ p.name }}</td>
+                <td style="text-align:center;font-weight:700;" class="pkg-price">{{ p.price }}</td>
+                <td style="text-align:center;">
+                    <button onclick="openEditModal({{ p.id }},'{{ p.name }}',{{ p.price }})" class="btn btn-sm" style="font-size:12px;padding:10px 14px;min-height:40px;">تعديل</button>
+                    <button onclick="deletePackage({{ p.id }},'{{ p.name }}')" class="btn btn-sm btn-danger" style="font-size:12px;padding:10px 14px;min-height:40px;">حذف</button>
+                </td>
+            </tr>{% endfor %}
+            {% if packages|length==0 %}<tr><td colspan="4" style="text-align:center;padding:40px;color:#999;">لا توجد باقات</td></tr>{% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/Edit Package Modal -->
+<div id="packageModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:420px;">
+        <h3 id="pkgModalTitle" style="font-size:18px;font-weight:700;margin-bottom:14px;">اضافة باقة جديدة</h3>
+        <input type="hidden" id="editPackageId" value="">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label class="f-label">اسم الباقة *</label><input type="text" id="pkgName" class="input" placeholder="مثال: ايكونومي" style="font-size:14px;min-height:38px;"></div>
+            <div><label class="f-label">السعر (د.ع) *</label><input type="number" id="pkgPrice" class="input" min="1000" step="1000" value="15000" style="font-size:14px;min-height:38px;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="savePackage()" class="btn btn-primary" style="flex:1;">حفظ</button>
+            <button onclick="document.getElementById('packageModal').style.display='none'" class="btn">الغاء</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<style>
+.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.pkg-price').forEach(function(c){c.textContent=formatDinar(c.textContent);});
+});
+function openAddModal(){
+    document.getElementById('pkgModalTitle').textContent='اضافة باقة جديدة';
+    document.getElementById('editPackageId').value='';
+    document.getElementById('pkgName').value='';
+    document.getElementById('pkgPrice').value='15000';
+    document.getElementById('packageModal').style.display='flex';
+}
+function openEditModal(id,name,price){
+    document.getElementById('pkgModalTitle').textContent='تعديل الباقة';
+    document.getElementById('editPackageId').value=id;
+    document.getElementById('pkgName').value=name;
+    document.getElementById('pkgPrice').value=price;
+    document.getElementById('packageModal').style.display='flex';
+}
+async function savePackage(){
+    var id=document.getElementById('editPackageId').value;
+    var data={name:document.getElementById('pkgName').value.trim(),price:parseInt(document.getElementById('pkgPrice').value)||0};
+    if(!data.name||data.price<=0){showToast('البيانات غير صالحة','error');return;}
+    var url=id?'/api/packages/edit/'+id:'/api/packages/add';
+    var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    var d=await r.json();
+    if(d.ok){showToast(id?'تم التعديل':'تمت الاضافة');document.getElementById('packageModal').style.display='none';setTimeout(function(){location.reload();},500);}
+    else{showToast(d.error||'خطأ','error');}
+}
+async function deletePackage(id,name){
+    showConfirm('حذف باقة '+name+'؟',async function(){
+        var r=await fetch('/api/packages/delete/'+id,{method:'POST'});
+        var d=await r.json();
+        if(d.ok){showToast('تم الحذف');setTimeout(function(){location.reload();},400);}
+        else{showToast(d.error||'خطأ','error');}
+    });
+}
+</script>
+{% endblock %}

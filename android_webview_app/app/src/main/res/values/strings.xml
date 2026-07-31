@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">الناظم</string>
+    <string name="app_not_found">لا يوجد تطبيق يمكنه فتح هذا الرابط</string>
+</resources>

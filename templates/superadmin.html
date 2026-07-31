@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block title %}لوحة المدير{% endblock %}
+{% block content %}
+<div style="margin-bottom:32px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;">🛡️ لوحة مدير المنصة</h2>
+        <p style="font-size:13px;color:#777;margin-top:4px;">إدارة حسابات مزودي الخدمة (ISP Owners)</p>
+    </div>
+    <button id="btn-logout" class="btn btn-sm btn-danger">تسجيل خروج المدير</button>
+</div>
+
+<div class="card">
+    <div class="card-header">📋 جميع المالكين</div>
+    <div class="card-body table-responsive" style="padding:0;">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>الاسم</th>
+                    <th>اسم المستخدم</th>
+                    <th>الحالة</th>
+                    <th>تاريخ الانتهاء</th>
+                    <th>تاريخ التسجيل</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for owner in owners %}
+                <tr>
+                    <td data-label="ID">{{ owner.id }}</td>
+                    <td data-label="الاسم">{{ owner.full_name }}</td>
+                    <td data-label="اسم المستخدم" dir="ltr">{{ owner.username }}</td>
+                    <td data-label="الحالة">
+                        {% if owner.account_status == 'active' %}
+                            <span class="badge badge-green">✅ مفعل</span>
+                        {% elif owner.account_status == 'pending' %}
+                            <span class="badge badge-amber">⏳ قيد الانتظار</span>
+                        {% else %}
+                            <span class="badge badge-red">⛔ موقوف</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="تاريخ الانتهاء">
+                        {{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '—' }}
+                    </td>
+                    <td data-label="تاريخ التسجيل">{{ owner.created_at.strftime('%Y-%m-%d %H:%M') if owner.created_at else '—' }}</td>
+                    <td data-label="إجراءات">
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            {% if owner.account_status == 'pending' %}
+                            <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">✅ تفعيل</button>
+                            {% elif owner.account_status == 'active' %}
+                            <button class="btn btn-sm btn-danger btn-suspend" data-id="{{ owner.id }}">⛔ إيقاف</button>
+                            {% endif %}
+                            {% if owner.account_status == 'suspended' %}
+                            <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">↩️ إعادة تفعيل</button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-primary btn-extend" data-id="{{ owner.id }}">📅 تمديد</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('click', async function(e) {
+    var btn = e.target.closest('.btn-approve, .btn-suspend, .btn-extend');
+    if (!btn) return;
+
+    var id = btn.getAttribute('data-id');
+    var action = 'approve';
+    if (btn.classList.contains('btn-suspend')) action = 'suspend';
+    if (btn.classList.contains('btn-extend')) action = 'extend';
+
+    if (action === 'extend') {
+        var dateStr = prompt('أدخل تاريخ الانتهاء (YYYY-MM-DD):');
+        if (!dateStr) return;
+        var r = await fetch('/superadmin/owners/' + id + '/extend', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({subscription_end_date: dateStr})
+        });
+        var d = await r.json();
+        showToast(d.ok ? d.message : d.error, d.ok ? '' : 'error');
+        if (d.ok) setTimeout(function(){ location.reload(); }, 800);
+        return;
+    }
+
+    var r = await fetch('/superadmin/owners/' + id + '/' + action, {method: 'POST'});
+    var d = await r.json();
+    showToast(d.ok ? d.message : d.error, d.ok ? '' : 'error');
+    if (d.ok) setTimeout(function(){ location.reload(); }, 800);
+});
+
+document.getElementById('btn-logout').addEventListener('click', async function() {
+    var r = await fetch('/superadmin/logout', {method: 'POST'});
+    var d = await r.json();
+    if (d.ok) window.location.href = '/superadmin/login';
+});
+</script>
+{% endblock %}

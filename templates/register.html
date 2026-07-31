@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{% block title %}إنشاء حساب{% endblock %}
+{% block content %}
+<div style="max-width:420px;margin:60px auto;padding:0 16px;">
+    <div class="card">
+        <div class="card-header" style="text-align:center;font-size:16px;font-weight:700;">📝 إنشاء حساب جديد</div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div>
+                <label class="f-label">الاسم الكامل</label>
+                <input type="text" id="fullName" class="input" placeholder="مثال: أبو أحمد">
+            </div>
+            <div>
+                <label class="f-label">اسم المستخدم</label>
+                <input type="text" id="username" class="input" dir="ltr" placeholder="example_user">
+            </div>
+            <div>
+                <label class="f-label">كلمة المرور</label>
+                <input type="password" id="password" class="input" dir="ltr" placeholder="••••••••">
+            </div>
+            <button onclick="doRegister()" class="btn btn-primary" style="width:100%;">إنشاء الحساب</button>
+            <p style="text-align:center;font-size:13px;color:#777;">
+                لديك حساب؟ <a href="/login" style="color:#1e3a5f;font-weight:600;">تسجيل الدخول</a>
+            </p>
+        </div>
+    </div>
+</div>
+<style>.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}</style>
+<script>
+async function doRegister() {
+    var f = document.getElementById('fullName').value.trim();
+    var u = document.getElementById('username').value.trim();
+    var p = document.getElementById('password').value;
+    if (!f || !u || !p) { showToast('جميع الحقول مطلوبة', 'error'); return; }
+    showToast('جاري إنشاء الحساب...');
+    var r = await fetch('/register', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({full_name: f, username: u, password: p})
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast('✅ ' + d.message);
+        setTimeout(function(){ window.location.href = '/login'; }, 1500);
+    } else {
+        showToast('❌ ' + (d.error || 'فشل التسجيل'), 'error');
+    }
+}
+document.getElementById('password').addEventListener('keydown', function(e){ if(e.key==='Enter') doRegister(); });
+</script>
+{% endblock %}

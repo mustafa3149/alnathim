@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>فاتورة</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Cairo', 'Segoe UI', sans-serif;
+            background: #fff;
+            direction: rtl;
+            text-align: right;
+            font-size: 14px;
+            color: #1a1a1a;
+        }
+
+        #receipt-card {
+            max-width: 360px;
+            margin: 0 auto;
+            padding: 16px 14px;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+        }
+
+        .receipt-header {
+            text-align: center;
+            border-bottom: 2px dashed #1a1a1a;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        .receipt-header .owner-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 2px;
+        }
+        .receipt-header .contact-info {
+            font-size: 11px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .receipt-title {
+            text-align: center;
+            font-size: 15px;
+            font-weight: 700;
+            padding: 8px 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+            letter-spacing: 1px;
+        }
+
+        .ref-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #666;
+            padding: 0 0 6px 0;
+            border-bottom: 1px dotted #ddd;
+            margin-bottom: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 13px;
+            border-bottom: 1px dotted #f0f0f0;
+        }
+        .info-label { color: #777; }
+        .info-value { font-weight: 600; }
+
+        .amount-section {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 2px solid #1a1a1a;
+        }
+        .amount-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 14px;
+        }
+        .amount-row.total {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .amount-row.paid {
+            color: #0d6e3c;
+            font-weight: 600;
+        }
+        .amount-row.remaining {
+            color: #b91c1c;
+            font-weight: 700;
+            font-size: 15px;
+            padding-top: 6px;
+            border-top: 1px dashed #ddd;
+            margin-top: 2px;
+        }
+        .amount-row.extras {
+            font-size: 12px;
+            color: #555;
+            border-bottom: 1px dotted #eee;
+        }
+
+        .payments-section {
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .payments-section h4 {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .pay-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            font-size: 11px;
+            color: #555;
+        }
+
+        .receipt-footer {
+            text-align: center;
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+            font-size: 11px;
+            color: #777;
+            line-height: 1.6;
+        }
+        .receipt-footer .thanks {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-top: 4px;
+        }
+        .receipt-footer .tech-support {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-top: 6px;
+        }
+
+        .btn-print {
+            display: block;
+            margin: 20px auto;
+            padding: 14px 48px;
+            background: #1a1a1a;
+            color: #fff;
+            border: none;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            letter-spacing: 1px;
+        }
+        .btn-print:hover {
+            background: #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+
+        @media print {
+            @page { margin: 2cm; }
+            body { margin: 0; padding: 0; background: #fff; }
+            .btn-print { display: none !important; }
+            #receipt-card {
+                max-width: 100%;
+                width: 100%;
+                margin: 0 auto;
+                padding: 20px 24px;
+                border: 2px solid #000;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align:center;margin-bottom:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn-print" onclick="window.print()" style="padding:10px 20px;font-size:13px;">🖨️ طباعة حرارية</button>
+        <a href="/print/a4/invoice/{{ invoice.id }}" target="_blank" class="btn-print" style="display:inline-block;padding:10px 20px;font-size:13px;background:#1a1a1a;color:#fff;text-decoration:none;border-radius:8px;">📄 طباعة A4</a>
+    </div>
+
+    <div id="receipt-card">
+        <div class="receipt-header">
+            <div class="owner-name">{{ gen_info.owner_name if gen_info and gen_info.owner_name else 'نظام الناظم لإدارة أبراج الإنترنت' }}</div>
+            <div class="contact-info">
+                {% if gen_info and gen_info.phone %}هاتف: {{ gen_info.phone }}{% endif %}
+                {% if gen_info and gen_info.phone and gen_info.address %} | {% endif %}
+                {% if gen_info and gen_info.address %}{{ gen_info.address }}{% endif %}
+            </div>
+        </div>
+
+        <div class="receipt-title">وصل تسديد فاتورة</div>
+
+        <div class="ref-row">
+            <span>رقم: {{ invoice.id|invoice_no }}</span>
+            <span>التاريخ: {{ invoice.created_at[:10] if invoice.created_at else '' }}</span>
+            <span>عن شهر: {{ invoice.month }}/{{ invoice.year }}</span>
+        </div>
+
+        <div class="info-row"><span class="info-label">اسم المشترك:</span><span class="info-value">{{ invoice.customer_name }}</span></div>
+        {% if invoice.username %}
+        <div class="info-row"><span class="info-label">اسم المستخدم:</span><span class="info-value">{{ invoice.username }}</span></div>
+        {% endif %}
+        <div class="info-row"><span class="info-label">الباقة:</span><span class="info-value">{{ invoice.package_name or '—' }}</span></div>
+        <div class="info-row"><span class="info-label">سعر الباقة:</span><span class="info-value">{{ invoice.package_price|dinar if invoice.package_price else '0 د.ع' }}</span></div>
+        {% if invoice.renewal_date %}
+        <div class="info-row"><span class="info-label">تاريخ الانتهاء:</span><span class="info-value" style="font-size:12px;">{{ invoice.renewal_date|datetime_display }}</span></div>
+        {% endif %}
+
+        <!-- Amounts -->
+        <div class="amount-section">
+            <div class="amount-row"><span>قيمة الباقة:</span><span>{{ (invoice.package_price or 0)|dinar }}</span></div>
+            {% if extras %}
+            {% for e in extras %}
+            <div class="amount-row extras"><span>+ {{ e.item_name }}:</span><span>{{ e.item_price|dinar }}</span></div>
+            {% endfor %}
+            {% endif %}
+            <div class="amount-row total"><span>المبلغ الإجمالي:</span><span>{{ invoice.total_amount|dinar }}</span></div>
+            <div class="amount-row paid"><span>المبلغ المدفوع:</span><span>{{ invoice.paid_amount|dinar }}</span></div>
+            {% if remaining > 0 %}
+            <div class="amount-row remaining"><span>المتبقي عليه:</span><span>{{ remaining|dinar }}</span></div>
+            {% endif %}
+        </div>
+
+        {% if payments %}
+        <div class="payments-section">
+            <h4>سجل المدفوعات:</h4>
+            {% for p in payments %}
+            <div class="pay-row"><span>{{ p.payment_date }}</span><span>{{ p.amount|dinar }} ({{ p.payment_method }})</span></div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="receipt-footer">
+            {% if gen_info and gen_info.footer_note %}
+            <div>{{ gen_info.footer_note }}</div>
+            {% endif %}
+            <div class="thanks">شكراً لالتزامكم بالتسديد</div>
+            {% if gen_info and gen_info.phone %}
+            <div class="tech-support">📞 الدعم الفني: {{ gen_info.phone }}</div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
