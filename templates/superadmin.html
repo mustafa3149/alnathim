@@ -1,36 +1,87 @@
 {% extends "layout.html" %}
 {% block title %}لوحة المدير{% endblock %}
 {% block content %}
-<div style="margin-bottom:32px;display:flex;justify-content:space-between;align-items:center;">
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
     <div>
-        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;">🛡️ لوحة مدير المنصة</h2>
-        <p style="font-size:13px;color:#777;margin-top:4px;">إدارة حسابات مزودي الخدمة (ISP Owners)</p>
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">🛡️ لوحة مدير المنصة</h2>
+        <p style="font-size:13px;color:#777;margin-top:4px;">إدارة حسابات مزودي الخدمة (ISP Owners) والإشراف على المنصة</p>
     </div>
-    <button id="btn-logout" class="btn btn-sm btn-danger">تسجيل خروج المدير</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="openCreateModal()" class="btn btn-success">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            إنشاء مالك
+        </button>
+        <button id="btn-logout" class="btn btn-danger">تسجيل الخروج</button>
+    </div>
 </div>
 
-<div class="card">
-    <div class="card-header">📋 جميع المالكين</div>
-    <div class="card-body table-responsive" style="padding:0;">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>الاسم</th>
-                    <th>اسم المستخدم</th>
-                    <th>الحالة</th>
-                    <th>تاريخ الانتهاء</th>
-                    <th>تاريخ التسجيل</th>
-                    <th>إجراءات</th>
-                </tr>
-            </thead>
-            <tbody>
+<!-- ── Statistics Cards ── -->
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;">
+    <div class="stat-card"><div class="stat-num" id="statTotalOwners">{{ stats.total_owners }}</div><div class="stat-txt">إجمالي المالكين</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#0d6e3c;">{{ stats.active_owners }}</div><div class="stat-txt">مفعلون</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#c27803;">{{ stats.pending_owners }}</div><div class="stat-txt">قيد الانتظار</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#b91c1c;">{{ stats.suspended_owners }}</div><div class="stat-txt">موقوفون</div></div>
+    <div class="stat-card"><div class="stat-num">{{ stats.total_customers }}</div><div class="stat-txt">المشتركين في المنصة</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#0d6e3c;">{{ stats.total_payments }}</div><div class="stat-txt">عمليات الدفع</div></div>
+    <div class="stat-card" style="grid-column:1/-1;"><div class="stat-num" id="statCollected">{{ stats.collected }}</div><div class="stat-txt">إجمالي المبالغ المحصلة</div></div>
+</div>
+
+<!-- ── Recent registrations ── -->
+{% if recent %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">🕑 آخر التسجيلات</div>
+    <div class="card-body" style="padding:10px 16px;">
+        {% for r in recent %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+            <span><strong>{{ r.full_name }}</strong> <span style="color:#888;">@{{ r.username }}</span></span>
+            <span style="font-size:11px;color:#888;">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '—' }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Search & Filter ── -->
+<div class="card filter-bar" style="margin-bottom:12px;">
+    <div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;">
+        <div style="flex:1;min-width:160px;position:relative;">
+            <input type="text" id="searchInput" placeholder="بحث بالاسم او اسم المستخدم..." class="input" onkeydown="if(event.key==='Enter')applyFilters()" style="padding-left:36px;">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aaa;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <button onclick="applyFilters()" class="btn btn-primary btn-sm" style="min-height:40px;">بحث</button>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="btn btn-sm filter-btn" data-filter="all" style="min-height:40px;">الكل</button>
+            <button class="btn btn-sm filter-btn" data-filter="active" style="min-height:40px;color:#0d6e3c;">مفعل</button>
+            <button class="btn btn-sm filter-btn" data-filter="pending" style="min-height:40px;color:#c27803;">قيد الانتظار</button>
+            <button class="btn btn-sm filter-btn" data-filter="suspended" style="min-height:40px;color:#b91c1c;">موقوف</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Desktop Table ── -->
+<div class="desktop-table">
+    <div class="card" style="overflow:hidden;">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>الاسم</th>
+                        <th>اسم المستخدم</th>
+                        <th>الحالة</th>
+                        <th>تاريخ الانتهاء</th>
+                        <th>الهاتف</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
                 {% for owner in owners %}
-                <tr>
-                    <td data-label="ID">{{ owner.id }}</td>
-                    <td data-label="الاسم">{{ owner.full_name }}</td>
-                    <td data-label="اسم المستخدم" dir="ltr">{{ owner.username }}</td>
-                    <td data-label="الحالة">
+                <tr class="owner-row" data-status="{{ owner.account_status }}" data-name="{{ owner.full_name|lower }}" data-username="{{ owner.username|lower }}">
+                    <td style="color:#999;font-size:12px;">{{ owner.id }}</td>
+                    <td style="font-weight:600;">{{ owner.full_name }}</td>
+                    <td dir="ltr" style="font-size:13px;">{{ owner.username }}</td>
+                    <td>
                         {% if owner.account_status == 'active' %}
                             <span class="badge badge-green">✅ مفعل</span>
                         {% elif owner.account_status == 'pending' %}
@@ -39,64 +90,375 @@
                             <span class="badge badge-red">⛔ موقوف</span>
                         {% endif %}
                     </td>
-                    <td data-label="تاريخ الانتهاء">
+                    <td style="font-size:13px;">
                         {{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '—' }}
                     </td>
-                    <td data-label="تاريخ التسجيل">{{ owner.created_at.strftime('%Y-%m-%d %H:%M') if owner.created_at else '—' }}</td>
-                    <td data-label="إجراءات">
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <td dir="ltr" style="font-size:12px;">{{ owner.phone or '—' }}</td>
+                    <td>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">
                             {% if owner.account_status == 'pending' %}
-                            <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">✅ تفعيل</button>
+                            <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">تفعيل</button>
                             {% elif owner.account_status == 'active' %}
-                            <button class="btn btn-sm btn-danger btn-suspend" data-id="{{ owner.id }}">⛔ إيقاف</button>
+                            <button class="btn btn-sm btn-danger btn-suspend" data-id="{{ owner.id }}">إيقاف</button>
+                            {% else %}
+                            <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">إعادة تفعيل</button>
                             {% endif %}
-                            {% if owner.account_status == 'suspended' %}
-                            <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">↩️ إعادة تفعيل</button>
-                            {% endif %}
-                            <button class="btn btn-sm btn-primary btn-extend" data-id="{{ owner.id }}">📅 تمديد</button>
+                            <button class="btn btn-sm btn-extend" data-id="{{ owner.id }}" data-end="{{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '' }}">تمديد</button>
+                            <button class="btn btn-sm btn-edit-owner" data-id="{{ owner.id }}" data-name="{{ owner.full_name }}" data-username="{{ owner.username }}" data-phone="{{ owner.phone or '' }}" data-company="{{ owner.company_name or '' }}" data-address="{{ owner.address or '' }}" data-footer="{{ owner.footer_note or '' }}" data-end="{{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '' }}">تعديل</button>
+                            <button class="btn btn-sm btn-reset-pass" data-id="{{ owner.id }}" data-name="{{ owner.username }}">كلمة المرور</button>
+                            <button class="btn btn-sm btn-danger btn-delete-owner" data-id="{{ owner.id }}" data-name="{{ owner.full_name }}" data-username="{{ owner.username }}">حذف</button>
                         </div>
                     </td>
                 </tr>
                 {% endfor %}
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
+<!-- ── Mobile Cards ── -->
+<div class="mobile-cards">
+{% for owner in owners %}
+<div class="owner-card" data-status="{{ owner.account_status }}" data-name="{{ owner.full_name|lower }}" data-username="{{ owner.username|lower }}">
+    <div class="m-card-header">
+        <span class="m-card-name">{{ owner.full_name }}</span>
+        {% if owner.account_status == 'active' %}
+            <span class="badge badge-green">✅ مفعل</span>
+        {% elif owner.account_status == 'pending' %}
+            <span class="badge badge-amber">⏳ قيد الانتظار</span>
+        {% else %}
+            <span class="badge badge-red">⛔ موقوف</span>
+        {% endif %}
+    </div>
+    <div class="m-card-row"><span class="text-muted">اسم المستخدم</span><span dir="ltr">{{ owner.username }}</span></div>
+    <div class="m-card-row"><span class="text-muted">الهاتف</span><span dir="ltr">{{ owner.phone or '—' }}</span></div>
+    <div class="m-card-row"><span class="text-muted">تاريخ الانتهاء</span><span>{{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '—' }}</span></div>
+    <div class="m-card-actions" style="margin-top:8px;">
+        {% if owner.account_status == 'pending' %}
+        <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">تفعيل</button>
+        {% elif owner.account_status == 'active' %}
+        <button class="btn btn-sm btn-danger btn-suspend" data-id="{{ owner.id }}">إيقاف</button>
+        {% else %}
+        <button class="btn btn-sm btn-success btn-approve" data-id="{{ owner.id }}">إعادة تفعيل</button>
+        {% endif %}
+        <button class="btn btn-sm btn-extend" data-id="{{ owner.id }}" data-end="{{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '' }}">تمديد</button>
+        <button class="btn btn-sm btn-edit-owner" data-id="{{ owner.id }}" data-name="{{ owner.full_name }}" data-username="{{ owner.username }}" data-phone="{{ owner.phone or '' }}" data-company="{{ owner.company_name or '' }}" data-address="{{ owner.address or '' }}" data-footer="{{ owner.footer_note or '' }}" data-end="{{ owner.subscription_end_date.strftime('%Y-%m-%d') if owner.subscription_end_date else '' }}">تعديل</button>
+    </div>
+    <div class="m-card-actions">
+        <button class="btn btn-sm btn-reset-pass" data-id="{{ owner.id }}" data-name="{{ owner.username }}">كلمة المرور</button>
+        <button class="btn btn-sm btn-danger btn-delete-owner" data-id="{{ owner.id }}" data-name="{{ owner.full_name }}" data-username="{{ owner.username }}">حذف</button>
+    </div>
+</div>
+{% endfor %}
+{% if owners|length==0 %}<div style="text-align:center;padding:40px;color:#999;">لا توجد حسابات بعد</div>{% endif %}
+</div>
+
+<!-- ── Create Owner Modal ── -->
+<div id="createModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:480px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">➕ إنشاء مالك جديد</h3>
+        <input type="hidden" id="createOwnerId" value="">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div><label class="f-label">الاسم الكامل *</label><input type="text" id="cFullName" class="input" placeholder="مثال: أبو أحمد"></div>
+            <div><label class="f-label">اسم المستخدم *</label><input type="text" id="cUsername" class="input" dir="ltr" placeholder="example_user"></div>
+            <div><label class="f-label">كلمة المرور * (٦ أحرف على الأقل)</label><input type="text" id="cPassword" class="input" dir="ltr" placeholder="••••••••"></div>
+            <div><label class="f-label">الهاتف</label><input type="text" id="cPhone" class="input" dir="ltr" placeholder="07xxxxxxxxx"></div>
+            <div><label class="f-label">اسم الشركة</label><input type="text" id="cCompany" class="input" placeholder="الناظم"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label class="f-label">الحالة</label><select id="cStatus" class="input"><option value="pending">قيد الانتظار</option><option value="active">مفعل</option><option value="suspended">موقوف</option></select></div>
+                <div><label class="f-label">تاريخ الانتهاء</label><input type="date" id="cEnd" class="input"></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="submitCreateOwner()" class="btn btn-success" style="flex:1;">إنشاء الحساب</button>
+            <button onclick="document.getElementById('createModal').style.display='none'" class="btn">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Edit Owner Modal ── -->
+<div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:480px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">✏️ تعديل بيانات المالك</h3>
+        <input type="hidden" id="editOwnerId" value="">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div><label class="f-label">الاسم الكامل *</label><input type="text" id="eFullName" class="input"></div>
+            <div><label class="f-label">اسم المستخدم *</label><input type="text" id="eUsername" class="input" dir="ltr"></div>
+            <div><label class="f-label">الهاتف</label><input type="text" id="ePhone" class="input" dir="ltr"></div>
+            <div><label class="f-label">اسم الشركة</label><input type="text" id="eCompany" class="input"></div>
+            <div><label class="f-label">العنوان</label><input type="text" id="eAddress" class="input"></div>
+            <div><label class="f-label">ملاحظة أسفل الوصل</label><input type="text" id="eFooter" class="input"></div>
+            <div><label class="f-label">تاريخ الانتهاء</label><input type="date" id="eEnd" class="input"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="submitEditOwner()" class="btn btn-primary" style="flex:1;">حفظ التعديلات</button>
+            <button onclick="document.getElementById('editModal').style.display='none'" class="btn">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Reset Password Modal ── -->
+<div id="resetModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:400px;">
+        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">🔑 تغيير كلمة المرور</h3>
+        <input type="hidden" id="resetOwnerId" value="">
+        <p style="font-size:13px;color:#555;margin-bottom:12px;">المستخدم: <strong id="resetOwnerName">—</strong></p>
+        <div><label class="f-label">كلمة المرور الجديدة *</label><input type="text" id="resetPassword" class="input" dir="ltr" placeholder="٦ أحرف على الأقل"></div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+            <button onclick="submitResetPassword()" class="btn btn-primary" style="flex:1;">حفظ</button>
+            <button onclick="document.getElementById('resetModal').style.display='none'" class="btn">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Change SuperAdmin Password ── -->
+<div class="card" style="margin-top:24px;">
+    <div class="card-header">🔐 كلمة مرور المدير</div>
+    <div class="card-body">
+        <p style="font-size:12px;color:#888;margin-bottom:12px;">المسجل دخوله حالياً: <strong dir="ltr">@{{ session.get('superadmin_username') }}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:420px;">
+            <div><label class="f-label">كلمة المرور الحالية *</label><input type="password" id="saCurrent" class="input" dir="ltr"></div>
+            <div><label class="f-label">كلمة المرور الجديدة *</label><input type="password" id="saNew" class="input" dir="ltr" placeholder="٦ أحرف على الأقل"></div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="changeAdminPassword()" class="btn btn-primary">تغيير كلمة المرور</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
+.stat-card{background:#fff;border:1px solid #e5e5e5;text-align:center;padding:12px 8px;border-radius:8px;}
+.stat-num{font-size:20px;font-weight:700;}
+.stat-txt{font-size:10px;color:#888;margin-top:3px;}
+.text-muted{color:#888;font-size:12px;}
+.filter-btn{font-size:11px;padding:6px 12px;border-color:#ddd;color:#666;}
+.filter-btn.active{background:#1a1a1a !important;color:#fff !important;border-color:#1a1a1a !important;}
+.desktop-table{display:block;}.mobile-cards{display:none;}
+.owner-card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.m-card-header{display:flex;justify-content:space-between;align-items:center;}
+.m-card-name{font-weight:700;font-size:15px;}
+.m-card-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.m-card-actions{display:flex;gap:4px;margin-top:2px;flex-wrap:wrap;}
+.m-card-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
+.actions-cell .btn-sm{font-size:12px;padding:10px 12px;min-height:38px;}
+@media(max-width:767px){
+    .desktop-table{display:none !important;}
+    .mobile-cards{display:flex;flex-direction:column;gap:10px;}
+}
+</style>
 <script>
-document.addEventListener('click', async function(e) {
-    var btn = e.target.closest('.btn-approve, .btn-suspend, .btn-extend');
-    if (!btn) return;
+var numeralStyle = '{{ numeral_style }}';
+var arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+function toArabicNum(n) {
+    if (numeralStyle === 'EN') return String(n);
+    return String(n).replace(/[0-9]/g, function(d) { return arabicDigits[parseInt(d)]; });
+}
+function formatDinar(amount) {
+    var n = parseInt(amount) || 0;
+    var formatted = n.toLocaleString('en-US');
+    return (numeralStyle === 'EN' ? formatted : toArabicNum(formatted)) + ' د.ع';
+}
 
-    var id = btn.getAttribute('data-id');
-    var action = 'approve';
-    if (btn.classList.contains('btn-suspend')) action = 'suspend';
-    if (btn.classList.contains('btn-extend')) action = 'extend';
+// Format collected total
+(function() {
+    var el = document.getElementById('statCollected');
+    if (el) el.textContent = formatDinar(el.textContent);
+})();
 
-    if (action === 'extend') {
-        var dateStr = prompt('أدخل تاريخ الانتهاء (YYYY-MM-DD):');
-        if (!dateStr) return;
-        var r = await fetch('/superadmin/owners/' + id + '/extend', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({subscription_end_date: dateStr})
-        });
+// ── Search & Filter ──
+function applyFilters() {
+    var q = document.getElementById('searchInput').value.trim().toLowerCase();
+    var activeFilter = document.querySelector('.filter-btn.active');
+    var filter = activeFilter ? activeFilter.dataset.filter : 'all';
+    document.querySelectorAll('.owner-row, .owner-card').forEach(function(el) {
+        var matchStatus = (filter === 'all') || (el.dataset.status === filter);
+        var matchText = q === '' || (el.dataset.name + ' ' + el.dataset.username).indexOf(q) !== -1;
+        el.style.display = (matchStatus && matchText) ? '' : 'none';
+    });
+}
+document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        applyFilters();
+    });
+});
+document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+
+// ── Create Owner ──
+function openCreateModal() {
+    document.getElementById('createModal').style.display = 'flex';
+    ['cFullName','cUsername','cPassword','cPhone','cEnd'].forEach(function(id) {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('cCompany').value = '';
+    document.getElementById('cStatus').value = 'pending';
+}
+async function submitCreateOwner() {
+    var data = {
+        full_name: document.getElementById('cFullName').value.trim(),
+        username: document.getElementById('cUsername').value.trim(),
+        password: document.getElementById('cPassword').value,
+        phone: document.getElementById('cPhone').value.trim(),
+        company_name: document.getElementById('cCompany').value.trim(),
+        account_status: document.getElementById('cStatus').value,
+        subscription_end_date: document.getElementById('cEnd').value
+    };
+    var r = await fetch('/superadmin/owners/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast(d.message);
+        setTimeout(function() { location.reload(); }, 700);
+    } else {
+        showToast(d.error || 'خطأ', 'error');
+    }
+}
+
+// ── Edit Owner ──
+document.querySelectorAll('.btn-edit-owner').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('editOwnerId').value = this.dataset.id;
+        document.getElementById('eFullName').value = this.dataset.name;
+        document.getElementById('eUsername').value = this.dataset.username;
+        document.getElementById('ePhone').value = this.dataset.phone || '';
+        document.getElementById('eCompany').value = this.dataset.company || '';
+        document.getElementById('eAddress').value = this.dataset.address || '';
+        document.getElementById('eFooter').value = this.dataset.footer || '';
+        document.getElementById('eEnd').value = this.dataset.end || '';
+        document.getElementById('editModal').style.display = 'flex';
+    });
+});
+async function submitEditOwner() {
+    var data = {
+        full_name: document.getElementById('eFullName').value.trim(),
+        username: document.getElementById('eUsername').value.trim(),
+        phone: document.getElementById('ePhone').value.trim(),
+        company_name: document.getElementById('eCompany').value.trim(),
+        address: document.getElementById('eAddress').value.trim(),
+        footer_note: document.getElementById('eFooter').value.trim(),
+        subscription_end_date: document.getElementById('eEnd').value
+    };
+    var id = document.getElementById('editOwnerId').value;
+    var r = await fetch('/superadmin/owners/' + id + '/edit', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast(d.message);
+        setTimeout(function() { location.reload(); }, 700);
+    } else {
+        showToast(d.error || 'خطأ', 'error');
+    }
+}
+
+// ── Reset Password ──
+document.querySelectorAll('.btn-reset-pass').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('resetOwnerId').value = this.dataset.id;
+        document.getElementById('resetOwnerName').textContent = this.dataset.name;
+        document.getElementById('resetPassword').value = '';
+        document.getElementById('resetModal').style.display = 'flex';
+    });
+});
+async function submitResetPassword() {
+    var data = { new_password: document.getElementById('resetPassword').value };
+    var id = document.getElementById('resetOwnerId').value;
+    var r = await fetch('/superadmin/owners/' + id + '/reset-password', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast(d.message);
+        document.getElementById('resetModal').style.display = 'none';
+    } else {
+        showToast(d.error || 'خطأ', 'error');
+    }
+}
+
+// ── Approve / Suspend / Extend (existing behavior, reloads) ──
+document.querySelectorAll('.btn-approve, .btn-suspend').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+        var id = this.dataset.id;
+        var action = this.classList.contains('btn-suspend') ? 'suspend' : 'approve';
+        var r = await fetch('/superadmin/owners/' + id + '/' + action, {method: 'POST'});
         var d = await r.json();
         showToast(d.ok ? d.message : d.error, d.ok ? '' : 'error');
-        if (d.ok) setTimeout(function(){ location.reload(); }, 800);
-        return;
-    }
-
-    var r = await fetch('/superadmin/owners/' + id + '/' + action, {method: 'POST'});
-    var d = await r.json();
-    showToast(d.ok ? d.message : d.error, d.ok ? '' : 'error');
-    if (d.ok) setTimeout(function(){ location.reload(); }, 800);
+        if (d.ok) setTimeout(function() { location.reload(); }, 700);
+    });
+});
+document.querySelectorAll('.btn-extend').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var id = this.dataset.id;
+        var end = this.dataset.end || '';
+        var dateStr = prompt('أدخل تاريخ الانتهاء (YYYY-MM-DD):', end);
+        if (!dateStr) return;
+        fetch('/superadmin/owners/' + id + '/extend', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({subscription_end_date: dateStr})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            showToast(d.ok ? d.message : d.error, d.ok ? '' : 'error');
+            if (d.ok) setTimeout(function() { location.reload(); }, 700);
+        });
+    });
 });
 
+// ── Delete Owner ──
+document.querySelectorAll('.btn-delete-owner').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var self = this;
+        showConfirm('⚠️ حذف حساب "' + self.dataset.name + '" (@' + self.dataset.username + ')؟\nسيتم حذف جميع المشتركين والفواتير والمدفوعات الخاصة به نهائياً!', async function() {
+            var r = await fetch('/superadmin/owners/' + self.dataset.id + '/delete', {method: 'POST'});
+            var d = await r.json();
+            showToast(d.ok ? d.message : d.error, d.ok ? '' : 'error');
+            if (d.ok) setTimeout(function() { location.reload(); }, 700);
+        });
+    });
+});
+
+// ── Change SuperAdmin password ──
+async function changeAdminPassword() {
+    var data = {
+        current_password: document.getElementById('saCurrent').value,
+        new_password: document.getElementById('saNew').value
+    };
+    var r = await fetch('/superadmin/password', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    var d = await r.json();
+    if (d.ok) {
+        showToast(d.message);
+        document.getElementById('saCurrent').value = '';
+        document.getElementById('saNew').value = '';
+    } else {
+        showToast(d.error || 'خطأ', 'error');
+    }
+}
+
+// ── Logout ──
 document.getElementById('btn-logout').addEventListener('click', async function() {
     var r = await fetch('/superadmin/logout', {method: 'POST'});
     var d = await r.json();
     if (d.ok) window.location.href = '/superadmin/login';
+});
+
+// ── Escape closes modals ──
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        ['createModal','editModal','resetModal'].forEach(function(id) {
+            document.getElementById(id).style.display = 'none';
+        });
+    }
 });
 </script>
 {% endblock %}

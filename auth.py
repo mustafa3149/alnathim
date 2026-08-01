@@ -11,7 +11,9 @@ from functools import wraps
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
-from database import db_session, ISPOwner, SuperAdmin
+from sqlalchemy import func
+
+from database import db_session, ISPOwner, SuperAdmin, Customer, Payment, Invoice
 
 # ── Flask-Login setup ───────────────────────────────────────
 
@@ -221,11 +223,30 @@ def superadmin_logout():
 @auth_bp.route("/superadmin")
 @superadmin_required
 def superadmin_panel():
-    """List all registered ISP owners."""
+    """List all registered ISP owners + platform statistics."""
     db = db_session()
     try:
         owners = db.query(ISPOwner).order_by(ISPOwner.created_at.desc()).all()
-        return render_template("superadmin.html", owners=owners)
+
+        stats = {
+            "total_owners": db.query(ISPOwner).count(),
+            "active_owners": db.query(ISPOwner).filter_by(account_status="active").count(),
+            "pending_owners": db.query(ISPOwner).filter_by(account_status="pending").count(),
+            "suspended_owners": db.query(ISPOwner).filter_by(account_status="suspended").count(),
+            "total_customers": db.query(Customer).count(),
+            "total_payments": db.query(Payment).count(),
+            "collected": db.query(Payment).with_entities(func.coalesce(func.sum(Payment.amount), 0)).scalar(),
+        }
+
+        # Recent 5 registrations for the dashboard
+        recent = db.query(ISPOwner).order_by(ISPOwner.created_at.desc()).limit(5).all()
+
+        return render_template(
+            "superadmin.html",
+            owners=owners,
+            stats=stats,
+            recent=recent,
+        )
     finally:
         db.close()
 
@@ -300,6 +321,204 @@ def superadmin_extend(owner_id):
             "ok": True,
             "message": f"تم تمديد اشتراك {owner.username} حتى {end_date_str}",
         })
+    except Exception as e:
+        db.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── SuperAdmin: Create owner ────────────────────────────────
+
+@auth_bp.route("/superadmin/owners/create", methods=["POST"])
+@superadmin_required
+def superadmin_create_owner():
+    """Create a new ISP owner account directly from the admin panel."""
+    data = request.get_json() or {}
+    full_name = (data.get("full_name") or "").strip()
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    phone = (data.get("phone") or "").strip()
+    company_name = (data.get("company_name") or "").strip()
+    account_status = (data.get("account_status") or "pending").strip()
+    end_date_str = (data.get("subscription_end_date") or "").strip()
+
+    # Validation
+    if not full_name:
+        return jsonify({"ok": False, "error": "الاسم الكامل مطلوب"}), 400
+    if not username:
+        return jsonify({"ok": False, "error": "اسم المستخدم مطلوب"}), 400
+    if len(password) < 6:
+        return jsonify({"ok": False, "error": "كلمة المرور يجب أن تكون ٦ أحرف على الأقل"}), 400
+    if account_status not in ("pending", "active", "suspended"):
+        account_status = "pending"
+
+    end_date = None
+    if end_date_str:
+        try:
+            from datetime import datetime
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"ok": False, "error": "صيغة تاريخ الانتهاء غير صحيحة"}), 400
+
+    db = db_session()
+    try:
+        exists = db.query(ISPOwner).filter_by(username=username).first()
+        if exists:
+            return jsonify({"ok": False, "error": f"اسم المستخدم '{username}' مستخدم بالفعل"}), 400
+
+        owner = ISPOwner(
+            full_name=full_name,
+            username=username,
+            account_status=account_status,
+            subscription_end_date=end_date,
+            phone=phone,
+            company_name=company_name or "الناظم",
+        )
+        owner.set_password(password)
+        db.add(owner)
+        db.commit()
+        return jsonify({"ok": True, "message": f"تم إنشاء حساب {username} بنجاح"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── SuperAdmin: Edit owner ──────────────────────────────────
+
+@auth_bp.route("/superadmin/owners/<int:owner_id>/edit", methods=["POST"])
+@superadmin_required
+def superadmin_edit_owner(owner_id):
+    """Update an ISP owner's profile fields."""
+    data = request.get_json() or {}
+    full_name = (data.get("full_name") or "").strip()
+    username = (data.get("username") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    company_name = (data.get("company_name") or "").strip()
+    address = (data.get("address") or "").strip()
+    footer_note = (data.get("footer_note") or "").strip()
+    end_date_str = (data.get("subscription_end_date") or "").strip()
+
+    if not full_name:
+        return jsonify({"ok": False, "error": "الاسم الكامل مطلوب"}), 400
+    if not username:
+        return jsonify({"ok": False, "error": "اسم المستخدم مطلوب"}), 400
+
+    end_date = None
+    if end_date_str:
+        try:
+            from datetime import datetime
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"ok": False, "error": "صيغة تاريخ الانتهاء غير صحيحة"}), 400
+
+    db = db_session()
+    try:
+        owner = db.query(ISPOwner).filter_by(id=owner_id).first()
+        if not owner:
+            return jsonify({"ok": False, "error": "المالك غير موجود"}), 404
+
+        # Username uniqueness (allow keeping the same username)
+        if username != owner.username:
+            exists = db.query(ISPOwner).filter_by(username=username).first()
+            if exists:
+                return jsonify({"ok": False, "error": f"اسم المستخدم '{username}' مستخدم بالفعل"}), 400
+
+        owner.full_name = full_name
+        owner.username = username
+        owner.phone = phone
+        owner.company_name = company_name or "الناظم"
+        owner.address = address
+        owner.footer_note = footer_note
+        owner.subscription_end_date = end_date
+        db.commit()
+        return jsonify({"ok": True, "message": f"تم تحديث بيانات {username}"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── SuperAdmin: Reset owner password ────────────────────────
+
+@auth_bp.route("/superadmin/owners/<int:owner_id>/reset-password", methods=["POST"])
+@superadmin_required
+def superadmin_reset_password(owner_id):
+    """Reset an ISP owner's password."""
+    data = request.get_json() or {}
+    new_password = data.get("new_password") or ""
+
+    if len(new_password) < 6:
+        return jsonify({"ok": False, "error": "كلمة المرور يجب أن تكون ٦ أحرف على الأقل"}), 400
+
+    db = db_session()
+    try:
+        owner = db.query(ISPOwner).filter_by(id=owner_id).first()
+        if not owner:
+            return jsonify({"ok": False, "error": "المالك غير موجود"}), 404
+
+        owner.set_password(new_password)
+        db.commit()
+        return jsonify({"ok": True, "message": f"تم تغيير كلمة مرور {owner.username}"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── SuperAdmin: Delete owner (cascade) ──────────────────────
+
+@auth_bp.route("/superadmin/owners/<int:owner_id>/delete", methods=["POST"])
+@superadmin_required
+def superadmin_delete_owner(owner_id):
+    """Delete an ISP owner and ALL their related data (customers, invoices, payments)."""
+    db = db_session()
+    try:
+        owner = db.query(ISPOwner).filter_by(id=owner_id).first()
+        if not owner:
+            return jsonify({"ok": False, "error": "المالك غير موجود"}), 404
+
+        username = owner.username
+        db.delete(owner)  # cascade="all, delete-orphan" removes related rows
+        db.commit()
+        return jsonify({"ok": True, "message": f"تم حذف حساب {username} وكل بياناته"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── SuperAdmin: Change own password ─────────────────────────
+
+@auth_bp.route("/superadmin/password", methods=["POST"])
+@superadmin_required
+def superadmin_change_password():
+    """Change the logged-in SuperAdmin's own password."""
+    data = request.get_json() or {}
+    current = data.get("current_password") or ""
+    new_password = data.get("new_password") or ""
+
+    if not current or not new_password:
+        return jsonify({"ok": False, "error": "أدخل كلمة المرور الحالية والجديدة"}), 400
+    if len(new_password) < 6:
+        return jsonify({"ok": False, "error": "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل"}), 400
+
+    db = db_session()
+    try:
+        admin = db.query(SuperAdmin).filter_by(id=session.get("superadmin_id")).first()
+        if not admin:
+            return jsonify({"ok": False, "error": "الجلسة غير صالحة"}), 401
+        if not admin.check_password(current):
+            return jsonify({"ok": False, "error": "كلمة المرور الحالية غير صحيحة"}), 400
+
+        admin.set_password(new_password)
+        db.commit()
+        return jsonify({"ok": True, "message": "تم تغيير كلمة المرور بنجاح"})
     except Exception as e:
         db.rollback()
         return jsonify({"ok": False, "error": str(e)}), 500
