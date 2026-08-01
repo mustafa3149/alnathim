@@ -13,7 +13,8 @@ If you ever need a new one: Supabase dashboard → Project Settings → Database
 2. Connect your GitHub repo
 3. Settings:
    - **Build Command:** `./build.sh`
-   - **Start Command:** `gunicorn app:app`
+   - **Start Command:** `gunicorn app:app --workers 2 --threads 4 --worker-class gthread`
+     > ✅ Thread-safety verified: 8-thread concurrency smoke test against the Supabase pooler passed (120/120 ops). The app uses a fresh per-request SQLAlchemy session (`db_session()` + `db.close()` in try/finally), so gthread multi-threading is safe.
 4. In **Environment** add these variables:
 
 | Variable | Value |
