@@ -30,6 +30,9 @@ backup_*.db
 # ── MikroTik credentials ─────────────────────
 mikrotik_api/.env
 
+# ── SNMP credentials ─────────────────────────
+snmp_monitor/.env
+
 # ── Build artifacts ──────────────────────
 dist/
 build/
