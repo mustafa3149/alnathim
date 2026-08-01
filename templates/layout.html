@@ -1,567 +1,481 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="scroll-smooth">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>الناظم - {% block title %}لوحة القيادة{% endblock %}</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="الناظم">
-    <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="/static/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icon-192.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={theme:{extend:{colors:{primary:{DEFAULT:'#1a1a1a',light:'#333',dark:'#000'},accent:'#1e3a5f'}}}};</script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Cairo', 'Segoe UI', system-ui, sans-serif;
-            background: #f4f4f4; color: #1a1a1a; -webkit-font-smoothing: antialiased;
-            overflow-x: hidden;
-        }
-        .nav-link { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 14px; font-weight: 500; color: #555; text-decoration: none; border-right: 3px solid transparent; transition: all 0.15s; }
-        .nav-link:hover { color: #000; background: #f9f9f9; border-right-color: #ccc; }
-        .nav-link.active { color: #000; background: #eee; border-right-color: #1a1a1a; font-weight: 600; }
-        .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-        .card-header { padding: 14px 20px; border-bottom: 1px solid #e5e5e5; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
-        .card-body { padding: 20px; }
-        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 20px; font-size: 13px; font-weight: 600; border: 1px solid #d5d5d5; background: #fff; color: #333; cursor: pointer; transition: all 0.15s; font-family: inherit; min-height: 42px; }
-        .btn:hover { background: #f5f5f5; border-color: #bbb; }
-        .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; } .btn-primary:hover { background: #333; border-color: #333; color: #fff; }
-        .btn-success { background: #0d6e3c; color: #fff; border-color: #0d6e3c; } .btn-success:hover { background: #0a5c31; border-color: #0a5c31; }
-        .btn-warning { background: #c27803; color: #fff; border-color: #c27803; } .btn-warning:hover { background: #a56602; border-color: #a56602; }
-        .btn-danger { background: #b91c1c; color: #fff; border-color: #b91c1c; } .btn-danger:hover { background: #991b1b; border-color: #991b1b; }
-        .btn-sm { padding: 6px 14px; font-size: 12px; min-height: 36px; }
-        .input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #d5d5d5; background: #fff; color: #1a1a1a; font-family: inherit; transition: border-color 0.15s; min-height: 42px; }
-        .input:focus { outline: none; border-color: #1a1a1a; } .input::placeholder { color: #aaa; }
-        select.input { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 12px center; padding-left: 32px; }
-        table { width: 100%; border-collapse: collapse; }
-        table th { text-align: right; padding: 10px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #777; background: #fafafa; border-bottom: 2px solid #e5e5e5; white-space: nowrap; }
-        table td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; }
-        table tr:hover td { background: #fafafa; }
-        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 14px; font-size: 12px !important; font-weight: 700 !important; border-radius: 4px; border: 1px solid; white-space: nowrap; }
-        .badge-green { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
-        .badge-amber { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
-        .badge-red { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
-        .badge-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .badge-dot-green { background: #10b981; } .badge-dot-red { background: #ef4444; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
-        .modal-box { background: #fff; border: 1px solid #e5e5e5; padding: 28px; max-width: 500px; width: 95%; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 90vh; overflow-y: auto; margin: auto; }
-        .stat-value { font-size: 32px; font-weight: 700; color: #1a1a1a; line-height: 1; }
-        .stat-label { font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
-        .toast { position: fixed; bottom: 24px; left: 24px; z-index: 100; padding: 14px 24px; font-size: 13px; font-weight: 600; background: #1a1a1a; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.25); opacity: 0; transform: translateY(10px); transition: all 0.25s; pointer-events: none; border-radius: 4px; }
-        .toast.show { opacity: 1; transform: translateY(0); } .toast.error { background: #b91c1c; }
-        .sidebar { width: 240px; min-height: 100vh; background: #fff; border-left: 1px solid #e5e5e5; flex-shrink: 0; transition: transform 0.3s ease; z-index: 40; }
-        #sidebarOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 39; }
-        #burgerBtn { display: none; }
-        .separator { height: 1px; background: #e5e5e5; margin: 16px 0; }
-        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>الناظم - {% block title %}لوحة القيادة{% endblock %}</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="الناظم">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ─────────────── Design Tokens (Premium Monochrome) ─────────────── */
+    :root {
+      --bg:#0a0a0a; --surface:#141414; --surface-2:#1c1c1c; --surface-3:#242424;
+      --border:#232323; --border-2:#333333;
+      --text:#fafafa; --muted:#a3a3a3; --faint:#6f6f6f;
+      --dot-active:#22c55e; --dot-expired:#ef4444; --dot-suspended:#737373;
+      --toast-bg:#fafafa; --toast-text:#0a0a0a;
+      --modal-dim:rgba(0,0,0,0.6);
+      --header-bg:rgba(10,10,10,0.82);
+      --nav-bg:rgba(10,10,10,0.92);
+    }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg:#fafafa; --surface:#ffffff; --surface-2:#f4f4f4; --surface-3:#ececec;
+        --border:#e5e5e5; --border-2:#d4d4d4;
+        --text:#171717; --muted:#737373; --faint:#a3a3a3;
+        --dot-active:#16a34a; --dot-expired:#dc2626; --dot-suspended:#a3a3a3;
+        --toast-bg:#171717; --toast-text:#fafafa;
+        --modal-dim:rgba(0,0,0,0.35);
+        --header-bg:rgba(250,250,250,0.82);
+        --nav-bg:rgba(250,250,250,0.92);
+      }
+    }
+    :root[data-theme="light"] {
+      --bg:#fafafa; --surface:#ffffff; --surface-2:#f4f4f4; --surface-3:#ececec;
+      --border:#e5e5e5; --border-2:#d4d4d4;
+      --text:#171717; --muted:#737373; --faint:#a3a3a3;
+      --dot-active:#16a34a; --dot-expired:#dc2626; --dot-suspended:#a3a3a3;
+      --toast-bg:#171717; --toast-text:#fafafa;
+      --modal-dim:rgba(0,0,0,0.35);
+      --header-bg:rgba(250,250,250,0.82);
+      --nav-bg:rgba(250,250,250,0.92);
+    }
 
-        @media (max-width: 767px) {
-            body { font-size: 14px; }
-            h2 { font-size: 18px !important; }
-            #burgerBtn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; background: none; cursor: pointer; color: #1a1a1a; font-size: 22px; }
-            .sidebar { position: fixed; top: 0; right: 0; height: 100vh; width: 260px; transform: translateX(100%); box-shadow: -4px 0 20px rgba(0,0,0,0.15); overflow-y: auto; }
-            .sidebar.open { transform: translateX(0); }
-            #sidebarOverlay.active { display: block; }
-            .mobile-header { display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: #fff; border-bottom: 1px solid #e5e5e5; position: sticky; top: 0; z-index: 30; }
-            .mobile-header h1 { font-size: 16px; font-weight: 700; }
-            .main-content { padding: 10px !important; }
-            .main-content .max-w-6xl { max-width: 100%; padding: 0 !important; }
-            .main-content > div { padding: 10px !important; }
-            .card-body { padding: 10px; }
-            .card-header { padding: 10px 14px; font-size: 11px; }
-            table thead { display: none; }
-            table tbody { display: flex; flex-direction: column; gap: 8px; }
-            table tr { border: 1px solid #e5e5e5; background: #fff; padding: 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 6px; }
-            table td { display: block; padding: 0; border: none; font-size: 12px; text-align: right; }
-            table td::before { content: attr(data-label); font-weight: 600; color: #888; font-size: 10px; display: inline-block; margin-left: 4px; }
-            table td[data-label=""]::before { content: ''; }
-            .modal-box { max-width: 100%; width: 100%; min-height: 100vh; height: auto; max-height: none; border-radius: 0; border: none; padding: 20px 14px calc(20px + env(safe-area-inset-bottom, 0px)); }
-            .btn { min-height: 44px; font-size: 13px; padding: 12px 16px; }
-            .btn-sm { min-height: 40px; font-size: 12px; padding: 10px 14px; }
-            .input { min-height: 42px; font-size: 15px; padding: 10px 12px; }
-            .nav-link { padding: 12px 16px; font-size: 14px; min-height: 44px; }
-            .stat-value { font-size: 22px !important; }
-            .stat-num { font-size: 20px; }
-            .badge { padding: 3px 8px; font-size: 10px; }
-            /* Prevent cramped stat rows on phones: fixed 3/5-col grids → 2 cols */
-            [style*="grid-template-columns:repeat(3,1fr)"],
-            [style*="grid-template-columns:repeat(5,1fr)"] {
-                grid-template-columns: repeat(2, 1fr) !important;
-                column-gap: 8px;
-                row-gap: 8px !important;
-            }
-        }
-        /* Mobile Bottom Navigation */
-        .bottom-nav { display: none; }
-        @media (max-width: 767px) {
-            .bottom-nav {
-                display: flex;
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: #fff;
-                border-top: 1px solid #e5e5e5;
-                z-index: 35;
-                justify-content: space-around;
-                align-items: center;
-                height: 60px;
-                padding-bottom: env(safe-area-inset-bottom, 0px);
-                box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
-            }
-            .bottom-nav-item {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 3px;
-                padding: 6px 10px;
-                color: #999;
-                text-decoration: none;
-                font-size: 10px;
-                font-weight: 500;
-                transition: color 0.15s;
-            }
-            .bottom-nav-item.active { color: #1a1a1a; font-weight: 600; }
-            .bottom-nav-item svg { stroke-width: 2; }
-            .main-content { padding-bottom: 80px !important; }
-        }
-        .desktop-container { max-width: 1300px; margin: 0 auto; width: 100%; }
+    body {
+      font-family:'Cairo','Tajawal','Segoe UI',sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+    }
+    .font-tajawal { font-family:'Tajawal','Cairo',sans-serif; }
 
-        /* Desktop-specific styles */
-        @media (min-width: 768px) {
-            .mobile-header { display: none; }
-            .bottom-nav { display: none !important; }
-            .sidebar { display: flex !important; flex-direction: column; position: sticky; top: 0; }
-            .main-content { padding: 24px 32px !important; }
-            .main-content > div { max-width: 100%; padding: 0 !important; }
-            table th { font-size: 12px; padding: 12px 16px; background: #f5f5f5; border-bottom: 2px solid #ddd; position: sticky; top: 0; z-index: 1; }
-            table td { padding: 12px 16px; font-size: 14px; }
-            table tr:hover td { background: #f9f9f9; }
-            .card { border-radius: 8px; border: 1px solid #e8e8e8; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
-            .card-header { font-size: 14px; padding: 16px 24px; }
-            .card-body { padding: 24px; }
-            .btn { min-height: 44px; font-size: 14px; padding: 10px 24px; }
-            .btn-sm { min-height: 38px; font-size: 13px; padding: 8px 16px; }
-            .input { min-height: 44px; font-size: 14px; padding: 10px 14px; }
-            .sidebar { width: 260px; box-shadow: 1px 0 8px rgba(0,0,0,0.04); }
-            .nav-link { padding: 14px 20px; font-size: 15px; }
-            .nav-link:hover { background: #f5f5f5; border-right-color: #aaa; }
-            h2 { font-size: 24px !important; }
-        }
-    </style>
-    {% block extra_head %}{% endblock %}
+    ::-webkit-scrollbar { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:4px; }
+    ::selection { background:var(--text); color:var(--bg); }
+    .no-scrollbar::-webkit-scrollbar { display:none; }
+    .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+
+    /* ─────────────── Surfaces ─────────────── */
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; }
+    .card-pad { padding:20px; }
+    .surface-2 { background:var(--surface-2); }
+    .divider { border-bottom:1px solid var(--border); }
+
+    /* ─────────────── Buttons (monochrome, Apple-style) ─────────────── */
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:10px 18px; font-weight:600; font-size:14px; border-radius:12px; cursor:pointer; transition:all .15s ease; min-height:42px; border:1px solid var(--border-2); background:var(--surface-2); color:var(--text); }
+    .btn:hover { background:var(--surface-3); }
+    .btn:active { transform:scale(.98); }
+    .btn-primary { background:var(--text); border-color:var(--text); color:var(--bg); } .btn-primary:hover{ background:var(--muted); border-color:var(--muted); }
+    .btn-danger { background:transparent; border-color:var(--border-2); color:var(--dot-expired); } .btn-danger:hover{ background:var(--dot-expired); border-color:var(--dot-expired); color:#fff; }
+    .btn-sm { padding:6px 12px; font-size:12px; min-height:34px; border-radius:10px; }
+    .btn-icon { width:38px; height:38px; padding:0; border-radius:12px; }
+
+    /* ─────────────── Inputs ─────────────── */
+    .input { width:100%; padding:11px 14px; font-size:14px; border:1px solid var(--border-2); background:var(--surface); color:var(--text); border-radius:12px; transition:border-color .15s ease; }
+    .input:focus { outline:none; border-color:var(--text); }
+    .input::placeholder { color:var(--faint); }
+
+    /* ─────────────── Status dots (semantic color ONLY) ─────────────── */
+    .dot { display:inline-block; width:7px; height:7px; border-radius:9999px; flex-shrink:0; }
+    .dot-active { background:var(--dot-active); }
+    .dot-expired { background:var(--dot-expired); }
+    .dot-suspended { background:var(--dot-suspended); }
+
+    /* ─────────────── Table ─────────────── */
+    table { width:100%; border-collapse:collapse; }
+    table th { text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:var(--muted); border-bottom:1px solid var(--border); background:var(--surface-2); }
+    table td { padding:12px 16px; font-size:13px; border-bottom:1px solid var(--border); color:var(--text); }
+    table tr:last-child td { border-bottom:none; }
+    table tr:hover td { background:var(--surface-2); }
+
+    /* ─────────────── Modal / Bottom Sheet ─────────────── */
+    .modal-overlay { position:fixed; inset:0; z-index:50; background:var(--modal-dim); backdrop-filter:blur(4px); }
+    .sheet { background:var(--surface); border:1px solid var(--border); border-radius:20px; }
+
+    .f-label { font-size:12px; font-weight:600; color:var(--muted); display:block; margin-bottom:5px; }
+    .stat-value { font-size:30px; font-weight:800; color:var(--text); line-height:1.15; letter-spacing:-0.02em; }
+    .stat-label { font-size:12px; color:var(--muted); margin-top:4px; }
+    .text-main { color:var(--text); }
+    .text-muted { color:var(--muted); }
+    .text-faint { color:var(--faint); }
+
+    /* ─────────────── Bottom navigation states ─────────────── */
+    .active-nav { color:var(--text); }
+    .nav-inactive { color:var(--faint); }
+    .nav-inactive:hover { color:var(--muted); }
+    .nav-indicator { position:absolute; top:0; right:0; left:0; height:2px; border-radius:9999px; background:var(--text); opacity:0; transition:opacity .15s ease; }
+    .active-nav .nav-indicator { opacity:1; }
+
+    /* ─────────────── Segmented tabs (Ping|Sectors|SNMP) ─────────────── */
+    .tab-btn { border-radius:8px; padding:10px 0; font-size:13px; font-weight:700; color:var(--muted); transition:all .2s ease-in-out; }
+    .tab-btn:hover { color:var(--text); }
+    .tab-btn.tab-active { background:var(--text); color:var(--bg); }
+
+    /* ─────────────── Mobile tap feel + transitions ─────────────── */
+    .btn { transition:all .2s ease-in-out, transform .1s ease; }
+    .btn:active { transform:scale(.95); }
+    .card { transition:all .2s ease-in-out; }
+    .card:active { transform:scale(.95); }
+    .modal-overlay { transition:opacity .2s ease-in-out; }
+    .sheet { transition:transform .2s ease-in-out, opacity .2s ease-in-out; }
+
+    /* ─────────────── Legacy safe overrides (tables/misc on other pages) ─────────────── */
+    .glass { background:var(--header-bg); backdrop-filter:blur(14px); }
+  </style>
+  {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="bg-app min-h-screen" style="background:var(--bg);">
 
-    <header class="mobile-header">
-        <button id="burgerBtn" aria-label="القائمة" onclick="toggleSidebar()">☰</button>
-        <h1 style="display:flex;align-items:center;gap:8px;">
-            <img src="/static/assets/al-nazim-icon.svg" alt="الناظم" style="height:32px;width:32px;">
-            الناظم
-        </h1>
-    </header>
-
-    <div style="display:flex; min-height:100vh;">
-        <aside class="sidebar" id="sidebar">
-            <div class="px-5 py-6 border-b border-gray-200 shrink-0" style="display:flex;flex-direction:column;align-items:center;text-align:center;">
-                <img src="/static/assets/al-nazim-icon.svg" alt="الناظم" style="width:48px;height:48px;margin-bottom:8px;">
-                <div class="text-lg font-bold text-black tracking-tight">الناظم</div>
-                <div class="text-xs text-gray-400 mt-0.5">لإدارة أبراج الإنترنت</div>
-            </div>
-            <nav class="flex-1 py-3">
-                <a href="/" class="nav-link{% if request.path == '/' %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    لوحة القيادة
-                </a>
-            <a href="/customers" class="nav-link{% if request.path.startswith('/customers') %} active{% endif %}" onclick="closeSidebar()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-                المشتركين
-            </a>
-            <a href="/debts" class="nav-link{% if request.path.startswith('/debts') %} active{% endif %}" onclick="closeSidebar()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                الديون
-            </a>
-            <a href="/reminders" class="nav-link{% if request.path.startswith('/reminders') %} active{% endif %}" onclick="closeSidebar()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
-                تنبيهات الديون
-            </a>
-            <a href="/payments" class="nav-link{% if request.path.startswith('/payments') %} active{% endif %}" onclick="closeSidebar()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                المدفوعات
-            </a>
-            <a href="/billing" class="nav-link{% if request.path.startswith('/billing') %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    الفواتير
-                </a>
-                <a href="/expenses" class="nav-link{% if request.path.startswith('/expenses') %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v2H6a2 2 0 00-2 2v7a2 2 0 002 2h1l-1 4h14l-1-4h1a2 2 0 002-2V8a2 2 0 00-2-2h-3V4a3 3 0 00-3-3zm-2 5V4a2 2 0 014 0v2h-4z"/><line x1="8" y1="15" x2="16" y2="15"/></svg>
-                    المصروفات
-                </a>
-                <a href="/tickets" class="nav-link{% if request.path.startswith('/tickets') %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    طلبات الصيانة
-                </a>
-                <a href="/report" class="nav-link{% if request.path.startswith('/report') %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/></svg>
-                    التقرير الشهري
-                </a>
-                <a href="/packages" class="nav-link{% if request.path.startswith('/packages') %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
-                    الباقات
-                </a>
-                <a href="/settings" class="nav-link{% if request.path.startswith('/settings') %} active{% endif %}" onclick="closeSidebar()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-                    الإعدادات
-                </a>
-            </nav>
-            <div class="px-5 py-4 border-t border-gray-200 text-xs text-gray-400 shrink-0">v2.0 · ISP Tower Management</div>
-        </aside>
-
-        <div id="sidebarOverlay" onclick="closeSidebar()"></div>
-
-        <main class="flex-1 overflow-y-auto main-content">
-            <div class="p-8 max-w-6xl" style="padding:32px;">
-                {% block content %}{% endblock %}
-            </div>
-        </main>
+  <!-- Top Header -->
+  <header class="sticky top-0 z-40 glass border-b" style="border-color:var(--border);">
+    <div class="max-w-4xl mx-auto flex items-center justify-between px-4 py-3">
+      <a href="/" class="flex items-center gap-2.5">
+        <img src="/static/assets/al-nazim-icon.svg" alt="الناظم" class="w-9 h-9 rounded-xl" style="filter:drop-shadow(0 0 0 transparent);">
+        <span class="font-bold text-lg" style="color:var(--text);">الناظم</span>
+      </a>
+      <div class="flex items-center gap-1">
+        <span class="text-sm font-tajawal hidden sm:block" style="color:var(--muted);">{{ session.get('user_name') or 'مدير' }}</span>
+        <!-- Theme toggle -->
+        <button onclick="toggleTheme()" id="themeToggle" class="p-2 transition hover:opacity-70" title="الوضع الليلي / النهاري" aria-label="تبديل المظهر">
+          <svg id="iconSun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <svg id="iconMoon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);display:none;"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        </button>
+        <button onclick="logoutNow()" class="p-2 transition hover:opacity-70" title="خروج" aria-label="خروج">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
     </div>
+  </header>
 
-    <!-- Shared Payment Modal (for debts تسديد) -->
-    <div id="paymentModal" class="modal-overlay" style="display:none;">
-        <div class="modal-box" style="max-width:420px;">
-            <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">تسديد — <span id="payCustName">—</span></h3>
-            <input type="hidden" id="payInvoiceId"><input type="hidden" id="payRemaining"><input type="hidden" id="payCustId">
-            <div style="display:flex;flex-direction:column;gap:10px;">
-                <div id="payInvoiceInfo" style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #eee;">
-                    <span style="color:#888;">الكلي: <strong style="color:#1a1a1a;">—</strong></span>
-                    <span style="color:#888;">مدفوع: <strong style="color:#0d6e3c;">—</strong></span>
-                    <span style="color:#888;">متبقي: <strong style="color:#b91c1c;">—</strong></span>
-                </div>
-                <div style="max-height:200px;overflow-y:auto;" id="payInvoiceList"></div>
-                <div><label class="modal-label">المبلغ</label><div style="display:flex;gap:6px;align-items:stretch;">
-                    <button onclick="adjustPayAmount(-1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">−</button>
-                    <input type="number" id="payAmount" class="input" style="font-weight:700;font-size:16px;text-align:center;flex:1;" step="1000" min="1000">
-                    <button onclick="adjustPayAmount(1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">+</button>
-                    <button onclick="document.getElementById('payAmount').value=document.getElementById('payRemaining').value" class="btn btn-sm btn-success">كامل</button>
-                </div></div>
-                <div><label class="modal-label">طريقة الدفع</label><select id="payMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
-                <div><label class="modal-label">تاريخ الدفع</label><input type="date" id="payDate" class="input"></div>
-                <div><label class="modal-label">ملاحظات</label><input type="text" id="payNotes" class="input" placeholder="اي ملاحظة"></div>
+  <!-- Page Content -->
+  <main class="max-w-4xl mx-auto px-4 pt-6 pb-32">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Fixed Bottom Navigation (5 tabs — monochrome) -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 border-t" style="background:var(--nav-bg);backdrop-filter:blur(14px);border-color:var(--border);">
+    <div class="max-w-4xl mx-auto grid {% if g.get('is_admin') %}grid-cols-6{% else %}grid-cols-5{% endif %}">
+      <a href="/" class="flex flex-col items-center gap-1 py-3 transition relative {% if request.path == '/' %}active-nav{% else %}nav-inactive{% endif %}">
+        <span class="nav-indicator"></span>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span class="text-[10px] font-semibold">الرئيسية</span>
+      </a>
+      <a href="/customers" class="flex flex-col items-center gap-1 py-3 transition relative {% if request.path.startswith('/customers') %}active-nav{% else %}nav-inactive{% endif %}">
+        <span class="nav-indicator"></span>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        <span class="text-[10px] font-semibold">العملاء</span>
+      </a>
+      <a href="/network" class="flex flex-col items-center gap-1 py-3 transition relative {% if request.path.startswith('/network') %}active-nav{% else %}nav-inactive{% endif %}">
+        <span class="nav-indicator"></span>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        <span class="text-[10px] font-semibold">الشبكة</span>
+      </a>
+      <a href="/report" class="flex flex-col items-center gap-1 py-3 transition relative {% if request.path.startswith('/report') %}active-nav{% else %}nav-inactive{% endif %}">
+        <span class="nav-indicator"></span>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/></svg>
+        <span class="text-[10px] font-semibold">المالية</span>
+      </a>
+      <a href="/more" class="flex flex-col items-center gap-1 py-3 transition relative {% if request.path.startswith('/more') %}active-nav{% else %}nav-inactive{% endif %}">
+        <span class="nav-indicator"></span>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        <span class="text-[10px] font-semibold">الإعدادات</span>
+      </a>
+      {% if g.get('is_admin') %}
+      <a href="/admin" class="flex flex-col items-center gap-1 py-3 transition relative {% if request.path.startswith('/admin') %}active-nav{% else %}nav-inactive{% endif %}">
+        <span class="nav-indicator"></span>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v2H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-3V4a3 3 0 00-3-3zm0 7a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H8a1 1 0 110-2h3v-3a1 1 0 011-1z"/></svg>
+        <span class="text-[10px] font-semibold">الإدارة</span>
+      </a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <!-- Payment Modal -->
+  <div id="paymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
+    <div class="min-h-full flex items-center justify-center p-4">
+      <div class="sheet max-w-md w-full p-6 shadow-2xl">
+        <h3 class="text-lg font-bold mb-4 text-main">تسديد — <span id="payCustName">—</span></h3>
+        <input type="hidden" id="payInvoiceId"><input type="hidden" id="payRemaining"><input type="hidden" id="payCustId">
+        <div class="space-y-4">
+          <div id="payInvoiceInfo" class="flex justify-between text-sm p-3 rounded-xl surface-2 divider"></div>
+          <div class="max-h-52 overflow-y-auto space-y-2" id="payInvoiceList"></div>
+          <div>
+            <label class="f-label">المبلغ</label>
+            <div class="flex gap-2">
+              <button onclick="adjustPayAmount(-1000)" class="btn btn-sm px-3 text-lg font-bold" type="button">−</button>
+              <input type="number" id="payAmount" class="input flex-1 font-bold text-center" step="1000" min="1000">
+              <button onclick="adjustPayAmount(1000)" class="btn btn-sm px-3 text-lg font-bold" type="button">+</button>
+              <button onclick="document.getElementById('payAmount').value=document.getElementById('payRemaining').value" class="btn btn-sm px-3">كامل</button>
             </div>
-            <div style="display:flex;gap:10px;margin-top:14px;">
-                <button onclick="submitSharedPayment()" class="btn btn-primary" style="flex:1;">تاكيد الدفع</button>
-                <button onclick="document.getElementById('paymentModal').style.display='none'" class="btn">الغاء</button>
-            </div>
+          </div>
+          <div><label class="f-label">طريقة الدفع</label><select id="payMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
+          <div><label class="f-label">تاريخ الدفع</label><input type="date" id="payDate" class="input"></div>
+          <div><label class="f-label">ملاحظات</label><input type="text" id="payNotes" class="input" placeholder="اي ملاحظة"></div>
         </div>
-    </div>
-
-    <!-- Quick Pay Modal (unified payment) -->
-    <div id="quickPayModal" class="modal-overlay" style="display:none;">
-        <div class="modal-box" style="max-width:420px;">
-            <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">دفع</h3>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-                <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #eee;">
-                    <span style="color:#888;">الكلي: <strong id="quickPayFullAmount" style="color:#1a1a1a;">—</strong></span>
-                    <span style="color:#888;">مدفوع: <strong id="quickPayAlreadyPaid" style="color:#0d6e3c;">—</strong></span>
-                    <span style="color:#888;">متبقي: <strong id="quickPayRemaining" style="color:#b91c1c;">—</strong></span>
-                </div>
-                <div><label class="modal-label">المبلغ المراد دفعه</label>
-                    <input type="hidden" id="quickPayMaxAmount" value="0">
-                    <div style="display:flex;gap:6px;align-items:stretch;">
-                        <button onclick="adjustQuickPay(-1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">−</button>
-                        <input type="number" id="quickPayAmount" class="input" style="font-weight:700;font-size:16px;text-align:center;flex:1;" step="1000" min="1000">
-                        <button onclick="adjustQuickPay(1000)" class="btn btn-sm" style="font-size:18px;font-weight:700;min-width:42px;" type="button">+</button>
-                        <button onclick="document.getElementById('quickPayAmount').value=document.getElementById('quickPayMaxAmount').value" class="btn btn-sm btn-success">كامل</button>
-                    </div>
-                </div>
-                <div><label class="modal-label">تاريخ الدفع</label><input type="date" id="quickPayDate" class="input"></div>
-                <div><label class="modal-label">طريقة الدفع</label><select id="quickPayMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
-                <div><label class="modal-label">ملاحظات</label><input type="text" id="quickPayNotes" class="input" placeholder="اي ملاحظة"></div>
-            </div>
-            <div style="display:flex;gap:10px;margin-top:14px;">
-                <button onclick="submitQuickPay()" class="btn btn-success" style="flex:1;">تاكيد الدفع</button>
-                <button onclick="document.getElementById('quickPayModal').style.display='none'" class="btn">الغاء</button>
-            </div>
+        <div class="flex gap-3 mt-5">
+          <button onclick="submitSharedPayment()" class="btn btn-primary flex-1 py-3">تاكيد الدفع</button>
+          <button onclick="document.getElementById('paymentModal').style.display='none'" class="btn px-5">الغاء</button>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Custom Confirm Modal -->
-    <div id="confirmModal" class="modal-overlay" style="display:none;z-index:60;">
-        <div class="modal-box" style="max-width:360px;text-align:center;padding:24px 20px;">
-            <div id="confirmMsg" style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:18px;">تاكيد</div>
-            <div style="display:flex;gap:10px;justify-content:center;">
-                <button onclick="confirmYes()" class="btn btn-danger" style="flex:1;min-width:80px;">تاكيد</button>
-                <button onclick="confirmNo()" class="btn" style="flex:1;min-width:80px;">الغاء</button>
+  <!-- Quick Pay Modal -->
+  <div id="quickPayModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
+    <div class="min-h-full flex items-center justify-center p-4">
+      <div class="sheet max-w-md w-full p-6 shadow-2xl">
+        <h3 class="text-lg font-bold mb-4 text-main">دفع</h3>
+        <div class="space-y-4">
+          <div class="flex justify-between text-sm p-3 rounded-xl surface-2 divider">
+            <span class="text-muted">الكلي: <strong class="text-main" id="quickPayFullAmount">—</strong></span>
+            <span class="text-muted">مدفوع: <strong class="text-main" id="quickPayAlreadyPaid">—</strong></span>
+            <span class="text-muted">متبقي: <strong class="text-main" id="quickPayRemaining">—</strong></span>
+          </div>
+          <div>
+            <label class="f-label">المبلغ المراد دفعه</label>
+            <input type="hidden" id="quickPayMaxAmount" value="0">
+            <div class="flex gap-2">
+              <button onclick="adjustQuickPay(-1000)" class="btn btn-sm px-3 text-lg font-bold" type="button">−</button>
+              <input type="number" id="quickPayAmount" class="input flex-1 font-bold text-center" step="1000" min="1000">
+              <button onclick="adjustQuickPay(1000)" class="btn btn-sm px-3 text-lg font-bold" type="button">+</button>
+              <button onclick="document.getElementById('quickPayAmount').value=document.getElementById('quickPayMaxAmount').value" class="btn btn-sm px-3">كامل</button>
             </div>
+          </div>
+          <div><label class="f-label">تاريخ الدفع</label><input type="date" id="quickPayDate" class="input"></div>
+          <div><label class="f-label">طريقة الدفع</label><select id="quickPayMethod" class="input"><option value="نقدي">نقدي</option><option value="تحويل">تحويل</option><option value="بطاقة">بطاقة</option><option value="غير ذلك">غير ذلك</option></select></div>
+          <div><label class="f-label">ملاحظات</label><input type="text" id="quickPayNotes" class="input" placeholder="اي ملاحظة"></div>
         </div>
+        <div class="flex gap-3 mt-5">
+          <button onclick="submitQuickPay()" class="btn btn-primary flex-1 py-3">تاكيد الدفع</button>
+          <button onclick="document.getElementById('quickPayModal').style.display='none'" class="btn px-5">الغاء</button>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div id="toast" class="toast"></div>
+  <!-- Confirm Modal -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden modal-overlay">
+    <div class="min-h-full flex items-center justify-center p-4">
+      <div class="sheet max-w-sm w-full p-6 shadow-2xl text-center">
+        <div id="confirmMsg" class="font-semibold mb-6 text-main">تاكيد</div>
+        <div class="flex gap-3 justify-center">
+          <button onclick="confirmYes()" class="btn btn-primary flex-1 py-2.5">تاكيد</button>
+          <button onclick="confirmNo()" class="btn flex-1 py-2.5">الغاء</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <script>
-        // ── Shared Payment Functions ──
-        var todayStr = new Date().toISOString().split('T')[0];
+  <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] hidden px-5 py-3 rounded-xl font-semibold text-sm shadow-2xl"></div>
 
-        function openPayModal(custId, custName) {
-            document.getElementById('payCustName').textContent = custName;
-            document.getElementById('payCustId').value = custId;
-            document.getElementById('payInvoiceList').innerHTML = 'جاري التحميل...';
-            document.getElementById('paymentModal').style.display = 'flex';
-            document.getElementById('payInvoiceId').value = '';
-            document.getElementById('payAmount').value = '';
-            document.getElementById('payDate').value = todayStr;
-            document.getElementById('payNotes').value = '';
+  <script>
+    var todayStr = new Date().toISOString().split('T')[0];
 
-            fetch('/api/customers/history/' + custId)
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    var unpaid = d.invoices.filter(function(inv) { return !inv.is_paid; });
-                    if (unpaid.length === 0) {
-                        document.getElementById('payInvoiceList').innerHTML = '<p style="color:#999;text-align:center;padding:10px;">لا توجد فواتير غير مسددة</p>';
-                        updatePayInvoiceInfoTotals(0, 0, 0);
-                        return;
-                    }
-                    var totalAll = 0, totalPaid = 0, totalRemaining = 0;
-                    unpaid.forEach(function(inv) {
-                        totalAll += inv.total_amount;
-                        totalPaid += inv.paid_amount;
-                        totalRemaining += (inv.total_amount - inv.paid_amount);
-                    });
-                    updatePayInvoiceInfoTotals(totalAll, totalPaid, totalRemaining);
-
-                    var months = ['','يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
-                    var h = '<div style="font-size:11px;color:#888;margin-bottom:6px;">اختر فاتورة للتسديد:</div>';
-                    unpaid.forEach(function(inv, idx) {
-                        var rem = inv.total_amount - inv.paid_amount;
-                        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid #e5e5e5;margin-bottom:3px;border-radius:6px;cursor:pointer;font-size:13px;' + (idx===0?'background:#f0fdf4;border-color:#0d6e3c;':'') + '" class="inv-select" data-inv-id="'+inv.id+'" data-remaining="'+rem+'">';
-                        h += '<span><strong>'+months[inv.month]+' '+inv.year+'</strong></span>';
-                        h += '<span style="color:#888;">اجمالي: <strong>'+formatDinar(inv.total_amount)+'</strong></span>';
-                        h += '<span style="color:#b91c1c;">متبقي: <strong>'+formatDinar(rem)+'</strong></span>';
-                        h += '</div>';
-                    });
-                    document.getElementById('payInvoiceList').innerHTML = h;
-
-                    var first = unpaid[0];
-                    document.getElementById('payInvoiceId').value = first.id;
-                    document.getElementById('payRemaining').value = first.total_amount - first.paid_amount;
-                    document.getElementById('payAmount').value = first.total_amount - first.paid_amount;
-
-                    document.querySelectorAll('.inv-select').forEach(function(el) {
-                        el.addEventListener('click', function() {
-                            document.querySelectorAll('.inv-select').forEach(function(e) { e.style.background=''; e.style.borderColor='#e5e5e5'; });
-                            this.style.background='#f0fdf4'; this.style.borderColor='#0d6e3c';
-                            document.getElementById('payInvoiceId').value = this.dataset.invId;
-                            document.getElementById('payRemaining').value = this.dataset.remaining;
-                            document.getElementById('payAmount').value = this.dataset.remaining;
-                        });
-                    });
-                });
+    /* ─────────────── CSRF auto-attach (Phase 14.5) ─────────────── */
+    var CSRF_TOKEN = '{{ csrf_token }}';
+    (function(){
+      var origFetch = window.fetch;
+      window.fetch = function(url, opts){
+        opts = opts || {};
+        var method = (opts.method || 'GET').toUpperCase();
+        var isSameOrigin = !/^https?:\/\//.test(String(url)) || String(url).startsWith(window.location.origin);
+        if(method !== 'GET' && isSameOrigin && CSRF_TOKEN){
+          opts.headers = opts.headers || {};
+          if(opts.headers instanceof Headers){
+            if(!opts.headers.has('X-CSRF-Token')) opts.headers.set('X-CSRF-Token', CSRF_TOKEN);
+          } else if(!opts.headers['X-CSRF-Token']){
+            opts.headers['X-CSRF-Token'] = CSRF_TOKEN;
+          }
         }
+        return origFetch.call(this, url, opts);
+      };
+    })();
 
-        function updatePayInvoiceInfoTotals(totalAll, totalPaid, totalRemaining) {
-            var info = document.getElementById('payInvoiceInfo');
-            info.innerHTML = '<span style="color:#888;">الكلي: <strong style="color:#1a1a1a;">'+formatDinar(totalAll)+'</strong></span>' +
-                '<span style="color:#888;">مدفوع: <strong style="color:#0d6e3c;">'+formatDinar(totalPaid)+'</strong></span>' +
-                '<span style="color:#888;">متبقي: <strong style="color:#b91c1c;">'+formatDinar(totalRemaining)+'</strong></span>';
-        }
-        function updatePayInvoiceInfo(inv) {
-            var info = document.getElementById('payInvoiceInfo');
-            info.innerHTML = '<span style="color:#888;">الكلي: <strong style="color:#1a1a1a;">'+formatDinar(inv.total_amount)+'</strong></span>' +
-                '<span style="color:#888;">مدفوع: <strong style="color:#0d6e3c;">'+formatDinar(inv.paid_amount)+'</strong></span>' +
-                '<span style="color:#888;">متبقي: <strong style="color:#b91c1c;">'+formatDinar(inv.total_amount-inv.paid_amount)+'</strong></span>';
-        }
-        function adjustPayAmount(delta) {
-            var inp = document.getElementById('payAmount');
-            var val = parseInt(inp.value) || 0;
-            var newVal = val + delta;
-            if (newVal < 0) newVal = 0;
-            inp.value = newVal;
-        }
-        function adjustQuickPay(delta) {
-            var inp = document.getElementById('quickPayAmount');
-            var val = parseInt(inp.value) || 0;
-            var newVal = val + delta;
-            if (newVal < 0) newVal = 0;
-            inp.value = newVal;
-        }
+    /* ─────────────── Dark / Light Theme (system default + manual toggle) ─────────────── */
+    function systemPrefersLight(){ return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches; }
+    function getStoredTheme(){ try{ return localStorage.getItem('alnathim_theme'); }catch(e){ return null; } }
+    function applyThemeState(){
+      var t=getStoredTheme();
+      if(t==='light'){ document.documentElement.setAttribute('data-theme','light'); }
+      else if(t==='dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+      else { document.documentElement.removeAttribute('data-theme'); }
+      updateThemeIcon();
+    }
+    function toggleTheme(){
+      var current=getStoredTheme();
+      if(current==='light'){ try{localStorage.setItem('alnathim_theme','dark');}catch(e){} }
+      else if(current==='dark'){ try{localStorage.removeItem('alnathim_theme');}catch(e){} }
+      else { try{localStorage.setItem('alnathim_theme', systemPrefersLight()?'dark':'light');}catch(e){} }
+      applyThemeState();
+    }
+    function updateThemeIcon(){
+      var t=getStoredTheme();
+      var dark = t==='dark' || (!t && !systemPrefersLight());
+      document.getElementById('iconSun').style.display = dark ? 'none' : 'block';
+      document.getElementById('iconMoon').style.display = dark ? 'block' : 'none';
+    }
+    applyThemeState();
+    if(window.matchMedia) window.matchMedia('(prefers-color-scheme: light)').addEventListener('change',applyThemeState);
 
-        var quickPayCustId = null;
-
-function openQuickPayModal(custId, fullAmount) {
-            quickPayCustId = custId;
-            document.getElementById('quickPayFullAmount').textContent = 'جاري التحميل...';
-            document.getElementById('quickPayAlreadyPaid').textContent = 'جاري التحميل...';
-            document.getElementById('quickPayRemaining').textContent = 'جاري التحميل...';
-            document.getElementById('quickPayAmount').value = '';
-            document.getElementById('quickPayDate').value = todayStr;
-            document.getElementById('quickPayNotes').value = '';
-            document.getElementById('quickPayModal').style.display = 'flex';
-
-            fetch('/api/payment/current-invoice/' + custId)
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.ok) {
-                        var realTotal = (d.total !== undefined && d.total !== null) ? d.total : fullAmount;
-                        var realPaid = (d.paid !== undefined && d.paid !== null) ? d.paid : 0;
-                        var realRemaining = (d.remaining !== undefined && d.remaining !== null) ? d.remaining : realTotal;
-                        document.getElementById('quickPayFullAmount').textContent = formatDinar(realTotal);
-                        document.getElementById('quickPayAlreadyPaid').textContent = formatDinar(realPaid);
-                        document.getElementById('quickPayRemaining').textContent = formatDinar(realRemaining);
-                        document.getElementById('quickPayMaxAmount').value = realRemaining;
-                        if (realRemaining <= 0) {
-                            document.getElementById('quickPayAmount').value = 0;
-                            document.getElementById('quickPayAmount').disabled = true;
-                            showToast('الفاتورة مدفوعة بالكامل', 'error');
-                        } else {
-                            document.getElementById('quickPayAmount').value = realRemaining;
-                            document.getElementById('quickPayAmount').disabled = false;
-                        }
-                    }
-                });
+    /* ─────────────── Payment flow (shared) ─────────────── */
+    function openPayModal(custId, custName) {
+      document.getElementById('payCustName').textContent = custName;
+      document.getElementById('payCustId').value = custId;
+      document.getElementById('payInvoiceList').innerHTML = '<div class="text-muted text-center py-3">جاري التحميل...</div>';
+      document.getElementById('paymentModal').style.display = 'block';
+      document.getElementById('payInvoiceId').value=''; document.getElementById('payAmount').value='';
+      document.getElementById('payDate').value = todayStr; document.getElementById('payNotes').value='';
+      fetch('/api/customers/history/'+custId).then(r=>r.json()).then(d=>{
+        var unpaid = d.invoices.filter(i=>!i.is_paid);
+        if(unpaid.length===0){
+          document.getElementById('payInvoiceList').innerHTML='<p class="text-muted text-center py-3">لا توجد فواتير غير مسددة</p>';
+          updatePayInvoiceInfoTotals(0,0,0); return;
         }
-
-        async function submitQuickPay() {
-            var amount = parseFloat(document.getElementById('quickPayAmount').value);
-            if (!amount || amount <= 0) { showToast('الرجاء ادخال مبلغ صحيح', 'error'); return; }
-            var r = await fetch('/api/payment/quick-pay/' + quickPayCustId, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    amount: amount,
-                    payment_date: document.getElementById('quickPayDate').value,
-                    payment_method: document.getElementById('quickPayMethod').value,
-                    notes: document.getElementById('quickPayNotes').value.trim()
-                })
-            });
-            var d = await r.json();
-            if (d.ok) {
-                var msg = 'تم الدفع بنجاح — ' + formatDinar(d.amount);
-                if (d.remaining > 0) msg += ' | المتبقي: ' + formatDinar(d.remaining);
-                showToast(msg);
-                document.getElementById('quickPayModal').style.display = 'none';
-                setTimeout(function() { location.reload(); }, 800);
-            } else {
-                showToast(d.error || 'حدث خطأ', 'error');
-            }
-        }
-
-        async function submitSharedPayment() {
-            var id = document.getElementById('payInvoiceId').value;
-            var amount = parseFloat(document.getElementById('payAmount').value);
-            if (!id) { showToast('الرجاء اختيار فاتورة','error'); return; }
-            if (!amount || amount <= 0) { showToast('الرجاء ادخال مبلغ صحيح','error'); return; }
-            var r = await fetch('/api/payment/make', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({
-                    invoice_id: parseInt(id), amount: amount,
-                    payment_date: document.getElementById('payDate').value,
-                    payment_method: document.getElementById('payMethod').value,
-                    notes: document.getElementById('payNotes').value.trim()
-                })
-            });
-            var d = await r.json();
-            if (d.ok) {
-                showToast('تم التسديد بنجاح');
-                document.getElementById('paymentModal').style.display = 'none';
-                setTimeout(function() { location.reload(); }, 500);
-            } else {
-                showToast(d.error || 'حدث خطأ', 'error');
-            }
-        }
-
-        // Close modals on Escape
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                document.getElementById('paymentModal').style.display = 'none';
-                document.getElementById('quickPayModal').style.display = 'none';
-                document.getElementById('confirmModal').style.display = 'none';
-            }
+        var tA=0,tP=0,tR=0; unpaid.forEach(i=>{tA+=i.total_amount;tP+=i.paid_amount;tR+=(i.total_amount-i.paid_amount);});
+        updatePayInvoiceInfoTotals(tA,tP,tR);
+        var h='<div class="text-[11px] text-muted mb-2">اختر فاتورة للتسديد:</div>';
+        unpaid.forEach((inv,idx)=>{
+          var rem=inv.total_amount-inv.paid_amount;
+          var sel = idx===0 ? 'style="background:var(--text);color:var(--bg);border-color:var(--text);"' : '';
+          var txt = idx===0 ? 'style="color:var(--bg);"' : '';
+          h+='<div class="inv-select flex justify-between items-center px-3 py-2.5 rounded-xl border cursor-pointer text-sm" '+sel+' data-inv-id="'+inv.id+'" data-remaining="'+rem+'">';
+          h+='<span class="font-semibold" '+txt+'>'+String(inv.month).padStart(2,'0')+'/'+inv.year+'</span>';
+          h+='<span class="text-muted" '+txt+'>اجمالي: <strong '+txt+'>'+formatDinar(inv.total_amount)+'</strong></span>';
+          h+='<span class="font-semibold" '+txt+'>'+formatDinar(rem)+'</span></div>';
         });
-
-function showToast(msg, type) {
-            var t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'toast' + (type === 'error' ? ' error' : '');
-            t.classList.add('show');
-            setTimeout(function() { t.classList.remove('show'); }, 8000);
-        }
-        var numeralStyle = '{{ numeral_style }}';
-        var arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-        function toArabicNum(n) {
-            if (numeralStyle === 'EN') return String(n);
-            return String(n).replace(/[0-9]/g, function(d) { return arabicDigits[parseInt(d)]; });
-        }
-        function formatDinar(amount) {
-            var n = parseInt(amount) || 0;
-            var formatted = n.toLocaleString('en-US');
-            return (numeralStyle === 'EN' ? formatted : toArabicNum(formatted)) + ' د.ع';
-        }
-        function formatArabicNumber(amount) {
-            var n = parseInt(amount) || 0;
-            var formatted = n.toLocaleString('en-US');
-            return numeralStyle === 'EN' ? formatted : toArabicNum(formatted);
-        }
-        function toggleSidebar() {
-            var s = document.getElementById('sidebar');
-            var o = document.getElementById('sidebarOverlay');
-            s.classList.toggle('open');
-            o.classList.toggle('active');
-        }
-        var _confirmCallback = null;
-        function showConfirm(msg, callback) {
-            document.getElementById('confirmMsg').textContent = msg;
-            _confirmCallback = callback;
-            document.getElementById('confirmModal').style.display = 'flex';
-        }
-        function confirmYes() {
-            document.getElementById('confirmModal').style.display = 'none';
-            if (_confirmCallback) _confirmCallback();
-        }
-        function confirmNo() {
-            document.getElementById('confirmModal').style.display = 'none';
-            _confirmCallback = null;
-        }
-        function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('sidebarOverlay').classList.remove('active');
-        }
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeSidebar();
+        document.getElementById('payInvoiceList').innerHTML=h;
+        var f=unpaid[0];
+        document.getElementById('payInvoiceId').value=f.id;
+        document.getElementById('payRemaining').value=f.total_amount-f.paid_amount;
+        document.getElementById('payAmount').value=f.total_amount-f.paid_amount;
+        document.querySelectorAll('.inv-select').forEach(el=>{
+          el.addEventListener('click',function(){
+            document.querySelectorAll('.inv-select').forEach(e=>{e.removeAttribute('style');var s=e.querySelectorAll('span');s.forEach(sp=>sp.removeAttribute('style'));});
+            var spanEls=this.querySelectorAll('span');
+            this.setAttribute('style','background:var(--text);color:var(--bg);border-color:var(--text);');
+            spanEls.forEach(sp=>sp.setAttribute('style','color:var(--bg);'));
+            document.getElementById('payInvoiceId').value=this.dataset.invId;
+            document.getElementById('payRemaining').value=this.dataset.remaining;
+            document.getElementById('payAmount').value=this.dataset.remaining;
+          });
         });
+      });
+    }
+    function updatePayInvoiceInfoTotals(a,p,r){
+      document.getElementById('payInvoiceInfo').innerHTML=
+        '<span class="text-muted">الكلي:<strong class="text-main">'+formatDinar(a)+'</strong></span>'+
+        '<span class="text-muted">مدفوع:<strong class="text-main">'+formatDinar(p)+'</strong></span>'+
+        '<span class="text-muted">متبقي:<strong class="text-main">'+formatDinar(r)+'</strong></span>';
+    }
+    function adjustPayAmount(d){var i=document.getElementById('payAmount');i.value=(parseInt(i.value)||0)+d<0?0:(parseInt(i.value)||0)+d;}
+    function adjustQuickPay(d){var i=document.getElementById('quickPayAmount');i.value=(parseInt(i.value)||0)+d<0?0:(parseInt(i.value)||0)+d;}
 
-        // Register Service Worker for PWA
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/service-worker.js');
+    var quickPayCustId=null;
+    function openQuickPayModal(custId,fullAmount){
+      quickPayCustId=custId;
+      document.getElementById('quickPayFullAmount').textContent='جاري التحميل...';
+      document.getElementById('quickPayAlreadyPaid').textContent='جاري التحميل...';
+      document.getElementById('quickPayRemaining').textContent='جاري التحميل...';
+      document.getElementById('quickPayAmount').value=''; document.getElementById('quickPayDate').value=todayStr;
+      document.getElementById('quickPayNotes').value=''; document.getElementById('quickPayModal').style.display='block';
+      fetch('/api/payment/current-invoice/'+custId).then(r=>r.json()).then(d=>{
+        if(d.ok){
+          var t=d.total!==undefined&&d.total!==null?d.total:fullAmount;
+          var p=d.paid!==undefined&&d.paid!==null?d.paid:0;
+          var r=d.remaining!==undefined&&d.remaining!==null?d.remaining:t;
+          document.getElementById('quickPayFullAmount').textContent=formatDinar(t);
+          document.getElementById('quickPayAlreadyPaid').textContent=formatDinar(p);
+          document.getElementById('quickPayRemaining').textContent=formatDinar(r);
+          document.getElementById('quickPayMaxAmount').value=r;
+          if(r<=0){document.getElementById('quickPayAmount').value=0;document.getElementById('quickPayAmount').disabled=true;showToast('الفاتورة مدفوعة بالكامل','error');}
+          else{document.getElementById('quickPayAmount').value=r;document.getElementById('quickPayAmount').disabled=false;}
         }
-    </script>
-    <!-- Mobile Bottom Navigation (visible only on phones) -->
-    <nav class="bottom-nav">
-        <a href="/" class="bottom-nav-item{% if request.path == '/' %} active{% endif %}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            <span>الرئيسية</span>
-        </a>
-        <a href="/customers" class="bottom-nav-item{% if request.path.startswith('/customers') %} active{% endif %}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-            <span>المشتركين</span>
-        </a>
-        <a href="/tickets" class="bottom-nav-item{% if request.path.startswith('/tickets') %} active{% endif %}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>الصيانة</span>
-        </a>
-        <a href="/reminders" class="bottom-nav-item{% if request.path.startswith('/reminders') %} active{% endif %}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
-            <span>تنبيهات</span>
-        </a>
-        <a href="/billing" class="bottom-nav-item{% if request.path.startswith('/billing') %} active{% endif %}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
-            <span>الفواتير</span>
-        </a>
-    </nav>
-    {% block extra_scripts %}{% endblock %}
+      });
+    }
+    async function submitQuickPay(){
+      var amt=parseFloat(document.getElementById('quickPayAmount').value);
+      if(!amt||amt<=0){showToast('الرجاء ادخال مبلغ صحيح','error');return;}
+      var r=await fetch('/api/payment/quick-pay/'+quickPayCustId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amt,payment_date:document.getElementById('quickPayDate').value,payment_method:document.getElementById('quickPayMethod').value,notes:document.getElementById('quickPayNotes').value.trim()})});
+      var d=await r.json();
+      if(d.ok){var m='تم الدفع بنجاح — '+formatDinar(d.amount);if(d.remaining>0)m+=' | المتبقي: '+formatDinar(d.remaining);showToast(m);document.getElementById('quickPayModal').style.display='none';setTimeout(()=>location.reload(),800);}
+      else{showToast(d.error||'حدث خطأ','error');}
+    }
+    async function submitSharedPayment(){
+      var id=document.getElementById('payInvoiceId').value;
+      var amt=parseFloat(document.getElementById('payAmount').value);
+      if(!id){showToast('الرجاء اختيار فاتورة','error');return;}
+      if(!amt||amt<=0){showToast('الرجاء ادخال مبلغ صحيح','error');return;}
+      var r=await fetch('/api/payment/make',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invoice_id:parseInt(id),amount:amt,payment_date:document.getElementById('payDate').value,payment_method:document.getElementById('payMethod').value,notes:document.getElementById('payNotes').value.trim()})});
+      var d=await r.json();
+      if(d.ok){showToast('تم التسديد بنجاح');document.getElementById('paymentModal').style.display='none';setTimeout(()=>location.reload(),500);}
+      else{showToast(d.error||'حدث خطأ','error');}
+    }
+
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'){document.getElementById('paymentModal').style.display='none';document.getElementById('quickPayModal').style.display='none';document.getElementById('confirmModal').style.display='none';}});
+
+    function showToast(msg,type){
+      var t=document.getElementById('toast');
+      t.textContent=msg;
+      t.style.display='block';
+      t.style.background = type==='error' ? 'var(--dot-expired)' : 'var(--toast-bg)';
+      t.style.color = type==='error' ? '#fff' : 'var(--toast-text)';
+      clearTimeout(t._timer);
+      t._timer=setTimeout(()=>{t.style.display='none';},4000);
+    }
+    var numeralStyle='{{ numeral_style }}';
+    var arabicDigits=['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    function toArabicNum(n){if(numeralStyle==='EN')return String(n);return String(n).replace(/[0-9]/g,function(d){return arabicDigits[parseInt(d)];});}
+    function formatDinar(amount){var n=parseInt(amount)||0;var f=n.toLocaleString('en-US');return(numeralStyle==='EN'?f:toArabicNum(f))+' د.ع';}
+    function formatArabicNumber(amount){var n=parseInt(amount)||0;var f=n.toLocaleString('en-US');return numeralStyle==='EN'?f:toArabicNum(f);}
+
+    /* ─────────────── Relative days helper (subscribers) ─────────────── */
+    function parseDateStr(s){
+      if(!s) return null;
+      var m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if(m) return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
+      var d=new Date(s);
+      return isNaN(d.getTime())?null:d;
+    }
+    function daysRemainingText(dateStr){
+      var d=parseDateStr(dateStr);
+      if(!d) return '';
+      var today=new Date(); today.setHours(0,0,0,0); d.setHours(0,0,0,0);
+      var diff=Math.round((d-today)/86400000);
+      if(diff>0) return 'باقي '+formatArabicNumber(diff)+(diff===1?' يوم':' أيام');
+      if(diff===0) return 'ينتهي اليوم';
+      return 'منتهي منذ '+formatArabicNumber(Math.abs(diff))+' أيام';
+    }
+    function formatDayMonth(dateStr){
+      var d=parseDateStr(dateStr);
+      if(!d) return '—';
+      var dd=String(d.getDate()).padStart(2,'0');
+      var mm=String(d.getMonth()+1).padStart(2,'0');
+      return dd+'/'+mm;
+    }
+
+    var _confirmCallback=null;
+    function showConfirm(msg,cb){document.getElementById('confirmMsg').textContent=msg;_confirmCallback=cb;document.getElementById('confirmModal').style.display='block';}
+    function confirmYes(){document.getElementById('confirmModal').style.display='none';if(_confirmCallback)_confirmCallback();}
+    function confirmNo(){document.getElementById('confirmModal').style.display='none';_confirmCallback=null;}
+
+    async function logoutNow(){
+      showConfirm('تسجيل الخروج؟',async function(){
+        var r=await fetch('/logout',{method:'POST'});var d=await r.json();
+        if(d.ok)window.location.href='/login';else window.location.href='/login';
+      });
+    }
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/service-worker.js');}
+  </script>
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

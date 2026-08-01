@@ -2,131 +2,140 @@
 {% block title %}طلبات الصيانة{% endblock %}
 {% block content %}
 
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-    <div>
-        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">طلبات الصيانة</h2>
-        <p style="font-size:13px;color:#888;margin-top:4px;">متابعة طلبات صيانة المشتركين</p>
-    </div>
-    <button onclick="openAddTicketModal()" class="btn btn-primary icon-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        اضافة طلب صيانة
-    </button>
+<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+  <div>
+    <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">طلبات الصيانة</h1>
+    <p class="text-sm text-muted mt-1 font-tajawal">متابعة طلبات صيانة المشتركين</p>
+  </div>
+  <button onclick="openAddTicketModal()" class="btn btn-primary">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    اضافة طلب صيانة
+  </button>
 </div>
 
-<div class="card filter-bar">
-    <div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;">
-        <div style="flex:1;min-width:160px;position:relative;">
-            <input type="text" id="searchInput" value="{{ search }}" placeholder="بحث باسم المشترك او وصف المشكلة..." class="input" onkeydown="if(event.key==='Enter')doSearch()" style="padding-left:36px;">
-            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aaa;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </div>
-        <button onclick="doSearch()" class="btn btn-primary btn-sm">بحث</button>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            <button onclick="filterStatus('all')" class="btn btn-sm filter-btn {% if status_filter=='all' %}filter-active{% endif %}">الكل</button>
-            <button onclick="filterStatus('pending')" class="btn btn-sm filter-btn {% if status_filter=='pending' %}filter-active{% endif %}">قيد الانتظار</button>
-            <button onclick="filterStatus('resolved')" class="btn btn-sm filter-btn {% if status_filter=='resolved' %}filter-active{% endif %}">تم الحل</button>
-        </div>
+<!-- Filter/search bar (monochrome) -->
+<div class="card card-pad p-4 mb-6">
+  <div class="flex items-center gap-2 flex-wrap">
+    <div class="relative flex-1 min-w-[160px]">
+      <input type="text" id="searchInput" value="{{ search }}" placeholder="بحث باسم المشترك او وصف المشكلة..." class="input pr-4 pl-10" onkeydown="if(event.key==='Enter')doSearch()">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </div>
+    <button onclick="doSearch()" class="btn btn-primary btn-sm">بحث</button>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="filterStatus('all')" class="btn btn-sm {% if status_filter=='all' %}filter-active{% endif %}">الكل</button>
+      <button onclick="filterStatus('pending')" class="btn btn-sm {% if status_filter=='pending' %}filter-active{% endif %}">قيد الانتظار</button>
+      <button onclick="filterStatus('resolved')" class="btn btn-sm {% if status_filter=='resolved' %}filter-active{% endif %}">تم الحل</button>
+    </div>
+  </div>
 </div>
 
-<div class="desktop-table">
-    <div class="card" style="overflow:hidden;">
-        <div class="table-responsive">
-            <table>
-                <thead><tr><th>المشترك</th><th>وصف المشكلة</th><th>التاريخ</th><th>الحالة</th><th style="width:120px;">اجراءات</th></tr></thead>
-                <tbody>
-                {% for t in tickets %}
-                <tr{% if t.status=='resolved' %} style="background:#f0fdf4;"{% endif %}>
-                    <td style="font-weight:600;">{{ t.customer_name }}{% if t.phone %} <span style="font-size:11px;color:#888;">{{ t.phone }}</span>{% endif %}</td>
-                    <td style="font-size:13px;">{{ t.issue_description[:60] }}{% if t.issue_description|length>60 %}...{% endif %}</td>
-                    <td style="text-align:center;font-size:12px;">{{ t.created_at[:10] }}</td>
-                    <td style="text-align:center;">
-                        {% if t.status=='pending' %}
-                        <span class="badge badge-amber">قيد الانتظار</span>
-                        {% else %}
-                        <span class="badge badge-green">تم الحل</span>
-                        {% endif %}
-                    </td>
-                    <td class="actions-cell" style="text-align:center;">
-                        <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">
-                            <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm {% if t.status=='pending' %}btn-success{% else %}btn-warning{% endif %}" style="font-size:12px;padding:10px 14px;min-height:40px;">
-                                {% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}
-                            </button>
-                            <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger" style="font-size:12px;padding:10px 14px;min-height:40px;">حذف</button>
-                        </div>
-                    </td>
-                </tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
+<!-- Desktop table (monochrome) -->
+<div class="sm:max-w-md sm:mx-auto desktop-table">
+  <div class="card overflow-hidden">
+    <div class="table-responsive">
+      <table>
+        <thead><tr><th>المشترك</th><th>وصف المشكلة</th><th>التاريخ</th><th>الحالة</th><th style="width:130px;">اجراءات</th></tr></thead>
+        <tbody>
+        {% for t in tickets %}
+        <tr>
+            <td>
+              <div class="font-bold text-sm text-main">{{ t.customer_name }}</div>
+              {% if t.phone %}<div class="text-[11px] text-muted font-tajawal" dir="ltr" style="text-align:right;">{{ t.phone }}</div>{% endif %}
+            </td>
+            <td class="text-sm text-main">{{ t.issue_description[:60] }}{% if t.issue_description|length>60 %}...{% endif %}</td>
+            <td class="text-center text-xs text-muted whitespace-nowrap">{{ t.created_at[:10] }}</td>
+            <td class="text-center">
+              <span class="inline-flex items-center gap-1.5 text-[11px] font-bold" style="color:{% if t.status=='pending' %}var(--dot-expired){% else %}var(--dot-active){% endif %};">
+                {% if t.status=='pending' %}● قيد الانتظار{% else %}● تم الحل{% endif %}
+              </span>
+            </td>
+            <td class="text-center">
+              <div class="flex gap-1.5 flex-wrap justify-center">
+                <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm {% if t.status=='pending' %}btn-primary{% endif %}">{% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}</button>
+                <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger">حذف</button>
+              </div>
+            </td>
+        </tr>{% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
 </div>
 
-<!-- Mobile Cards -->
-<div class="mobile-cards">
+<!-- Mobile cards (monochrome, centered) -->
+<div class="mobile-cards mx-auto max-w-md">
 {% for t in tickets %}
-<div class="m-card{% if t.status=='resolved' %} paid-bg{% endif %}">
-    <div class="m-card-header">
-        <span class="m-card-name">{{ t.customer_name }}</span>
-        <span>{% if t.status=='pending' %}<span class="badge badge-amber">قيد الانتظار</span>{% else %}<span class="badge badge-green">تم الحل</span>{% endif %}</span>
+<div class="m-card card p-4">
+    <div class="flex items-center justify-between gap-2">
+        <span class="font-bold text-sm text-main truncate">{{ t.customer_name }}</span>
+        <span class="inline-flex items-center gap-1.5 text-[11px] font-bold" style="color:{% if t.status=='pending' %}var(--dot-expired){% else %}var(--dot-active){% endif %};">
+          {% if t.status=='pending' %}● قيد الانتظار{% else %}● تم الحل{% endif %}
+        </span>
     </div>
-    <div class="m-card-row"><span class="text-muted">{{ t.created_at[:10] }}</span></div>
-    <div class="m-card-row"><span>{{ t.issue_description }}</span></div>
-    <div class="m-card-actions">
-        <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm {% if t.status=='pending' %}btn-success{% else %}btn-warning{% endif %}">{% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}</button>
+    <div class="m-card-row mt-2 text-xs text-faint font-tajawal">{{ t.created_at[:10] }}</div>
+    <div class="mt-1 text-sm text-main">{{ t.issue_description }}</div>
+    <div class="flex gap-2 mt-3">
+        <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm flex-1 {% if t.status=='pending' %}btn-primary{% endif %}">{% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}</button>
         <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger">حذف</button>
     </div>
 </div>{% endfor %}
-{% if tickets|length==0 %}<div style="text-align:center;padding:48px;color:#999;">لا توجد طلبات صيانة</div>{% endif %}
+{% if tickets|length==0 %}<div class="text-center text-muted py-16 font-tajawal">لا توجد طلبات صيانة</div>{% endif %}
 </div>
 
 <!-- Add Ticket Modal -->
-<div id="ticketModal" class="modal-overlay" style="display:none;">
-    <div class="modal-box" style="max-width:500px;">
-        <h3 style="font-size:18px;font-weight:700;margin-bottom:14px;">اضافة طلب صيانة</h3>
-        <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="position:relative;">
-                <label class="f-label">المشترك *</label>
-                <input type="text" id="ticketCustomerSearch" class="input" placeholder="اكتب اسم المشترك او اسم المستخدم للبحث..." autocomplete="off" oninput="searchCustomers()" onfocus="searchCustomers()" style="font-size:14px;min-height:38px;">
-                <input type="hidden" id="ticketCustomerId" value="">
-                <div id="searchResults" style="position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1px solid #d5d5d5;border-top:none;max-height:200px;overflow-y:auto;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);"></div>
-            </div>
-            <div>
-                <label class="f-label">وصف المشكلة *</label>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
-                    <button type="button" onclick="setTicketIssue('برمجة راوتر')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">برمجة راوتر</button>
-                    <button type="button" onclick="setTicketIssue('قطع بالكيبل')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">قطع بالكيبل</button>
-                    <button type="button" onclick="setTicketIssue('ضعف اشارة')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">ضعف اشارة</button>
-                    <button type="button" onclick="setTicketIssue('انقطاع خدمة')" class="btn btn-sm" style="font-size:11px;padding:4px 10px;">انقطاع خدمة</button>
-                </div>
-                <textarea id="ticketDescription" rows="4" class="input" style="resize:none;" placeholder="مثال: انقطاع الكيبل، اشارة ضعيفة، جهاز معطل..."></textarea>
-            </div>
+<div id="ticketModal" class="fixed inset-0 z-[55] hidden overflow-y-auto modal-overlay">
+  <div class="min-h-full flex items-center justify-center p-4">
+    <div class="sheet w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
+      <h3 class="text-lg font-bold text-main mb-4">اضافة طلب صيانة</h3>
+      <div class="space-y-4">
+        <div class="relative">
+          <label class="f-label">المشترك *</label>
+          <input type="text" id="ticketCustomerSearch" class="input" placeholder="اكتب اسم المشترك او اسم المستخدم للبحث..." autocomplete="off" oninput="searchCustomers()" onfocus="searchCustomers()">
+          <input type="hidden" id="ticketCustomerId" value="">
+          <div id="searchResults" class="absolute top-full right-0 left-0 z-[60] rounded-b-xl overflow-hidden surface-2" style="display:none;border:1px solid var(--border-2);border-top:none;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:14px;">
-            <button onclick="submitTicket()" class="btn btn-primary" style="flex:1;">حفظ</button>
-            <button onclick="document.getElementById('ticketModal').style.display='none'" class="btn">الغاء</button>
+        <div>
+          <label class="f-label">وصف المشكلة *</label>
+          <div class="flex gap-2 flex-wrap mb-3">
+            <button type="button" onclick="setTicketIssue('برمجة راوتر')" class="btn btn-sm">برمجة راوتر</button>
+            <button type="button" onclick="setTicketIssue('قطع بالكيبل')" class="btn btn-sm">قطع بالكيبل</button>
+            <button type="button" onclick="setTicketIssue('ضعف اشارة')" class="btn btn-sm">ضعف اشارة</button>
+            <button type="button" onclick="setTicketIssue('انقطاع خدمة')" class="btn btn-sm">انقطاع خدمة</button>
+          </div>
+          <textarea id="ticketDescription" rows="4" class="input" style="resize:none;" placeholder="مثال: انقطاع الكيبل، اشارة ضعيفة، جهاز معطل..."></textarea>
         </div>
+      </div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="submitTicket()" class="btn btn-primary flex-1 py-3">حفظ</button>
+        <button onclick="document.getElementById('ticketModal').style.display='none'" class="btn px-6">الغاء</button>
+      </div>
     </div>
+  </div>
 </div>
 
 {% endblock %}
 {% block extra_scripts %}
 <style>
-.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
-.desktop-table{display:block;}
-.mobile-cards{display:none;}
-.paid-bg{background:#f0fdf4 !important;}
-.m-card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:8px;}
-.m-card-header{display:flex;justify-content:space-between;align-items:center;}
-.m-card-name{font-weight:700;font-size:15px;}
-.m-card-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
-.m-card-actions{display:flex;gap:4px;margin-top:2px;flex-wrap:wrap;}
-.m-card-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
-.text-muted{color:#888;font-size:12px;}
-.filter-btn{font-size:11px;padding:6px 12px;border-color:#ddd;color:#666;}
-.filter-active{background:#1a1a1a !important;color:#fff !important;border-color:#1a1a1a !important;}
-.filter-bar .card-body{padding:10px 14px !important;}
-.badge-amber{background:#fffbeb;color:#92400e;border-color:#fcd34d;}
-@media(max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:flex;flex-direction:column;gap:10px;}}
+.desktop-table { display:block; }
+.mobile-cards { display:none; }
+@media(max-width:767px){
+  .desktop-table { display:none !important; }
+  .mobile-cards { display:flex; flex-direction:column; gap:10px; }
+}
+.filter-active {
+  background:var(--text) !important;
+  border-color:var(--text) !important;
+  color:var(--bg) !important;
+}
+#searchResults > div {
+  padding:10px 14px;
+  cursor:pointer;
+  border-bottom:1px solid var(--border);
+  font-size:13px;
+  transition:background .1s;
+}
+#searchResults > div:hover { background:var(--surface-3); }
+#searchResults > div:last-child { border-bottom:none; }
 </style>
 <script>
 var searchTimeout = null;
@@ -141,16 +150,16 @@ function doSearchCustomers(){
         .then(function(d){
             var div = document.getElementById('searchResults');
             if(!d.ok||!d.customers.length){
-                div.innerHTML = '<div style="padding:8px 12px;color:#999;font-size:12px;">لا توجد نتائج</div>';
+                div.innerHTML = '<div style="padding:10px 14px;color:var(--faint);font-size:12px;">لا توجد نتائج</div>';
                 div.style.display='block';
                 return;
             }
             var h='';
             d.customers.forEach(function(c){
-                h+='<div onclick="selectCustomer('+c.id+',\''+c.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;transition:background 0.1s;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'\'">';
-                h+='<strong>'+c.name+'</strong>';
-                if(c.username)h+=' <span style="color:#888;font-size:11px;">@'+c.username+'</span>';
-                if(c.phone)h+=' <span style="color:#aaa;font-size:11px;">'+c.phone+'</span>';
+                h+='<div onclick="selectCustomer('+c.id+',\''+c.name.replace(/'/g,"\\'")+'\')">';
+                h+='<strong style="color:var(--text);">'+c.name+'</strong>';
+                if(c.username)h+=' <span style="color:var(--muted);font-size:11px;">@'+c.username+'</span>';
+                if(c.phone)h+=' <span style="color:var(--faint);font-size:11px;">'+c.phone+'</span>';
                 h+='</div>';
             });
             div.innerHTML=h;
@@ -172,7 +181,6 @@ function openAddTicketModal(){
     document.getElementById('searchResults').style.display='none';
     document.getElementById('ticketModal').style.display='flex';
 }
-// Close search dropdown on outside click
 document.addEventListener('click', function(e){
     var sr = document.getElementById('searchResults');
     var inp = document.getElementById('ticketCustomerSearch');

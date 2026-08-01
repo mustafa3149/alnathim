@@ -30,17 +30,26 @@ class MikroTikManager:
         self._api = None
 
     def connect(self):
-        """Open the RouterOS API connection."""
-        self._api = routeros_api.RouterOsApiPool(
-            self.host,
+        """Open the RouterOS API connection.
+
+        `connect_timeout` is only passed when the installed routeros_api
+        version supports it (0.21.0 dropped/renamed the kwarg).
+        """
+        kwargs = dict(
             username=self.username,
             password=self.password,
             port=self.port,
             plaintext_login=self.plaintext_login,
             use_ssl=self.ssl,
             ssl_verify=self.ssl_verify,
-            connect_timeout=self.connect_timeout,
         )
+        try:
+            self._api = routeros_api.RouterOsApiPool(
+                self.host, connect_timeout=self.connect_timeout, **kwargs
+            )
+        except TypeError:
+            # Older routeros_api versions don't accept connect_timeout.
+            self._api = routeros_api.RouterOsApiPool(self.host, **kwargs)
         self._api.login()
         return self
 
@@ -96,3 +105,39 @@ class MikroTikManager:
                 }
             )
         return result
+
+    def set_ppp_secret_disabled(self, username, disabled=True):
+        """Enable/disable a /ppp secret by username (disabled=yes/no).
+
+        Args:
+            username: the PPP username (name field of the secret).
+            disabled: True sets disabled=yes, False sets disabled=no.
+
+        Returns:
+            True if the secret was found and updated, False if no secret
+            exists with that username.
+        """
+        secrets = self._get_resource("/ppp secret")
+        flag = "yes" if disabled else "no"
+        for row in secrets.get():
+            if row.get("name") == username:
+                secrets.set(id=row.get("id"), disabled=flag)
+                return True
+        return False
+
+    def disconnect_ppp_active(self, username):
+        """Disconnect all active PPP sessions for a username.
+
+        Args:
+            username: the PPP username to kick from /ppp active.
+
+        Returns:
+            The number of sessions that were removed (0 if none/nonexistent).
+        """
+        active = self._get_resource("/ppp active")
+        removed = 0
+        for row in active.get():
+            if row.get("user") == username or row.get("name") == username:
+                active.call("remove", {"numbers": row.get("id")})
+                removed += 1
+        return removed

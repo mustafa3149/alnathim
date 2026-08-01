@@ -1,0 +1,450 @@
+{% extends "layout.html" %}
+{% block title %}مركز الإدارة{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">مركز الإدارة</h1>
+    <p class="text-sm text-muted mt-1 font-tajawal">إدارة الحسابات والصلاحيات والوصول</p>
+  </div>
+  <button onclick="openAddUserModal()" class="btn btn-primary px-4">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    إضافة عضو
+  </button>
+</div>
+
+<!-- Compact stats strip -->
+<div class="grid grid-cols-4 gap-2 mb-6">
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main" id="statTotal">—</div>
+    <div class="text-[10px] text-muted font-tajawal">الكل</div>
+  </div>
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main" id="statActive">—</div>
+    <div class="text-[10px] text-muted font-tajawal">نشط</div>
+  </div>
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main" id="statPending">—</div>
+    <div class="text-[10px] text-muted font-tajawal">معلق</div>
+  </div>
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main" id="statSuspended">—</div>
+    <div class="text-[10px] text-muted font-tajawal">موقوف</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-5">
+  <button onclick="switchTab('registrations')" id="tab-registrations" class="tab-btn tab-active px-4 py-2">طلبات التسجيل</button>
+  <button onclick="switchTab('members')" id="tab-members" class="tab-btn px-4 py-2">الأعضاء</button>
+  <button onclick="switchTab('access')" id="tab-access" class="tab-btn px-4 py-2">منح وصول</button>
+  <button onclick="switchTab('invites')" id="tab-invites" class="tab-btn px-4 py-2">رموز الدخول</button>
+</div>
+
+<!-- ═══ Registrations tab ═══ -->
+<section id="view-registrations">
+  <div class="card overflow-hidden">
+    <div class="px-5 py-4 divider flex items-center justify-between">
+      <div class="font-bold text-main text-sm">طلبات إنشاء حسابات جديدة</div>
+      <span class="text-[10px] font-bold px-2 py-1 rounded-full border" id="pendingCount" style="border-color:var(--border-2);color:var(--muted);">0</span>
+    </div>
+    <div id="registrationsList" class="divide-y" style="border-color:var(--border);">
+      <div class="text-center text-muted py-8 font-tajawal text-sm">جاري التحميل...</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Members tab ═══ -->
+<section id="view-members" class="hidden">
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>العضو</th>
+            <th>الدور</th>
+            <th>الحالة</th>
+            <th>انتهاء الوصول</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="membersTableBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--faint);padding:32px;">جاري التحميل...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Access tab ═══ -->
+<section id="view-access" class="hidden">
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-1">منح وصول مؤقت</div>
+    <div class="text-xs text-muted font-tajawal mb-5">امنح موظفاً دخولاً لفترة محددة — ينتهي تلقائياً بعد المدة.</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="f-label">العضو</label>
+        <select id="accessUser" class="input"></select>
+      </div>
+      <div>
+        <label class="f-label">أو حتى تاريخ محدد</label>
+        <input type="datetime-local" id="accessExpires" class="input" dir="ltr">
+      </div>
+      <div>
+        <label class="f-label">أيام</label>
+        <input type="number" id="accessDays" class="input" value="0" min="0">
+      </div>
+      <div>
+        <label class="f-label">ساعات</label>
+        <input type="number" id="accessHours" class="input" value="0" min="0">
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="grantAccess()" class="btn btn-primary flex-1 py-3">منح الوصول</button>
+      <button onclick="clearAccess()" class="btn flex-1 py-3">إزالة قيد الوصول</button>
+    </div>
+  </div>
+
+  <!-- Active grants -->
+  <div class="card overflow-hidden mt-5">
+    <div class="px-5 py-4 divider font-bold text-main text-sm">الوصول الممنوح حالياً</div>
+    <div id="grantsList" class="divide-y">
+      <div class="text-center text-muted py-6 font-tajawal text-sm">جاري التحميل...</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Invites tab ═══ -->
+<section id="view-invites" class="hidden">
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-1">رموز دخول (Invite Codes)</div>
+    <div class="text-xs text-muted font-tajawal mb-5">أنشئ رمزاً لعضو — من يسجل به يُفعَّل فوراً دون موافقة. كل رمز صالح لعدد استخدامات محدد.</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="f-label">العضو صاحب الرمز</label>
+        <select id="inviteUser" class="input"></select>
+      </div>
+      <div>
+        <label class="f-label">عدد الاستخدامات القصوى</label>
+        <input type="number" id="inviteMaxUses" class="input" value="1" min="1">
+      </div>
+    </div>
+    <button onclick="generateInvite()" class="btn btn-primary w-full py-3 mt-6">إنشاء رمز الدخول</button>
+    <div id="inviteResult" class="hidden mt-4 rounded-xl surface-2 p-4 text-center" style="border:1px solid var(--border);">
+      <div class="text-xs text-muted font-tajawal mb-2">انسخ هذا الرمز وأرسله للعضو</div>
+      <div class="text-xl font-extrabold text-main tracking-wider" id="inviteCodeText" dir="ltr">—</div>
+      <button onclick="copyInviteCode()" class="btn btn-sm mt-3">نسخ الرمز</button>
+    </div>
+  </div>
+
+  <!-- All user codes -->
+  <div class="card overflow-hidden mt-5">
+    <div class="px-5 py-4 divider font-bold text-main text-sm">الرموز الحالية</div>
+    <div id="invitesList" class="divide-y">
+      <div class="text-center text-muted py-6 font-tajawal text-sm">جاري التحميل...</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ Add/Edit User Modal ═══════════ -->
+<div id="userModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
+  <div class="min-h-full flex items-center justify-center p-4">
+    <div class="sheet max-w-md w-full p-6">
+      <h3 id="userModalTitle" class="text-lg font-bold text-main mb-5">إضافة عضو</h3>
+      <input type="hidden" id="editUserId" value="">
+      <div class="space-y-4">
+        <div><label class="f-label">الاسم الكامل *</label><input type="text" id="userFullName" class="input"></div>
+        <div><label class="f-label">اسم المستخدم *</label><input type="text" id="userUsername" class="input" dir="ltr"></div>
+        <div><label class="f-label">كلمة المرور * (٦ أحرف على الأقل)</label><input type="password" id="userPassword" class="input" dir="ltr"></div>
+        <div><label class="f-label">الهاتف</label><input type="text" id="userPhone" class="input" dir="ltr"></div>
+        <div>
+          <label class="f-label">الدور</label>
+          <select id="userRole" class="input">
+            <option value="agent">وكيل</option>
+            <option value="admin">مدير</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button onclick="saveUser()" class="btn btn-primary flex-1 py-3">حفظ</button>
+        <button onclick="document.getElementById('userModal').style.display='none'" class="btn px-6">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+var allUsers = [];
+
+function switchTab(tab){
+  ['registrations','members','access','invites'].forEach(function(t){
+    document.getElementById('view-' + t).classList.add('hidden');
+    document.getElementById('tab-' + t).classList.remove('tab-active');
+  });
+  document.getElementById('view-' + tab).classList.remove('hidden');
+  document.getElementById('tab-' + tab).classList.add('tab-active');
+  if(tab === 'members') renderMembers();
+  if(tab === 'access') renderAccessForm();
+  if(tab === 'invites') renderInvites();
+}
+
+function statusBadge(s){
+  if(s === 'active') return '<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold" style="color:var(--dot-active);border-color:var(--dot-active);">نشط</span>';
+  if(s === 'pending') return '<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold" style="color:var(--faint);border-color:var(--border-2);">معلق</span>';
+  return '<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold" style="color:var(--dot-expired);border-color:var(--dot-expired);">موقوف</span>';
+}
+function roleBadge(r){
+  return r === 'admin'
+    ? '<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold" style="color:var(--text);border-color:var(--border-2);">مدير</span>'
+    : '<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold" style="color:var(--muted);border-color:var(--border-2);">وكيل</span>';
+}
+
+function loadAll(){
+  Promise.all([
+    fetch('/api/users/list').then(function(r){ return r.json(); }),
+    fetch('/api/admin/registrations').then(function(r){ return r.json(); })
+  ]).then(function(res){
+    allUsers = (res[0].users || []);
+    var pending = (res[1].registrations || []);
+    document.getElementById('statTotal').textContent = allUsers.length;
+    document.getElementById('statActive').textContent = allUsers.filter(function(u){return u.status==='active';}).length;
+    document.getElementById('statPending').textContent = allUsers.filter(function(u){return u.status==='pending';}).length;
+    document.getElementById('statSuspended').textContent = allUsers.filter(function(u){return u.status==='suspended';}).length;
+    document.getElementById('pendingCount').textContent = pending.length;
+    renderRegistrations(pending);
+    renderMembers();
+    renderAccessForm();
+    renderInvites();
+  });
+}
+
+/* ── Registrations ── */
+function renderRegistrations(list){
+  var el = document.getElementById('registrationsList');
+  if(!list.length){ el.innerHTML = '<div class="text-center text-muted py-8 font-tajawal text-sm">لا توجد طلبات معلقة</div>'; return; }
+  var h = '';
+  list.forEach(function(r){
+    h += '<div class="px-5 py-4 flex items-center justify-between gap-3">'
+      + '<div class="min-w-0"><div class="font-bold text-main text-sm truncate">' + (r.full_name || '—') + '</div>'
+      + '<div class="text-xs text-muted mt-0.5 font-tajawal" dir="ltr">@' + r.username + (r.phone ? ' · ' + r.phone : '') + '</div></div>'
+      + '<div class="flex gap-2 shrink-0">'
+      + '<button onclick="approve(' + r.id + ')" class="btn btn-sm">موافقة</button>'
+      + '<button onclick="reject(' + r.id + ')" class="btn btn-sm btn-danger">رفض</button>'
+      + '</div></div>';
+  });
+  el.innerHTML = h;
+}
+function approve(id){
+  fetch('/api/admin/registrations/' + id + '/approve', {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    showToast(d.ok ? 'تمت الموافقة' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+    loadAll();
+  });
+}
+function reject(id){
+  showConfirm('رفض طلب التسجيل؟', function(){
+    fetch('/api/admin/registrations/' + id + '/reject', {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      showToast(d.ok ? 'تم الرفض' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+      loadAll();
+    });
+  });
+}
+
+/* ── Members ── */
+function renderMembers(){
+  var el = document.getElementById('membersTableBody');
+  var h = '';
+  allUsers.forEach(function(u){
+    var expiry = u.access_expires ? '<span class="text-xs" dir="ltr">' + u.access_expires + '</span>' : '<span class="text-xs" style="color:var(--faint);">دائم</span>';
+    h += '<tr><td><div class="font-bold text-sm text-main">' + (u.full_name || '—') + '</div><div class="text-xs text-muted" dir="ltr">@' + u.username + '</div></td>'
+      + '<td>' + roleBadge(u.role) + '</td>'
+      + '<td>' + statusBadge(u.status) + '</td>'
+      + '<td>' + expiry + '</td>'
+      + '<td style="text-align:center;white-space:nowrap;">'
+      + (u.status === 'suspended'
+        ? '<button onclick="toggleStatus(' + u.id + ',\'activate\')" class="btn btn-sm">تفعيل</button> '
+        : '<button onclick="toggleStatus(' + u.id + ',\'suspend\')" class="btn btn-sm">إيقاف</button> ')
+      + '<button onclick="openEditUserModal(' + u.id + ')" class="btn btn-sm">تعديل</button> '
+      + '<button onclick="resetPassword(' + u.id + ')" class="btn btn-sm">كلمة المرور</button> '
+      + '<button onclick="deleteUser(' + u.id + ')" class="btn btn-sm btn-danger">حذف</button>'
+      + '</td></tr>';
+  });
+  el.innerHTML = h || '<tr><td colspan="5" style="text-align:center;color:var(--faint);padding:32px;">لا يوجد أعضاء</td></tr>';
+}
+function toggleStatus(id, action){
+  fetch('/api/admin/users/' + id + '/' + action, {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    showToast(d.ok ? (action==='suspend' ? 'تم الإيقاف' : 'تم التفعيل') : (d.error || 'خطأ'), d.ok ? '' : 'error');
+    loadAll();
+  });
+}
+
+/* ── Access ── */
+function renderAccessForm(){
+  var sel = document.getElementById('accessUser');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— اختر العضو —</option>';
+  allUsers.filter(function(u){return u.status === 'active';}).forEach(function(u){
+    sel.innerHTML += '<option value="' + u.id + '"' + (String(u.id)===cur?' selected':'') + '>' + (u.full_name || u.username) + ' (' + u.username + ')</option>';
+  });
+  var invites = document.getElementById('inviteUser');
+  var icur = invites.value;
+  invites.innerHTML = '<option value="">— اختر العضو —</option>';
+  allUsers.forEach(function(u){
+    invites.innerHTML += '<option value="' + u.id + '"' + (String(u.id)===icur?' selected':'') + '>' + (u.full_name || u.username) + ' (' + u.username + ')</option>';
+  });
+  renderGrants();
+}
+function renderGrants(){
+  var el = document.getElementById('grantsList');
+  var grants = allUsers.filter(function(u){ return u.access_expires; });
+  if(!grants.length){ el.innerHTML = '<div class="text-center text-muted py-6 font-tajawal text-sm">لا يوجد وصول مؤقت مفعّل</div>'; return; }
+  var h = '';
+  grants.forEach(function(u){
+    h += '<div class="px-5 py-4 flex items-center justify-between gap-3">'
+      + '<div class="min-w-0"><div class="font-bold text-main text-sm truncate">' + (u.full_name || u.username) + '</div>'
+      + '<div class="text-xs text-muted mt-0.5 font-tajawal">ينتهي <span dir="ltr">' + u.access_expires + '</span></div></div>'
+      + '<button onclick="clearGrant(' + u.id + ')" class="btn btn-sm shrink-0">إنهاء الوصول</button></div>';
+  });
+  el.innerHTML = h;
+}
+function grantAccess(){
+  var id = document.getElementById('accessUser').value;
+  if(!id){ showToast('اختر العضو', 'error'); return; }
+  var body = {
+    access_expires: document.getElementById('accessExpires').value || '',
+    days: parseInt(document.getElementById('accessDays').value)||0,
+    hours: parseInt(document.getElementById('accessHours').value)||0
+  };
+  fetch('/api/admin/users/' + id + '/access', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      showToast(d.ok ? 'تم منح الوصول' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+      if(d.ok){ document.getElementById('accessExpires').value=''; document.getElementById('accessDays').value='0'; document.getElementById('accessHours').value='0'; loadAll(); }
+    });
+}
+function clearAccess(){
+  var id = document.getElementById('accessUser').value;
+  if(!id){ showToast('اختر العضو', 'error'); return; }
+  fetch('/api/admin/users/' + id + '/clear-access', {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    showToast(d.ok ? 'تمت إزالة قيد الوصول' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+    loadAll();
+  });
+}
+function clearGrant(id){
+  fetch('/api/admin/users/' + id + '/clear-access', {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    showToast(d.ok ? 'تم إنهاء الوصول' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+    loadAll();
+  });
+}
+
+/* ── Invites ── */
+function renderInvites(){
+  var el = document.getElementById('invitesList');
+  var withCodes = allUsers.filter(function(u){ return u.invite_code && u.invite_max_uses > 0; });
+  if(!withCodes.length){ el.innerHTML = '<div class="text-center text-muted py-6 font-tajawal text-sm">لا توجد رموز حالية</div>'; return; }
+  var h = '';
+  withCodes.forEach(function(u){
+    var used = u.invite_uses || 0;
+    var max = u.invite_max_uses || 0;
+    var full = used >= max;
+    h += '<div class="px-5 py-4 flex items-center justify-between gap-3">'
+      + '<div class="min-w-0"><div class="font-bold text-main text-sm truncate">' + (u.full_name || u.username) + '</div>'
+      + '<div class="text-xs mt-1 font-extrabold tracking-wider text-main" dir="ltr">' + u.invite_code + '</div>'
+      + '<div class="text-xs text-muted mt-0.5 font-tajawal">مستخدم ' + used + ' من ' + max + '</div></div>'
+      + '<div class="shrink-0 flex gap-2">'
+      + (full ? '<span class="text-[10px] px-2 py-0.5 rounded-full border font-bold" style="color:var(--dot-expired);border-color:var(--dot-expired);">مستنفد</span>' : '')
+      + '<button onclick="regenerateInvite(' + u.id + ')" class="btn btn-sm">توليد جديد</button></div></div>';
+  });
+  el.innerHTML = h;
+}
+function generateInvite(){
+  var id = document.getElementById('inviteUser').value;
+  if(!id){ showToast('اختر العضو', 'error'); return; }
+  var max = parseInt(document.getElementById('inviteMaxUses').value)||1;
+  fetch('/api/admin/users/' + id + '/invite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({max_uses:max})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        document.getElementById('inviteCodeText').textContent = d.code;
+        document.getElementById('inviteResult').classList.remove('hidden');
+        loadAll();
+      } else showToast(d.error || 'خطأ', 'error');
+    });
+}
+function regenerateInvite(id){
+  fetch('/api/admin/users/' + id + '/invite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({max_uses:1})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        document.getElementById('inviteCodeText').textContent = d.code;
+        document.getElementById('inviteResult').classList.remove('hidden');
+        showToast('تم توليد رمز جديد');
+        loadAll();
+      } else showToast(d.error || 'خطأ', 'error');
+    });
+}
+function copyInviteCode(){
+  var code = document.getElementById('inviteCodeText').textContent;
+  if(navigator.clipboard){ navigator.clipboard.writeText(code).then(function(){ showToast('تم نسخ الرمز'); }); }
+  else showToast(code, '');
+}
+
+/* ── Add / Edit member ── */
+function openAddUserModal(){
+  document.getElementById('userModalTitle').textContent = 'إضافة عضو';
+  document.getElementById('editUserId').value = '';
+  ['userFullName','userUsername','userPassword','userPhone'].forEach(function(i){document.getElementById(i).value='';});
+  document.getElementById('userRole').value = 'agent';
+  document.getElementById('userModal').style.display = 'block';
+}
+function openEditUserModal(id){
+  var u = allUsers.find(function(x){ return x.id === id; });
+  if(!u) return;
+  document.getElementById('userModalTitle').textContent = 'تعديل عضو';
+  document.getElementById('editUserId').value = u.id;
+  document.getElementById('userFullName').value = u.full_name || '';
+  document.getElementById('userUsername').value = u.username;
+  document.getElementById('userPassword').value = '';
+  document.getElementById('userPhone').value = u.phone || '';
+  document.getElementById('userRole').value = u.role;
+  document.getElementById('userModal').style.display = 'block';
+}
+async function saveUser(){
+  var id = document.getElementById('editUserId').value;
+  var data = {
+    full_name: document.getElementById('userFullName').value.trim(),
+    username: document.getElementById('userUsername').value.trim(),
+    password: document.getElementById('userPassword').value,
+    phone: document.getElementById('userPhone').value.trim(),
+    role: document.getElementById('userRole').value
+  };
+  if(!data.full_name || !data.username){ showToast('الاسم واسم المستخدم مطلوبان', 'error'); return; }
+  if(!id && (!data.password || data.password.length < 6)){ showToast('كلمة المرور مطلوبة (٦ أحرف على الأقل)', 'error'); return; }
+  var url = id ? ('/api/users/edit/' + id) : '/api/users/add';
+  var payload = id ? {full_name: data.full_name, phone: data.phone, role: data.role} : data;
+  var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  var d = await r.json();
+  if(d.ok){ showToast(id ? 'تم التعديل' : 'تمت الإضافة'); document.getElementById('userModal').style.display='none'; loadAll(); }
+  else { showToast(d.error || 'خطأ', 'error'); }
+}
+function resetPassword(id){
+  var u = allUsers.find(function(x){ return x.id === id; });
+  var newPass = prompt('كلمة المرور الجديدة لعضو ' + (u ? u.username : '?') + ' (٦ أحرف على الأقل):');
+  if(!newPass || newPass.length < 6){ showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
+  fetch('/api/users/reset-password/' + id, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({new_password: newPass})})
+    .then(function(r){return r.json();}).then(function(d){ showToast(d.ok ? 'تم تغيير كلمة المرور' : (d.error || 'خطأ'), d.ok ? '' : 'error'); });
+}
+function deleteUser(id){
+  var u = allUsers.find(function(x){ return x.id === id; });
+  showConfirm('حذف العضو ' + (u ? u.username : '') + '؟', function(){
+    fetch('/api/users/delete/' + id, {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){ showToast('تم الحذف'); loadAll(); }
+      else { showToast(d.error || 'خطأ', 'error'); }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', loadAll);
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') document.getElementById('userModal').style.display = 'none';
+});
+</script>
+{% endblock %}

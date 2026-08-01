@@ -132,18 +132,21 @@
         }
 
         @media print {
-            @page { margin: 2cm; }
-            body { margin: 0; padding: 0; background: #fff; }
-            .btn-print { display: none !important; }
+            /* Thermal POS — force 80mm, remove default A4 margins */
+            @page { size: 80mm 297mm; margin: 0 !important; }
+            html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
             #receipt-card {
-                max-width: 100%;
-                width: 100%;
-                margin: 0 auto;
-                padding: 20px 24px;
-                border: 2px solid #000;
-                border-radius: 0;
-                box-shadow: none;
+                width: 100% !important;
+                max-width: 80mm !important;
+                margin: 0 !important;
+                padding: 8px 6px !important;
+                border: none !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
             }
+            body * { visibility: hidden; }
+            #receipt-card, #receipt-card * { visibility: visible; }
+            .btn-print { display: none !important; }
         }
     </style>
 </head>

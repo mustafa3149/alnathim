@@ -2,77 +2,91 @@
 {% block title %}تنبيهات الديون{% endblock %}
 {% block content %}
 
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-    <div>
-        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">تنبيهات الديون</h2>
-        <p style="font-size:13px;color:#888;margin-top:4px;">المشتركين المتأخرين عن الدفع أو المنتهية اشتراكاتهم — إرسال تذكير واتساب</p>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button onclick="sendToAll()" class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366;">
-            📢 إرسال للجميع
-        </button>
-    </div>
+<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+  <div>
+    <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">تنبيهات الديون</h1>
+    <p class="text-sm text-muted mt-1 font-tajawal">المشتركين المتأخرين عن الدفع أو المنتهية اشتراكاتهم — إرسال تذكير واتساب</p>
+  </div>
+  <button onclick="sendToAll()" class="btn btn-primary">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H5.17L4 17.17V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>
+    إرسال للجميع
+  </button>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">
-    <div class="stat-card"><div class="stat-num" style="color:#b91c1c;">{{ customers|length }}</div><div class="stat-txt">مشترك متأخر</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:#b91c1c;">{{ total_debt_all|dinar if total_debt_all else '0 د.ع' }}</div><div class="stat-txt">إجمالي الديون</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:#0d6e3c;">{{ customers|selectattr('whatsapp_phone')|list|length }}</div><div class="stat-txt">لديهم واتساب</div></div>
+<!-- Stats strip (monochrome) -->
+<div class="grid grid-cols-3 gap-2 mb-6">
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main">{{ customers|length|numeral }}</div>
+    <div class="text-[10px] text-muted font-tajawal">مشترك متأخر</div>
+  </div>
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main deb-format">{{ total_debt_all if total_debt_all else 0 }}</div>
+    <div class="text-[10px] text-muted font-tajawal">إجمالي الديون</div>
+  </div>
+  <div class="card card-pad p-3 text-center">
+    <div class="text-lg font-extrabold text-main">{{ customers|selectattr('whatsapp_phone')|list|length|numeral }}</div>
+    <div class="text-[10px] text-muted font-tajawal">لديهم واتساب</div>
+  </div>
 </div>
 
+<!-- Desktop table (monochrome) -->
 <div class="desktop-table">
-    <div class="card" style="overflow:hidden;">
-        <div class="table-responsive">
-            <table class="reminders-table">
-                <thead><tr><th>المشترك</th><th>واتساب</th><th>الباقة</th><th>تاريخ الانتهاء</th><th>الدين المستحق</th><th style="width:180px;">إجراءات</th></tr></thead>
-                <tbody>{% for c in customers %}
-                {% set is_overdue = false %}
-                {% if c.renewal_date %}
-                    {% set exp_dt = c.renewal_date|string %}
-                    {% if exp_dt <= now_str %}
-                        {% set is_overdue = true %}
-                    {% endif %}
+  <div class="card overflow-hidden">
+    <div class="table-responsive">
+      <table class="reminders-table">
+        <thead><tr><th>المشترك</th><th>واتساب</th><th>الباقة</th><th>تاريخ الانتهاء</th><th>الدين المستحق</th><th style="width:180px;">إجراءات</th></tr></thead>
+        <tbody>{% for c in customers %}
+        {% set is_overdue = false %}
+        {% if c.renewal_date %}
+            {% set exp_dt = c.renewal_date|string %}
+            {% if exp_dt <= now_str %}
+                {% set is_overdue = true %}
+            {% endif %}
+        {% endif %}
+        <tr>
+            <td>
+                <div class="font-bold text-sm text-main">{{ c.name }}</div>
+                <div class="text-xs text-muted font-tajawal mt-0.5" dir="ltr" style="text-align:right;">{{ c.phone or '—' }}</div>
+                {% if c.region %}<div class="text-[11px] text-faint font-tajawal">{{ c.region }}</div>{% endif %}
+            </td>
+            <td class="text-sm" dir="ltr">
+                {% if c.whatsapp_phone %}
+                    <span class="text-main font-semibold">{{ c.whatsapp_phone }}</span>
+                {% elif c.phone %}
+                    <span class="text-muted">{{ c.phone }}</span>
+                {% else %}
+                    <span class="text-faint">لا يوجد رقم</span>
                 {% endif %}
-                <tr class="{% if c.total_debt and c.total_debt>0 %}row-debt{% endif %}">
-                    <td>
-                        <div style="font-weight:700;font-size:14px;">{{ c.name }}</div>
-                        <div style="font-size:12px;color:#888;margin-top:2px;" dir="ltr">{{ c.phone or '—' }}</div>
-                        {% if c.region %}<div style="font-size:11px;color:#aaa;">{{ c.region }}</div>{% endif %}
-                    </td>
-                    <td dir="ltr" style="font-size:13px;">
-                        {% if c.whatsapp_phone %}
-                            <span class="badge badge-green" style="font-size:11px;">{{ c.whatsapp_phone }}</span>
-                        {% elif c.phone %}
-                            <span class="badge" style="background:#f3f4f6;color:#6b7280;border-color:#d1d5db;font-size:11px;">{{ c.phone }}</span>
-                        {% else %}
-                            <span style="color:#bbb;">لا يوجد رقم</span>
-                        {% endif %}
-                    </td>
-                    <td style="font-size:13px;">
-                        {% if c.package_name %}<strong>{{ c.package_name }}</strong>{% else %}—{% endif %}
-                        {% if c.package_price and c.package_price>0 %}<div style="font-size:11px;color:#888;">{{ c.package_price|dinar }}</div>{% endif %}
-                    </td>
-                    <td style="font-size:13px;">
-                        {{ c.renewal_date|datetime_display if c.renewal_date else '—' }}
-                        {% if is_overdue %}<span class="badge badge-red" style="font-size:10px;margin-right:4px;">منتهي</span>{% endif %}
-                    </td>
-                    <td style="font-size:14px;">
-                        {% if c.total_debt and c.total_debt>0 %}
-                            <strong style="color:#b91c1c;">{{ c.total_debt|dinar }}</strong>
-                        {% else %}
-                            <span class="badge badge-amber" style="font-size:10px;">لا دين</span>
-                        {% endif %}
-                    </td>
-                    <td style="text-align:center;">
-                        <button onclick="sendWhatsApp('{{ c.name|e }}','{{ c.whatsapp_phone or c.phone or '' }}','{{ c.total_debt or 0 }}')" class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366;font-size:12px;padding:10px 14px;min-height:40px;">💬 إرسال واتساب</button>
-                    </td>
-                </tr>{% endfor %}</tbody>
-            </table>
-        </div>
+            </td>
+            <td class="text-sm">
+                {% if c.package_name %}<span class="font-semibold text-main">{{ c.package_name }}</span>{% else %}—{% endif %}
+                {% if c.package_price and c.package_price>0 %}<div class="text-[11px] text-muted">{{ c.package_price|dinar }}</div>{% endif %}
+            </td>
+            <td class="text-sm">
+                {{ c.renewal_date|datetime_display if c.renewal_date else '—' }}
+                {% if is_overdue %}<span class="text-[10px] font-bold" style="color:var(--dot-expired);"> · منتهي</span>{% endif %}
+            </td>
+            <td class="text-sm">
+                {% if c.total_debt and c.total_debt>0 %}
+                    <span class="font-bold" style="color:var(--dot-expired);">{{ c.total_debt|dinar }}</span>
+                {% else %}
+                    <span class="text-muted">لا دين</span>
+                {% endif %}
+            </td>
+            <td class="text-center">
+                <button onclick="sendWhatsApp('{{ c.name|e }}','{{ c.whatsapp_phone or c.phone or '' }}','{{ c.total_debt or 0 }}')" class="btn btn-sm">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+                    واتساب
+                </button>
+            </td>
+        </tr>{% endfor %}</tbody>
+      </table>
     </div>
+  </div>
 </div>
 
-<div class="mobile-cards">
+<!-- Mobile cards (monochrome, centered) -->
+<div class="mobile-cards mx-auto max-w-md">
 {% for c in customers %}
 {% set is_overdue = false %}
 {% if c.renewal_date %}
@@ -81,43 +95,32 @@
         {% set is_overdue = true %}
     {% endif %}
 {% endif %}
-<div class="m-card{% if c.total_debt and c.total_debt>0 %} card-debt{% endif %}">
-    <div class="m-card-header">
-        <span class="m-card-name">{{ c.name }}</span>
-        {% if is_overdue %}<span class="badge badge-red">منتهي</span>{% else %}<span class="badge badge-amber">دين</span>{% endif %}
+<div class="m-card card p-4">
+    <div class="flex items-center justify-between gap-2">
+        <span class="font-bold text-sm text-main truncate">{{ c.name }}</span>
+        {% if is_overdue %}<span class="text-[10px] font-bold" style="color:var(--dot-expired);">منتهي</span>{% else %}<span class="text-[10px] font-bold text-muted">دين</span>{% endif %}
     </div>
-    <div class="m-card-row">
+    <div class="flex items-center justify-between mt-2 text-sm">
         <span class="text-muted" dir="ltr">{{ c.whatsapp_phone or c.phone or '—' }}</span>
-        <span><strong>{{ c.package_name or '—' }}</strong></span>
+        <span class="font-semibold text-main">{{ c.package_name or '—' }}</span>
     </div>
-    <div class="m-card-row">
-        <span class="text-muted">ينتهي: {{ c.renewal_date|datetime_display if c.renewal_date else '—' }}</span>
-        <span>{% if c.total_debt and c.total_debt>0 %}<strong style="color:#b91c1c;">{{ c.total_debt|dinar }}</strong>{% else %}<span class="text-muted">لا دين</span>{% endif %}</span>
+    <div class="flex items-center justify-between mt-1 text-xs text-muted font-tajawal">
+        <span>ينتهي: {{ c.renewal_date|datetime_display if c.renewal_date else '—' }}</span>
+        <span>{% if c.total_debt and c.total_debt>0 %}<strong style="color:var(--dot-expired);">{{ c.total_debt|dinar }}</strong>{% else %}<span class="text-muted">لا دين</span>{% endif %}</span>
     </div>
-    <div class="m-card-actions">
-        <button onclick="sendWhatsApp('{{ c.name|e }}','{{ c.whatsapp_phone or c.phone or '' }}','{{ c.total_debt or 0 }}')" class="btn btn-sm" style="flex:1;background:#25d366;color:#fff;border-color:#25d366;min-height:44px;">💬 واتساب</button>
+    <div class="flex gap-2 mt-3">
+        <button onclick="sendWhatsApp('{{ c.name|e }}','{{ c.whatsapp_phone or c.phone or '' }}','{{ c.total_debt or 0 }}')" class="btn btn-sm flex-1">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+            واتساب
+        </button>
     </div>
 </div>{% endfor %}
-{% if customers|length==0 %}<div style="text-align:center;padding:48px;color:#999;">🎉 لا يوجد مشتركين متأخرين — كل شيء على ما يرام</div>{% endif %}
+{% if customers|length==0 %}<div class="text-center text-muted py-16 font-tajawal">لا يوجد مشتركين متأخرين — كل شيء على ما يرام</div>{% endif %}
 </div>
 
 {% endblock %}
 {% block extra_scripts %}
 <style>
-.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
-.stat-card{background:#fff;border:1px solid #e5e5e5;text-align:center;padding:12px 8px;border-radius:8px;}
-.stat-num{font-size:20px;font-weight:700;}
-.stat-txt{font-size:10px;color:#888;margin-top:3px;}
-.text-muted{color:#888;font-size:12px;}
-.row-debt{background:#fff5f5 !important;}
-.desktop-table{display:block;}.mobile-cards{display:none;}
-.m-card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
-.card-debt{background:#fff5f5;border-color:#fecaca;}
-.m-card-header{display:flex;justify-content:space-between;align-items:center;}
-.m-card-name{font-weight:700;font-size:15px;}
-.m-card-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
-.m-card-actions{display:flex;gap:4px;margin-top:2px;flex-wrap:wrap;}
-.m-card-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
 .reminders-table { table-layout: fixed; width: 100%; }
 .reminders-table th { white-space: nowrap; text-align: center; }
 .reminders-table th:nth-child(1) { text-align: right; }
@@ -128,17 +131,17 @@
 .reminders-table th:nth-child(4) { width: 18%; }
 .reminders-table th:nth-child(5) { width: 15%; }
 .reminders-table th:nth-child(6) { width: 12%; }
-@media(max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:flex;flex-direction:column;gap:10px;}}
+.desktop-table { display:block; }
+.mobile-cards { display:none; }
+@media(max-width:767px){ .desktop-table{display:none !important;} .mobile-cards{display:flex;flex-direction:column;gap:10px;} }
 </style>
 <script>
 function normalizePhone(num) {
     if (!num) return '';
     var n = String(num).replace(/[^\d+]/g, '');
-    // Convert 07xxxxxxxxx (Iraqi local) to +9647xxxxxxxxx
     if (n.startsWith('07') && n.length === 11) {
         n = '+964' + n.slice(1);
     }
-    // Remove any leading zeros if starts with 00964
     if (n.startsWith('00964')) {
         n = '+964' + n.slice(5);
     }
@@ -158,13 +161,11 @@ function sendWhatsApp(name, phone, debt) {
         return;
     }
     var msg = encodeURIComponent(buildMessage(name, debt));
-    // Try WhatsApp desktop deep link first, fall back to web
     window.open('https://wa.me/' + normalized + '?text=' + msg, '_blank');
     showToast('تم فتح واتساب — جاهز للإرسال إلى ' + name);
 }
 
 function sendToAll() {
-    var rows = document.querySelectorAll('.reminders-table tbody tr, .m-card');
     var withPhone = [];
     document.querySelectorAll('[onclick^="sendWhatsApp"]').forEach(function(btn) {
         var parts = btn.getAttribute('onclick').replace('sendWhatsApp(', '').replace(')', '').split("','");
@@ -192,5 +193,11 @@ function sendToAll() {
         showToast('تم فتح ' + withPhone.length + ' نوافذ واتساب — أرسل كل رسالة يدوياً');
     });
 }
+
+document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.deb-format').forEach(c=>{
+        if(!c.textContent.includes('د.ع')) c.textContent = formatDinar(c.textContent);
+    });
+});
 </script>
 {% endblock %}

@@ -103,6 +103,13 @@ When faced with a choice, use this priority order:
 - If the project uses 'single quotes', use that. If "double quotes", use that.
 - Do NOT impose your own style on an existing codebase.
 
+6.3 STRICT FILE PATH FORMATTING (NO XML TAGS IN PATHS).
+- When using tools like write_to_file, read_file, or shell commands, the file path MUST be a clean string.
+- NEVER append XML tags (like </content>, <path>, etc.) to the actual file path argument.
+- Correct: api_gateway/test_api.py
+- FATAL ERROR: api_gateway/test_api.py</content>
+- Windows OS strictly forbids < and > in file names. Violating this will crash the system.
+
 ## 7. VERIFICATION & COMPLETION PROTOCOL (HIGHEST PRIORITY)
 
 7.1 NEVER CLAIM COMPLETION WITHOUT VERIFICATION.
@@ -169,3 +176,16 @@ When faced with a choice, use this priority order:
 - templates/ contains Jinja2 HTML templates.
 - static/ contains CSS/JS/manifest files.
 - Changes to one file must be reflected in all connected files.
+
+## 9. SEARCH & TOOL EFFICIENCY (ANTI-TOKEN WASTE)
+9.1 NARROW SCOPE FIRST.
+- NEVER perform global searches across the entire root directory.
+- Always use `list_dir` or `search_files` to narrow down the target directory (e.g., `frontend/` or `api_gateway/`) BEFORE reading files or searching text.
+
+9.2 LITERAL OVER REGEX.
+- Default to searching for precise, literal strings (e.g., function names, exact variable names).
+- NEVER use hallucinated, overly complex, or open-ended regex patterns (no multi-line wildcards, no repetitive boundary matches).
+
+9.3 TARGETED FILE READING.
+- Do not read massive files (300+ lines) in their entirety just to find one variable.
+- Use VS Code search tools to find the exact line number first, then read only the relevant chunk/lines.

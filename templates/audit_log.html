@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{% block title %}سجل العمليات{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">سجل العمليات</h1>
+  <p class="text-sm text-muted mt-1 font-tajawal">من قام بماذا — سجل مراجعة كامل لجميع العمليات</p>
+</div>
+
+<div class="sm:max-w-md sm:mx-auto">
+  <div class="card overflow-hidden">
+    <div class="table-responsive">
+      <table>
+        <thead><tr><th>التاريخ</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr></thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td class="text-[11px] text-muted whitespace-nowrap">{{ log.created_at }}</td>
+                <td class="font-semibold whitespace-nowrap">
+                    <span class="text-main">{{ log.username or '—' }}</span>
+                    {% if log.user_id %}<span class="text-[10px] text-faint">(#{{ log.user_id }})</span>{% endif %}
+                </td>
+                <td class="whitespace-nowrap"><span class="text-main font-semibold">{{ log.action }}</span></td>
+                <td class="text-xs text-muted">{{ log.details or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-10 font-tajawal">لا توجد عمليات مسجلة بعد</td></tr>
+            {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

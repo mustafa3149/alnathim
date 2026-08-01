@@ -1,47 +1,41 @@
 {% extends "layout.html" %}
 {% block title %}تسجيل الدخول{% endblock %}
 {% block content %}
-<div style="max-width:420px;margin:60px auto;padding:0 16px;">
-    <div class="card">
-        <div class="card-header" style="text-align:center;font-size:16px;font-weight:700;">🔐 تسجيل الدخول</div>
-        <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
-            <div>
-                <label class="f-label">اسم المستخدم</label>
-                <input type="text" id="username" class="input" dir="ltr" placeholder="example_user">
-            </div>
-            <div>
-                <label class="f-label">كلمة المرور</label>
-                <input type="password" id="password" class="input" dir="ltr" placeholder="••••••••">
-            </div>
-            <button onclick="doLogin()" class="btn btn-primary" style="width:100%;">دخول</button>
-            <p style="text-align:center;font-size:13px;color:#777;">
-                ليس لديك حساب؟ <a href="/register" style="color:#1e3a5f;font-weight:600;">إنشاء حساب جديد</a>
-            </p>
-            <p style="text-align:center;font-size:12px;color:#aaa;border-top:1px solid #f0f0f0;padding-top:10px;">
-                هل أنت مدير المنصة؟ <a href="/superadmin/login" style="color:#0d6e3c;font-weight:600;">دخول المدير</a>
-            </p>
-        </div>
+<div class="flex flex-col items-center justify-center min-h-[70vh]">
+  <div class="w-full max-w-sm">
+    <div class="flex flex-col items-center mb-8">
+      <img src="/static/assets/al-nazim-icon.svg" alt="الناظم" class="w-16 h-16 rounded-2xl mb-3 shadow-lg shadow-indigo-500/20">
+      <h1 class="text-2xl font-extrabold text-slate-50">الناظم</h1>
+      <p class="text-sm text-slate-400 font-tajawal mt-1">نظام إدارة أبراج الإنترنت</p>
     </div>
-</div>
-<style>.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}</style>
+
+    <div class="rounded-2xl bg-slate-800/70 border border-slate-700/60 backdrop-blur p-6 shadow-2xl">
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs text-slate-400 font-semibold mb-1.5 block">اسم المستخدم</label>
+          <input type="text" id="username" dir="ltr" placeholder="اسم المستخدم" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-4 py-3 text-slate-50 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 font-semibold mb-1.5 block">كلمة المرور</label>
+          <input type="password" id="password" dir="ltr" placeholder="••••••••" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-4 py-3 text-slate-50 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+        </div>
+        <button onclick="doLogin()" class="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold py-3 transition shadow-lg shadow-indigo-500/30">دخول</button>
+        <p style="text-align:center;font-size:13px;color:var(--muted);margin-top:12px;">
+          ليس لديك حساب؟ <a href="/register" style="color:var(--dot-active);font-weight:600;">إنشاء حساب</a>
+        </p>
+      </div>
+    </div>
+  </div>
 <script>
-async function doLogin() {
-    var u = document.getElementById('username').value.trim();
-    var p = document.getElementById('password').value;
-    if (!u || !p) { showToast('أدخل اسم المستخدم وكلمة المرور', 'error'); return; }
-    showToast('جاري الدخول...');
-    var r = await fetch('/login', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({username: u, password: p})
-    });
-    var d = await r.json();
-    if (d.ok) {
-        showToast('✅ تم تسجيل الدخول بنجاح');
-        setTimeout(function(){ window.location.href = '/'; }, 400);
-    } else {
-        showToast('❌ ' + (d.error || 'فشل الدخول'), 'error');
-    }
+async function doLogin(){
+  var u=document.getElementById('username').value.trim();var p=document.getElementById('password').value;
+  if(!u||!p){showToast('أدخل اسم المستخدم وكلمة المرور','error');return;}
+  showToast('جاري الدخول...');
+  var r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+  var d=await r.json();
+  if(d.ok){showToast('✅ تم تسجيل الدخول بنجاح');setTimeout(function(){window.location.href=(d.redirect || '/');},400);}
+  else{showToast('❌ '+(d.error||'فشل الدخول'),'error');}
 }
-document.getElementById('password').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+document.getElementById('password').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 </script>
 {% endblock %}

@@ -24,6 +24,57 @@
             </div>
         </div>
 
+        <!-- Tower Connection Settings (MikroTik + OLT/SNMP) -->
+        <div class="card">
+            <div class="card-header">ربط اللوحة (MikroTik و OLT/SNMP)</div>
+            <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div style="grid-column:1/-1;font-size:11px;color:#888;padding-bottom:4px;border-bottom:1px solid #eee;margin-bottom:4px;font-weight:600;">جهاز MikroTik (الراوتر الرئيسي)</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">
+                        <div><label class="f-label">عنوان IP</label><input type="text" id="mikrotikHost" class="input" dir="ltr" value="{{ settings.get('mikrotik_host','') if settings else '' }}" placeholder="192.168.1.1"></div>
+                        <div><label class="f-label">المنفذ (API)</label><input type="number" id="mikrotikPort" class="input" dir="ltr" value="{{ settings.get('mikrotik_port','8728') if settings else '8728' }}" min="1" max="65535"></div>
+                        <div><label class="f-label">اسم المستخدم</label><input type="text" id="mikrotikUser" class="input" dir="ltr" value="{{ settings.get('mikrotik_user','') if settings else '' }}" placeholder="admin"></div>
+                        <div><label class="f-label">كلمة المرور</label>
+                            <div style="display:flex;gap:6px;">
+                                <input type="password" id="mikrotikPassword" class="input" dir="ltr" value="{{ settings.get('mikrotik_password','') if settings else '' }}" style="flex:1;" placeholder="********">
+                                <button onclick="toggleMikrotikPass()" class="btn btn-sm" type="button" style="min-width:46px;">👁</button>
+                            </div>
+                        </div>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;font-weight:600;">
+                        <input type="checkbox" id="mikrotikSsl" style="width:18px;height:18px;" {% if settings and settings.get('mikrotik_ssl','0') in ('1','true','yes') %}checked{% endif %}>
+                        استخدام اتصال SSL (API-SSL)
+                    </label>
+
+                    <div style="grid-column:1/-1;font-size:11px;color:#888;padding-bottom:4px;border-bottom:1px solid #eee;margin-top:8px;margin-bottom:4px;font-weight:600;">جهاز OLT / SNMP (قراءة الإشارة)</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">
+                        <div><label class="f-label">عنوان OLT</label><input type="text" id="oltIp" class="input" dir="ltr" value="{{ settings.get('olt_ip','') if settings else '' }}" placeholder="10.0.0.1"></div>
+                        <div><label class="f-label">SNMP Community للـ OLT</label><input type="text" id="oltSnmpCommunity" class="input" dir="ltr" value="{{ settings.get('olt_snmp_community','') if settings else '' }}" placeholder="public"></div>
+                        <div><label class="f-label">SNMP Community</label><input type="text" id="snmpCommunity" class="input" dir="ltr" value="{{ settings.get('snmp_community','public') if settings else 'public' }}" placeholder="public"></div>
+                        <div><label class="f-label">منفذ SNMP</label><input type="number" id="snmpPort" class="input" dir="ltr" value="{{ settings.get('snmp_port','161') if settings else '161' }}" min="1" max="65535"></div>
+                        <div><label class="f-label">مهلة الانتظار (ثانية)</label><input type="number" id="snmpTimeout" class="input" dir="ltr" value="{{ settings.get('snmp_timeout','2.0') if settings else '2.0' }}" min="0.5" max="30" step="0.5"></div>
+                        <div><label class="f-label">عدد المحاولات</label><input type="number" id="snmpRetries" class="input" dir="ltr" value="{{ settings.get('snmp_retries','1') if settings else '1' }}" min="0" max="10"></div>
+                    </div>
+
+                    <details style="border:1px solid #e5e5e5;border-radius:6px;padding:10px 12px;">
+                        <summary style="font-size:13px;font-weight:600;color:#555;cursor:pointer;">إعدادات OID المتقدمة (اختياري)</summary>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:10px;">
+                            <div><label class="f-label">OID ONU RX (الاستقبال)</label><input type="text" id="oidOnuRx" class="input" dir="ltr" value="{{ settings.get('oid_onu_rx','') if settings else '' }}" placeholder="1.3.6.1.4.1.5873.4.1.2.3.1.4"></div>
+                            <div><label class="f-label">OID ONU TX (الإرسال)</label><input type="text" id="oidOnuTx" class="input" dir="ltr" value="{{ settings.get('oid_onu_tx','') if settings else '' }}" placeholder="1.3.6.1.4.1.5873.4.1.2.3.1.5"></div>
+                            <div><label class="f-label">OID إشارة Ubnt</label><input type="text" id="oidUbntSignal" class="input" dir="ltr" value="{{ settings.get('oid_ubnt_signal','') if settings else '' }}" placeholder="1.3.6.1.4.1.41112.1.4.5.1.2"></div>
+                            <div><label class="f-label">OID CCQ Ubnt</label><input type="text" id="oidUbntCcq" class="input" dir="ltr" value="{{ settings.get('oid_ubnt_ccq','') if settings else '' }}" placeholder="1.3.6.1.4.1.41112.1.4.6.1.3"></div>
+                            <div style="grid-column:1/-1;"><label class="f-label">OID إشارة MikroTik</label><input type="text" id="oidMikrotikSignal" class="input" dir="ltr" value="{{ settings.get('oid_mikrotik_signal','') if settings else '' }}" placeholder="1.3.6.1.4.1.14988.1.1.2.1.1.1"></div>
+                        </div>
+                    </details>
+
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="saveTowerConnection()" class="btn btn-primary" style="flex:1;">حفظ اعدادات اللوحة</button>
+                        <button onclick="testTowerConnection()" class="btn" style="flex:1;">اختبار الاتصال</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Other Settings -->
         <div class="card">
             <div class="card-header">إعدادات أخرى</div>
@@ -55,5 +106,26 @@
 async function saveGeneratorInfo(){var d={owner_name:document.getElementById('ownerName').value.trim(),phone:document.getElementById('ownerPhone').value.trim(),address:document.getElementById('ownerAddress').value.trim(),footer_note:document.getElementById('footerNote').value.trim()};var r=await fetch('/api/generator/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});var j=await r.json();showToast(j.ok?'تم حفظ بيانات الشركة':(j.error||'خطأ'),j.ok?'':'error');}
 async function saveDefaultConnection(){var r=await fetch('/api/settings/default-connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_connection_type:document.getElementById('defaultConnectionType').value})});var j=await r.json();showToast(j.ok?'تم الحفظ':(j.error||'خطأ'),j.ok?'':'error');}
 async function saveNumeralStyle(s){var r=await fetch('/api/settings/numeral-style',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numeral_style:s})});var j=await r.json();if(j.ok){numeralStyle=s;showToast('تم تغيير نمط الأرقام');setTimeout(function(){location.reload();},300);}else{showToast(j.error||'خطأ','error');}}
+function toggleMikrotikPass(){var inp=document.getElementById('mikrotikPassword');inp.type=inp.type==='password'?'text':'password';}
+function collectTowerData(){return {
+    mikrotik_host:document.getElementById('mikrotikHost').value.trim(),
+    mikrotik_user:document.getElementById('mikrotikUser').value.trim(),
+    mikrotik_password:document.getElementById('mikrotikPassword').value,
+    mikrotik_port:parseInt(document.getElementById('mikrotikPort').value)||8728,
+    mikrotik_ssl:document.getElementById('mikrotikSsl').checked,
+    olt_ip:document.getElementById('oltIp').value.trim(),
+    olt_snmp_community:document.getElementById('oltSnmpCommunity').value.trim(),
+    snmp_community:document.getElementById('snmpCommunity').value.trim(),
+    snmp_port:parseInt(document.getElementById('snmpPort').value)||161,
+    snmp_timeout:parseFloat(document.getElementById('snmpTimeout').value)||2.0,
+    snmp_retries:parseInt(document.getElementById('snmpRetries').value)||1,
+    oid_onu_rx:document.getElementById('oidOnuRx').value.trim(),
+    oid_onu_tx:document.getElementById('oidOnuTx').value.trim(),
+    oid_ubnt_signal:document.getElementById('oidUbntSignal').value.trim(),
+    oid_ubnt_ccq:document.getElementById('oidUbntCcq').value.trim(),
+    oid_mikrotik_signal:document.getElementById('oidMikrotikSignal').value.trim()
+};}
+async function saveTowerConnection(){var r=await fetch('/api/settings/tower-connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(collectTowerData())});var j=await r.json();showToast(j.ok?j.message:(j.error||'خطأ'),j.ok?'':'error');}
+async function testTowerConnection(){var btn=document.querySelector('[onclick="testTowerConnection()"]');btn.textContent='جاري الاختبار...';btn.disabled=true;var r=await fetch('/api/settings/tower-test',{method:'POST'});var j=await r.json();showToast(j.ok?j.message:(j.error||'خطأ'),j.ok?'':'error');btn.textContent='اختبار الاتصال';btn.disabled=false;}
 </script>
 {% endblock %}

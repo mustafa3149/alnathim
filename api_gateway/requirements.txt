@@ -1,0 +1,7 @@
+# API Gateway (Phase 4)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+# Phase 1/2 libs imported by the gateway at module load
+routeros_api==0.21.0
+pysnmp==7.1.28
+python-dotenv==1.0.1

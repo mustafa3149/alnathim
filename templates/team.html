@@ -1,0 +1,168 @@
+{% extends "layout.html" %}
+{% block title %}الفريق{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:22px;font-weight:700;color:#1a1a1a;margin:0;">إدارة الفريق</h2>
+        <p style="font-size:13px;color:#888;margin-top:4px;">إدارة حسابات الموظفين (مدير / وكيل)</p>
+    </div>
+    <button onclick="openAddUserModal()" class="btn btn-primary icon-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        اضافة عضو
+    </button>
+</div>
+
+<div class="card" style="overflow:hidden;">
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>#</th><th>الاسم</th><th>اسم المستخدم</th><th>الهاتف</th><th>الدور</th><th>إجراءات</th></tr></thead>
+            <tbody id="teamTableBody">
+                <tr><td colspan="6" style="text-align:center;color:#999;padding:32px;">جاري التحميل...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add / Edit User Modal -->
+<div id="userModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:420px;">
+        <h3 id="userModalTitle" style="font-size:18px;font-weight:700;margin-bottom:14px;">اضافة عضو</h3>
+        <input type="hidden" id="editUserId" value="">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <div><label class="f-label">الاسم الكامل *</label><input type="text" id="userFullName" class="input"></div>
+            <div><label class="f-label">اسم المستخدم *</label><input type="text" id="userUsername" class="input" dir="ltr"></div>
+            <div><label class="f-label">كلمة المرور * (٦ أحرف على الأقل)</label><input type="password" id="userPassword" class="input" dir="ltr"></div>
+            <div><label class="f-label">الهاتف</label><input type="text" id="userPhone" class="input" dir="ltr"></div>
+            <div><label class="f-label">الدور</label>
+                <select id="userRole" class="input">
+                    <option value="agent">وكيل</option>
+                    <option value="admin">مدير</option>
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+            <button onclick="saveUser()" class="btn btn-primary" style="flex:1;">حفظ</button>
+            <button onclick="document.getElementById('userModal').style.display='none'" class="btn">الغاء</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<style>.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}</style>
+<script>
+var users = [];
+
+function loadUsers() {
+    fetch('/api/users/list')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) { showToast(d.error || 'خطأ', 'error'); return; }
+            users = d.users;
+            var h = '';
+            users.forEach(function(u) {
+                var roleBadge = u.role === 'admin'
+                    ? '<span class="badge badge-amber">مدير</span>'
+                    : '<span class="badge badge-green">وكيل</span>';
+                h += '<tr>';
+                h += '<td style="color:#999;font-size:12px;">' + u.id + '</td>';
+                h += '<td style="font-weight:600;">' + (u.full_name || '—') + '</td>';
+                h += '<td dir="ltr" style="font-size:13px;">' + u.username + '</td>';
+                h += '<td dir="ltr" style="font-size:13px;">' + (u.phone || '—') + '</td>';
+                h += '<td>' + roleBadge + '</td>';
+                h += '<td style="text-align:center;">';
+                h += '<button onclick="openEditUserModal(' + u.id + ')" class="btn btn-sm">تعديل</button> ';
+                h += '<button onclick="resetPassword(' + u.id + ')" class="btn btn-sm">كلمة المرور</button> ';
+                h += '<button onclick="deleteUser(' + u.id + ')" class="btn btn-sm btn-danger">حذف</button>';
+                h += '</td>';
+                h += '</tr>';
+            });
+            document.getElementById('teamTableBody').innerHTML = h || '<tr><td colspan="6" style="text-align:center;color:#999;padding:32px;">لا يوجد أعضاء</td></tr>';
+        });
+}
+
+function openAddUserModal() {
+    document.getElementById('userModalTitle').textContent = 'اضافة عضو';
+    document.getElementById('editUserId').value = '';
+    document.getElementById('userFullName').value = '';
+    document.getElementById('userUsername').value = '';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userPhone').value = '';
+    document.getElementById('userRole').value = 'agent';
+    document.getElementById('userModal').style.display = 'flex';
+}
+
+function openEditUserModal(id) {
+    var u = users.find(function(x) { return x.id === id; });
+    if (!u) return;
+    document.getElementById('userModalTitle').textContent = 'تعديل عضو';
+    document.getElementById('editUserId').value = u.id;
+    document.getElementById('userFullName').value = u.full_name || '';
+    document.getElementById('userUsername').value = u.username;
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userPhone').value = u.phone || '';
+    document.getElementById('userRole').value = u.role;
+    document.getElementById('userModal').style.display = 'flex';
+}
+
+async function saveUser() {
+    var id = document.getElementById('editUserId').value;
+    var data = {
+        full_name: document.getElementById('userFullName').value.trim(),
+        username: document.getElementById('userUsername').value.trim(),
+        password: document.getElementById('userPassword').value,
+        phone: document.getElementById('userPhone').value.trim(),
+        role: document.getElementById('userRole').value
+    };
+    if (!data.full_name || !data.username) { showToast('الاسم واسم المستخدم مطلوبان', 'error'); return; }
+    if (!id && (!data.password || data.password.length < 6)) { showToast('كلمة المرور مطلوبة (٦ أحرف على الأقل)', 'error'); return; }
+
+    var url = id ? ('/api/users/edit/' + id) : '/api/users/add';
+    var payload = id ? {
+        full_name: data.full_name,
+        phone: data.phone,
+        role: data.role
+    } : data;
+
+    var r = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    var d = await r.json();
+    if (d.ok) {
+        showToast(id ? 'تم التعديل' : 'تمت الاضافة');
+        document.getElementById('userModal').style.display = 'none';
+        loadUsers();
+    } else {
+        showToast(d.error || 'خطأ', 'error');
+    }
+}
+
+function resetPassword(id) {
+    var u = users.find(function(x) { return x.id === id; });
+    var newPass = prompt('كلمة المرور الجديدة لعضو ' + (u ? u.username : '?') + ' (٦ أحرف على الأقل):');
+    if (!newPass || newPass.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
+    fetch('/api/users/reset-password/' + id, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({new_password: newPass})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        showToast(d.ok ? 'تم تغيير كلمة المرور' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+    });
+}
+
+function deleteUser(id) {
+    var u = users.find(function(x) { return x.id === id; });
+    showConfirm('حذف العضو ' + (u ? u.username : '') + '؟', function() {
+        fetch('/api/users/delete/' + id, { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) { showToast('تم الحذف'); loadUsers(); }
+                else { showToast(d.error || 'خطأ', 'error'); }
+            });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadUsers);
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') document.getElementById('userModal').style.display = 'none';
+});
+</script>
+{% endblock %}

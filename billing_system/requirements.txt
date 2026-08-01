@@ -1,0 +1,5 @@
+# Billing System (Phase 3)
+# routeros_api is used by the sync engine (MikroTik write commands)
+# via the Phase 1 MikroTikManager.
+routeros_api>=1.0.1
+python-dotenv>=1.0.0

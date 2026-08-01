@@ -1,0 +1,251 @@
+{% extends "layout.html" %}
+{% block title %}الأجهزة{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">الأجهزة</h1>
+  <p class="text-sm text-muted mt-1 font-tajawal">أدوات التشخيص وإدارة السيكتورات والروابط</p>
+</div>
+
+<!-- Inner segmented tabs (monochrome with clear active state) -->
+<div class="grid grid-cols-3 gap-1 mb-6 rounded-xl surface-2 p-1" style="border:1px solid var(--border);">
+  <button onclick="showNetTab('ping')" id="tabPingBtn" class="tab-btn tab-active">Ping</button>
+  <button onclick="showNetTab('sectors')" id="tabSectorsBtn" class="tab-btn">السيكتورات</button>
+  <button onclick="showNetTab('snmp')" id="tabSnmpBtn" class="tab-btn">SNMP</button>
+</div>
+
+<!-- Ping tab -->
+<div id="tabPing" class="space-y-4">
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-4">تشخيص الشبكة</div>
+    <div class="space-y-4">
+      <div>
+        <label class="f-label">العنوان (IP أو اسم النطاق)</label>
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="pingHost" dir="ltr" placeholder="google.com أو 192.168.1.1" class="input pr-4 pl-10" onkeydown="if(event.key==='Enter')doPing()">
+        </div>
+        <!-- Quick shortcuts (highly relevant targets) -->
+        <div class="flex gap-2 mt-3 flex-wrap">
+          <button onclick="setPingHost('google.com')" class="rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition" style="border:1px solid var(--border-2);color:var(--muted);background:var(--surface);">Google</button>
+          <button onclick="setPingHost('youtube.com')" class="rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition" style="border:1px solid var(--border-2);color:var(--muted);background:var(--surface);">YouTube</button>
+          <button onclick="setPingHost('facebook.com')" class="rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition" style="border:1px solid var(--border-2);color:var(--muted);background:var(--surface);">Facebook</button>
+          <button onclick="setPingHost('tiktok.com')" class="rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition" style="border:1px solid var(--border-2);color:var(--muted);background:var(--surface);">TikTok</button>
+          <button onclick="setPingHost('1.1.1.1')" class="rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition" style="border:1px solid var(--border-2);color:var(--muted);background:var(--surface);">1.1.1.1</button>
+        </div>
+      </div>
+      <div>
+        <label class="f-label">عدد الحزم</label>
+        <input type="number" id="pingCount" dir="ltr" value="4" min="1" max="10" class="input">
+      </div>
+      <button onclick="doPing()" id="pingBtn" class="btn btn-primary w-full py-3">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        فحص
+      </button>
+    </div>
+  </div>
+  <div id="pingResult" class="hidden"></div>
+</div>
+
+<!-- Sectors tab -->
+<div id="tabSectors" class="hidden space-y-4">
+  <div class="card card-pad">
+    <div class="flex items-center justify-between mb-4">
+      <div class="text-sm font-bold text-main">السيكتورات والروابط</div>
+      <button onclick="openLinkModal()" class="btn btn-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        اضافة
+      </button>
+    </div>
+    <div class="space-y-2">
+      {% for l in links %}
+      <div class="flex items-center justify-between rounded-xl surface-2 p-3" style="border:1px solid var(--border);" data-id="{{ l.id }}" data-name="{{ l.name }}" data-ip="{{ l.ip or '' }}" data-type="{{ l.link_type }}" data-location="{{ l.location or '' }}" data-notes="{{ l.notes or '' }}" data-username="{{ l.username or '' }}" data-password="{{ l.password or '' }}" data-community="{{ l.community or 'public' }}">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-main font-bold text-sm truncate">{{ l.name }}</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full border font-bold text-muted" style="border-color:var(--border-2);">{{ l.link_type }}</span>
+          </div>
+          <div class="text-[11px] text-faint font-tajawal mt-0.5" dir="ltr" style="text-align:right;">{{ l.ip or '—' }}{% if l.location %} · {{ l.location }}{% endif %}</div>
+        </div>
+        <div class="flex gap-1.5 shrink-0">
+          <button onclick="editLink(this)" class="btn btn-sm">تعديل</button>
+          <button onclick="deleteLink(this)" class="btn btn-sm btn-danger">حذف</button>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-center text-muted py-8 font-tajawal">لا توجد أجهزة شبكة</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- SNMP tab -->
+<div id="tabSnmp" class="hidden space-y-4">
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-4">فحص الإشارة</div>
+    <div class="space-y-4">
+      <div>
+        <label class="f-label">عنوان IP الجهاز</label>
+        <input type="text" id="signalIp" dir="ltr" placeholder="10.0.0.x" class="input" onkeydown="if(event.key==='Enter')checkSignal()">
+      </div>
+      <div>
+        <label class="f-label">نوع الجهاز</label>
+        <select id="signalType" class="input">
+          <option value="auto">تلقائي</option>
+          <option value="wireless">نانو / واي فاي</option>
+          <option value="optical">كيبل ضوئي / GPON</option>
+        </select>
+      </div>
+      <div>
+        <label class="f-label">SNMP Community</label>
+        <input type="text" id="signalCommunity" dir="ltr" value="public" class="input" placeholder="public">
+      </div>
+      <button onclick="checkSignal()" class="btn btn-primary w-full py-3">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
+        فحص الإشارة
+      </button>
+    </div>
+  </div>
+  <div id="signalResult" class="hidden"></div>
+</div>
+
+<!-- Link Modal -->
+<div id="linkModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
+  <div class="min-h-full flex items-center justify-center p-4">
+    <div class="sheet max-w-md w-full p-6">
+      <h3 class="text-lg font-bold text-main mb-4">اضافة / تعديل جهاز شبكة</h3>
+      <input type="hidden" id="linkEditId" value="">
+      <div class="space-y-4">
+        <div><label class="f-label">اسم الجهاز *</label><input type="text" id="linkName" class="input" placeholder="سيكتور-1"></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="f-label">النوع</label>
+            <select id="linkDeviceType" class="input">
+              <option value="Sector">سيكتور</option><option value="Link">رابط</option><option value="Switch">سويتش</option>
+            </select>
+          </div>
+          <div>
+            <label class="f-label">الشركة / البراند</label>
+            <select id="linkType" class="input">
+              <option value="MikroTik">MikroTik</option><option value="Ubnt">Ubnt</option><option value="Mimosa">Mimosa</option>
+            </select>
+          </div>
+        </div>
+        <div><label class="f-label">عنوان IP</label><input type="text" id="linkIp" dir="ltr" class="input"></div>
+        <div><label class="f-label">الموقع</label><input type="text" id="linkLocation" class="input"></div>
+        <div class="sm:col-span-2"><label class="f-label">ملاحظات</label><input type="text" id="linkNotes" class="input"></div>
+        <!-- Auth fields (2-column grid for a compact premium layout) -->
+        <div class="grid grid-cols-2 gap-3 sm:col-span-2">
+          <div>
+            <label class="f-label">اسم المستخدم</label>
+            <input type="text" id="linkUsername" dir="ltr" class="input" placeholder="admin">
+          </div>
+          <div>
+            <label class="f-label">كلمة المرور</label>
+            <input type="password" id="linkPassword" dir="ltr" class="input" placeholder="••••••••">
+          </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="f-label">SNMP Community</label>
+          <input type="text" id="linkCommunity" dir="ltr" value="public" class="input" placeholder="public">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="saveLink()" class="btn btn-primary flex-1 py-3">حفظ</button>
+        <button onclick="document.getElementById('linkModal').style.display='none'" class="btn px-6">الغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function setPingHost(host){ document.getElementById('pingHost').value = host; document.getElementById('pingHost').focus(); }
+function showNetTab(tab){
+  ['ping','sectors','snmp'].forEach(t=>{
+    document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('hidden', t!==tab);
+    var btn = document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)+'Btn');
+    if(t===tab){ btn.classList.add('tab-active'); }
+    else { btn.classList.remove('tab-active'); }
+  });
+}
+async function doPing(){
+  var host = document.getElementById('pingHost').value.trim();
+  var count = parseInt(document.getElementById('pingCount').value)||4;
+  if(!host){ showToast('يرجى ادخال عنوان', 'error'); return; }
+  var btn = document.getElementById('pingBtn'); btn.textContent = '⏳ جاري الفحص...'; btn.disabled = true;
+  var box = document.getElementById('pingResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري الفحص...</div>';
+  try{
+    var r = await fetch('/api/network/ping', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host:host, count:count})});
+    var d = await r.json();
+    if(d.ok){
+      var c = d.loss_percent > 20 ? 'var(--dot-expired)' : (d.loss_percent > 0 ? 'var(--muted)' : 'var(--dot-active)');
+      box.innerHTML = '<div class="card card-pad"><div class="grid grid-cols-2 gap-2">'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">متوسط</div><div class="font-extrabold text-lg" style="color:'+c+';">'+(d.avg_ms!==null?d.avg_ms+' ms':'—')+'</div></div>'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أقل</div><div class="font-extrabold text-lg text-main">'+(d.min_ms!==null?d.min_ms+' ms':'—')+'</div></div>'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أعلى</div><div class="font-extrabold text-lg text-main">'+(d.max_ms!==null?d.max_ms+' ms':'—')+'</div></div>'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">فقدان</div><div class="font-extrabold text-lg" style="color:'+c+';">'+d.loss_percent+'%</div></div>'
+        + '</div><div class="text-center text-[11px] text-faint font-tajawal mt-3">أرسل '+d.sent+' · استلم '+d.received+' · زمن '+d.elapsed_sec+' ث</div></div>';
+    } else { box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);font-weight:600;">'+(d.error||'فشل')+'</div>'; }
+  } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
+  btn.textContent = 'فحص'; btn.disabled = false;
+}
+async function checkSignal(){
+  var ip = document.getElementById('signalIp').value.trim();
+  var type = document.getElementById('signalType').value;
+  if(!ip){ showToast('يرجى ادخال عنوان IP', 'error'); return; }
+  var box = document.getElementById('signalResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري القراءة...</div>';
+  try{
+    var r = await fetch('/api/network/signal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:ip, device_type:type, community:document.getElementById('signalCommunity').value.trim()||'public'})});
+    var d = await r.json();
+    if(d.status === 'good'){
+      var h = '<div class="card card-pad text-center"><div class="font-bold mb-2" style="color:var(--dot-active);">الجهاز متصل</div><div class="flex justify-center gap-6 text-sm">';
+      if(d.type === 'optical') h += '<div>RX: <strong class="text-main">'+(d.rx_dbm||'—')+' dBm</strong></div><div>TX: <strong class="text-main">'+(d.tx_dbm||'—')+' dBm</strong></div>';
+      else h += '<div>الإشارة: <strong class="text-main">'+(d.signal_dbm||'—')+' dBm</strong></div><div>CCQ: <strong class="text-main">'+(d.ccq||'—')+'%</strong></div>';
+      h += '</div></div>'; box.innerHTML = h;
+    } else { box.innerHTML = '<div class="card card-pad text-center font-semibold" style="color:var(--dot-expired);">'+(d.status==='error'?(d.error||'فشل'):'الجهاز غير متصل / مهلة انتهت')+'</div>'; }
+  } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
+}
+function openLinkModal(){
+  document.getElementById('linkEditId').value = '';
+  ['linkName','linkIp','linkLocation','linkNotes','linkUsername','linkPassword'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('linkType').value = 'MikroTik';
+  document.getElementById('linkCommunity').value = 'public';
+  document.getElementById('linkModal').style.display = 'block';
+}
+function editLink(btn){
+  var row = btn.closest('[data-id]');
+  document.getElementById('linkEditId').value = row.dataset.id;
+  document.getElementById('linkName').value = row.dataset.name;
+  document.getElementById('linkType').value = row.dataset.type || 'MikroTik';
+  document.getElementById('linkIp').value = row.dataset.ip || '';
+  document.getElementById('linkLocation').value = row.dataset.location || '';
+  document.getElementById('linkNotes').value = row.dataset.notes || '';
+  document.getElementById('linkUsername').value = row.dataset.username || '';
+  document.getElementById('linkPassword').value = row.dataset.password || '';
+  document.getElementById('linkCommunity').value = row.dataset.community || 'public';
+  document.getElementById('linkModal').style.display = 'block';
+}
+async function saveLink(){
+  var id = document.getElementById('linkEditId').value;
+  var data = {name: document.getElementById('linkName').value.trim(), link_type: document.getElementById('linkType').value, ip: document.getElementById('linkIp').value.trim(), location: document.getElementById('linkLocation').value.trim(), notes: document.getElementById('linkNotes').value.trim(), username: document.getElementById('linkUsername').value.trim(), password: document.getElementById('linkPassword').value.trim(), community: document.getElementById('linkCommunity').value.trim()||'public'};
+  if(!data.name){ showToast('اسم الجهاز مطلوب', 'error'); return; }
+  var url = id ? '/api/network/links/edit/' + id : '/api/network/links/add';
+  var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  var j = await r.json();
+  if(j.ok){ showToast(id?'تم التعديل':'تمت الاضافة'); document.getElementById('linkModal').style.display='none'; setTimeout(()=>location.reload(), 500); }
+  else { showToast(j.error || 'خطأ', 'error'); }
+}
+function deleteLink(btn){
+  var row = btn.closest('[data-id]');
+  showConfirm('حذف الجهاز "' + row.dataset.name + '"؟', async function(){
+    var r = await fetch('/api/network/links/delete/' + row.dataset.id, {method:'POST'});
+    var j = await r.json();
+    if(j.ok){ showToast('تم الحذف'); setTimeout(()=>location.reload(), 400); }
+    else { showToast(j.error || 'خطأ', 'error'); }
+  });
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') document.getElementById('linkModal').style.display='none'; });
+</script>
+{% endblock %}

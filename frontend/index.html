@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Apple iOS web-app meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="الناظم" />
+  <link rel="apple-touch-icon" href="../static/icon-192.png" />
+
+  <meta name="theme-color" content="#0f172a" />
+
+  <title>الناظم - لوحة الإدارة</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Fallback if the Tailwind CDN fails (basic readability) -->
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; }
+    .hidden { display: none !important; }
+    button { cursor: pointer; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+
+  <!-- ── Login screen (Phase 8) ───────────────────────── -->
+  <div id="loginView" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900 p-6">
+    <div class="w-full max-w-sm text-center">
+      <img src="/static/al-nazim-icon.svg" alt="الناظم" class="mx-auto h-14 w-auto" onerror="this.src='/static/icon-192.png'" />
+      <h1 class="mt-4 text-2xl font-bold text-white">الناظم</h1>
+      <p class="mt-1 text-sm text-slate-400">لوحة إدارة أبراج الإنترنت</p>
+
+      <form id="loginForm" class="mt-8 space-y-3">
+        <input id="loginPassword" type="password" inputmode="numeric" dir="ltr"
+          placeholder="كلمة المرور" autocomplete="current-password"
+          class="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-center text-lg text-white outline-none placeholder:text-center placeholder:text-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30" />
+        <button id="loginBtn" type="submit"
+          class="w-full rounded-xl bg-emerald-600 py-3 text-base font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-60">
+          تسجيل الدخول
+        </button>
+      </form>
+      <p id="loginError" class="mt-3 hidden text-sm text-rose-400"></p>
+    </div>
+  </div>
+
+  <!-- ── App shell (hidden until login) ───────────────── -->
+  <div id="appShell" class="hidden">
+
+  <!-- ── Top bar ─────────────────────────────────────── -->
+  <header class="sticky top-0 z-30 bg-slate-900 text-white shadow-md">
+    <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+      <div class="flex items-center gap-2">
+        <img src="/static/al-nazim-icon.svg" alt="الناظم" class="h-8 w-auto" onerror="this.src='/static/icon-192.png'" />
+        <div>
+          <h1 class="text-base font-bold leading-tight">الناظم</h1>
+          <p class="text-[11px] text-slate-400">لوحة إدارة أبراج الإنترنت</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="refreshBtn"
+          class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 ring-1 ring-slate-700 transition hover:bg-slate-700 active:scale-95"
+          aria-label="تحديث" title="تحديث">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99' />
+          </svg>
+        </button>
+        <button id="logoutBtn"
+          class="flex h-9 items-center justify-center rounded-full bg-slate-800 px-3 text-xs font-bold text-slate-300 ring-1 ring-slate-700 transition hover:bg-slate-700 hover:text-white active:scale-95"
+          title="تسجيل الخروج">
+          تسجيل خروج
+        </button>
+      </div>
+    </div>
+
+    <!-- Nav tabs -->
+    <nav class="mx-auto max-w-5xl px-4">
+      <div class="flex gap-1 pb-2" id="navTabs">
+        <button data-tab="dashboard"
+          class="tab-btn flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition"
+          aria-selected="true">
+          الرئيسية
+        </button>
+        <button data-tab="tower"
+          class="tab-btn flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition"
+          aria-selected="false">
+          ربط البرج
+        </button>
+        <button data-tab="debts"
+          class="tab-btn flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition"
+          aria-selected="false">
+          الديون والحسابات
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ── Main content ─────────────────────────────────── -->
+  <main class="mx-auto max-w-5xl px-4 pb-24 pt-5">
+
+    <!-- Error banner -->
+    <div id="errorBox" class="hidden mb-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-600 ring-1 ring-rose-200">
+      <p id="errorMsg" class="whitespace-pre-line"></p>
+      <button id="retryBtn" class="mt-2 w-full rounded-lg bg-rose-600 py-2 text-white">إعادة المحاولة</button>
+    </div>
+
+    <!-- ══ Dashboard view ══ -->
+    <section id="view-dashboard" class="space-y-5">
+      <!-- Stat cards -->
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">إجمالي المشتركين</p>
+          <p id="statTotal" class="mt-1 text-2xl font-bold">—</p>
+        </div>
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">متصل الآن</p>
+          <p id="statOnline" class="mt-1 text-2xl font-bold text-emerald-600">—</p>
+        </div>
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">منتهي</p>
+          <p id="statExpired" class="mt-1 text-2xl font-bold text-rose-600">—</p>
+        </div>
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">إيرادات الشهر</p>
+          <p id="statRevenue" class="mt-1 text-2xl font-bold text-slate-900">—</p>
+        </div>
+      </div>
+
+      <!-- Search & filter toolbar -->
+      <div class="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200/60">
+        <div class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 ring-1 ring-slate-200">
+          <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input id="searchInput" type="text" placeholder="ابحث بالاسم أو اسم المستخدم…"
+            class="w-full bg-transparent py-2.5 text-sm outline-none placeholder:text-slate-400" />
+        </div>
+        <div class="mt-2 flex gap-1" id="filterTabs">
+          <button data-filter="all"
+            class="filter-btn active flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition">الكل</button>
+          <button data-filter="active"
+            class="filter-btn flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition">نشط</button>
+          <button data-filter="expired"
+            class="filter-btn flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition">منتهي</button>
+        </div>
+      </div>
+
+      <!-- Subscribers table -->
+      <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60">
+        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h2 class="text-sm font-bold">المشتركون</h2>
+          <div class="flex items-center gap-2">
+            <span id="dashSubtitle" class="text-xs text-slate-400"></span>
+            <button id="addUserBtn"
+              class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95">
+              + إضافة مشترك جديد
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr class="bg-slate-50 text-right text-xs text-slate-500">
+                <th class="px-4 py-2.5 font-semibold">المشترك</th>
+                <th class="px-4 py-2.5 font-semibold">الحالة</th>
+                <th class="px-4 py-2.5 font-semibold">الرصيد</th>
+                <th class="px-4 py-2.5 font-semibold">الانتهاء</th>
+                <th class="px-4 py-2.5 font-semibold">IP</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Tower connection view ══ -->
+    <section id="view-tower" class="hidden space-y-5">
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+        <h2 class="text-base font-bold">إعدادات الراوتر (MikroTik)</h2>
+        <p class="mt-1 text-xs text-slate-400">بيانات الاتصال براوتر MikroTik لإدارة المشتركين.</p>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">IP الراوتر</span>
+            <input id="mkHost" type="text" dir="ltr" placeholder="192.168.1.1"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">اسم المستخدم</span>
+            <input id="mkUser" type="text" dir="ltr" placeholder="admin"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">كلمة المرور</span>
+            <input id="mkPassword" type="password" dir="ltr" placeholder="••••••••"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">المنفذ (Port)</span>
+            <input id="mkPort" type="number" dir="ltr" value="8728"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+        <h2 class="text-base font-bold">إعدادات OLT / SNMP</h2>
+        <p class="mt-1 text-xs text-slate-400">بيانات قراءة الإشارة البصرية من أجهزة OLT.</p>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">Community</span>
+            <input id="oltCommunity" type="text" dir="ltr" placeholder="public"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">منفذ SNMP</span>
+            <input id="oltPort" type="number" dir="ltr" value="161"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <button id="towerSaveBtn"
+          class="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-60">
+          حفظ الإعدادات
+        </button>
+        <button id="towerTestBtn"
+          class="flex-1 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white shadow-md transition hover:bg-slate-800 active:scale-[0.98] disabled:opacity-60">
+          اختبار الاتصال
+        </button>
+      </div>
+      <p id="towerMsg" class="hidden rounded-xl bg-slate-50 px-4 py-3 text-sm ring-1 ring-slate-200"></p>
+    </section>
+
+    <!-- ══ Debts & accounts view ══ -->
+    <section id="view-debts" class="hidden space-y-5">
+      <!-- Stat cards -->
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">إجمالي الديون</p>
+          <p id="debtTotalUnpaid" class="mt-1 text-2xl font-bold text-rose-600">—</p>
+        </div>
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">إجمالي الإيرادات</p>
+          <p id="debtTotalRevenue" class="mt-1 text-2xl font-bold text-emerald-600">—</p>
+        </div>
+        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <p class="text-xs text-slate-500">المتعثرون</p>
+          <p id="debtCount" class="mt-1 text-2xl font-bold">—</p>
+        </div>
+      </div>
+
+      <!-- Debtors table -->
+      <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60">
+        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h2 class="text-sm font-bold">قائمة الديون</h2>
+          <button id="exportBtn"
+            class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 active:scale-95">
+            تصدير البيانات
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr class="bg-slate-50 text-right text-xs text-slate-500">
+                <th class="px-4 py-2.5 font-semibold">المشترك</th>
+                <th class="px-4 py-2.5 font-semibold">الديون المتبقية</th>
+                <th class="px-4 py-2.5 font-semibold">تاريخ الانتهاء</th>
+              </tr>
+            </thead>
+            <tbody id="debtorsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="debtLog" class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+        <h2 class="text-sm font-bold">سجل المدفوعات</h2>
+        <p id="debtPaymentCount" class="mt-1 text-xs text-slate-400"></p>
+      </div>
+    </section>
+  </main>
+
+  </div><!-- /#appShell -->
+
+  <!-- ── Subscriber modal (bottom drawer) ─────────────── -->
+  <div id="sheetBackdrop" class="sheet-backdrop hidden">
+    <div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetName">
+      <div class="mx-auto max-w-xl px-5 pb-8 pt-4">
+        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-300"></div>
+
+        <div class="flex items-center justify-between">
+          <h2 id="sheetName" class="text-lg font-bold"></h2>
+          <span id="sheetStatusDot" class="h-2.5 w-2.5 rounded-full"></span>
+        </div>
+        <p id="sheetUsername" class="text-xs text-slate-400"></p>
+
+        <!-- Signal -->
+        <div class="mt-4 rounded-2xl bg-slate-50 p-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-500">الإشارة</span>
+            <span id="signalPill" class="rounded-full px-3 py-1 text-sm font-semibold"></span>
+          </div>
+          <div id="signalDetail" class="mt-2 text-xs text-slate-400"></div>
+        </div>
+
+        <!-- IP / expiry -->
+        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div class="rounded-2xl bg-slate-50 p-4">
+            <span class="block text-xs text-slate-400">IP</span>
+            <span id="sheetIp" class="mt-1 block font-medium" dir="ltr"></span>
+          </div>
+          <div class="rounded-2xl bg-slate-50 p-4">
+            <span class="block text-xs text-slate-400">الانتهاء</span>
+            <span id="sheetExpiry" class="mt-1 block font-medium"></span>
+          </div>
+        </div>
+
+        <!-- Payment history -->
+        <div class="mt-4 rounded-2xl bg-slate-50 p-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-500">سجل الدفعات</span>
+            <button id="editUserBtn" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+              تعديل
+            </button>
+          </div>
+          <div class="mt-2 overflow-x-auto">
+            <table class="w-full min-w-[240px] text-xs">
+              <thead>
+                <tr class="text-right text-slate-400">
+                  <th class="py-1 font-semibold">المبلغ</th>
+                  <th class="py-1 font-semibold">التاريخ</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pay button -->
+        <button id="payBtn"
+          class="mt-5 flex w-full items-center justify-center rounded-2xl bg-emerald-600 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-600/20 transition active:scale-[0.98] disabled:opacity-60">
+          دفع وتجديد
+        </button>
+        <p id="payError" class="mt-2 hidden text-center text-xs text-rose-500"></p>
+
+        <button id="sheetClose" class="mt-4 w-full py-2 text-sm text-slate-400">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Add / Edit subscriber modal (bottom drawer) ──── -->
+  <div id="editBackdrop" class="sheet-backdrop hidden">
+    <div id="editSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <div class="mx-auto max-w-xl px-5 pb-8 pt-4">
+        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-300"></div>
+
+        <h2 id="editTitle" class="text-lg font-bold">إضافة مشترك جديد</h2>
+
+        <div class="mt-4 grid gap-3">
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">الاسم</span>
+            <input id="editName" type="text" placeholder="اسم المشترك"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+          <label class="block">
+            <span class="text-xs font-medium text-slate-500">اسم المستخدم (MikroTik)</span>
+            <input id="editUsername" type="text" dir="ltr" placeholder="username"
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-xs font-medium text-slate-500">الاشتراك الشهري (د.ع)</span>
+              <input id="editFee" type="number" min="1" placeholder="50000"
+                class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+            </label>
+            <label class="block">
+              <span class="text-xs font-medium text-slate-500">تاريخ الانتهاء</span>
+              <input id="editExpiry" type="date" dir="ltr"
+                class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+            </label>
+          </div>
+        </div>
+
+        <button id="editSaveBtn"
+          class="mt-5 w-full rounded-2xl bg-emerald-600 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-600/20 transition active:scale-[0.98] disabled:opacity-60">
+          حفظ
+        </button>
+        <p id="editError" class="mt-2 hidden text-center text-xs text-rose-500"></p>
+
+        <button id="editDeleteBtn"
+          class="mt-3 hidden w-full rounded-2xl bg-rose-50 py-3 text-sm font-bold text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-100 active:scale-[0.98]">
+          حذف المشترك
+        </button>
+
+        <button id="editCloseBtn" class="mt-4 w-full py-2 text-sm text-slate-400">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Print-only receipt (80mm thermal POS) ─────────── -->
+  <div id="printReceipt" class="print-receipt">
+    <div class="pr-header">الناظم</div>
+    <div class="pr-line">وصل استلام مبلغ</div>
+    <div class="pr-sep"></div>
+    <div class="pr-row"><span>المشترك</span><span id="prName"></span></div>
+    <div class="pr-row"><span>المبلغ</span><span id="prAmount"></span></div>
+    <div class="pr-row"><span>التاريخ</span><span id="prDate"></span></div>
+    <div class="pr-row"><span>الانتهاء</span><span id="prExpiry"></span></div>
+    <div class="pr-sep"></div>
+    <div class="pr-footer">شكراً لتعاملكم معنا</div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

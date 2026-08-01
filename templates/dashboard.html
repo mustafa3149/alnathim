@@ -2,84 +2,116 @@
 {% block title %}لوحة القيادة{% endblock %}
 {% block content %}
 
-<div class="mb-8">
-    <h2>لوحة القيادة</h2>
-    <p style="font-size:13px;color:#777;margin-top:4px;">نظرة عامة على حالة أبراج الإنترنت لهذا الشهر</p>
+<div class="flex items-center justify-between mb-5">
+  <div>
+    <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">اللوحات</h1>
+    <p class="text-xs text-muted mt-0.5 font-tajawal">نظرة مالية سريعة</p>
+  </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-    <div class="card">
-        <div class="card-header">المشتركين النشطين</div>
-        <div class="card-body"><div class="stat-value" id="activeCustomers">{{ active_customers|numeral }}</div><div class="stat-label">مشترك نشط</div></div>
+<!-- Hero financial cards (monochrome) -->
+<div class="grid grid-cols-1 gap-3 mb-5">
+  <div class="card card-pad p-4 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-muted font-semibold">الدخل المتوقع</div>
+      <div class="text-2xl font-extrabold text-main mt-1">{{ expected_income|dinar }}</div>
     </div>
-    <div class="card">
-        <div class="card-header">إجمالي الباقات النشطة</div>
-        <div class="card-body"><div class="stat-value" id="totalPackages">{{ total_packages|numeral }}</div><div class="stat-label">باقة إنترنت مباعة</div></div>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+  </div>
+  <div class="card card-pad p-4 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-muted font-semibold">إجمالي الديون</div>
+      <div class="text-2xl font-extrabold text-main mt-1">{{ total_debt|dinar }}</div>
     </div>
-    <div class="card">
-        <div class="card-header">الدخل المتوقع هذا الشهر</div>
-        <div class="card-body"><div class="stat-value" style="font-size:28px;" id="expectedIncome">{{ expected_income|dinar }}</div><div class="stat-label"></div></div>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+  </div>
+  <div class="card card-pad p-4 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-muted font-semibold">المحصل اليوم</div>
+      <div class="text-2xl font-extrabold text-main mt-1">{{ collected_today|dinar }}</div>
     </div>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:24px;">
-    <div class="card">
-        <div class="card-header">المبالغ المستلمة</div>
-        <div class="card-body"><div class="stat-value" id="collectedMoney" style="color:#0d6e3c;">{{ collected|dinar }}</div><div class="stat-label">محصل هذا الشهر</div></div>
-    </div>
-    <div class="card">
-        <div class="card-header" style="color:#b91c1c;">إجمالي الديون</div>
-        <div class="card-body"><div class="stat-value" id="totalDebt" style="color:#b91c1c;">{{ total_debt|dinar }}</div><div class="stat-label">المبالغ غير المسددة</div></div>
-    </div>
+<!-- Secondary cards (monochrome) -->
+<div class="grid grid-cols-3 gap-2 mb-6">
+  <div class="card card-pad p-3">
+    <div class="text-[10px] text-muted font-semibold">نشطين</div>
+    <div class="text-lg font-extrabold text-main">{{ active_customers|numeral }}</div>
+  </div>
+  <div class="card card-pad p-3">
+    <div class="text-[10px] text-muted font-semibold">باقات</div>
+    <div class="text-lg font-extrabold text-main">{{ total_packages|numeral }}</div>
+  </div>
+  <div class="card card-pad p-3">
+    <div class="text-[10px] text-muted font-semibold">محصل الشهر</div>
+    <div class="text-lg font-extrabold text-main">{{ collected|dinar }}</div>
+  </div>
 </div>
 
-<!-- Alert Card: Expiring Subscriptions -->
-<div class="card" style="margin-bottom:20px;border-color:#c27803;">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <span>⚠️ تنبيهات الاشتراكات</span>
-        <div style="display:flex;gap:6px;align-items:center;">
-            <span style="font-size:12px;color:#666;">عرض المشتركين الذين ستنتهي اشتراكاتهم خلال</span>
-            <input type="number" id="alertDaysInput" value="{{ alert_days }}" min="1" max="90" class="input" style="width:60px;text-align:center;font-size:12px;padding:4px 6px;min-height:auto;">
-            <span style="font-size:12px;color:#666;">يوم</span>
-            <button onclick="applyAlertDays()" class="btn btn-sm" style="font-size:12px;padding:10px 14px;min-height:40px;">تطبيق</button>
-        </div>
+<!-- Expiring alerts (monochrome) -->
+<div class="card card-pad mb-6">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <span class="font-bold text-sm text-main">تنبيهات الاشتراكات</span>
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-muted">خلال</span>
+      <input type="number" id="alertDaysInput" value="{{ alert_days }}" min="1" max="90" class="input w-16 text-center text-sm py-1.5">
+      <span class="text-xs text-muted">يوم</span>
+      <button onclick="applyAlertDays()" class="btn btn-sm">تطبيق</button>
     </div>
-    <div class="card-body" style="padding:12px;">
-        {% if expiring %}
-        <div style="display:flex;flex-direction:column;gap:8px;">
-            <div style="font-size:13px;color:#c27803;font-weight:600;">{{ expiring|length }} مشترك على وشك انتهاء الاشتراك خلال {{ alert_days }} أيام:</div>
-            {% for e in expiring %}
-            {% set hl = e.hours_left|float %}
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:{% if hl<=48 %}#fef2f2{% elif hl<=120 %}#fffbeb{% else %}#f0fdf4{% endif %};border:1px solid {% if hl<=48 %}#fecaca{% elif hl<=120 %}#fcd34d{% else %}#bbf7d0{% endif %};border-radius:6px;">
-                <span><strong>{{ e.name }}</strong>{% if e.phone %} — {{ e.phone }}{% endif %} | <strong>{% if e.package_name %}{{ e.package_name }}{% else %}—{% endif %}</strong></span>
-                <span style="font-weight:700;{% if hl<=48 %}color:#b91c1c;{% elif hl<=120 %}color:#c27803;{% else %}color:#0d6e3c;{% endif %}">ينتهي: {{ e.renewal_date|datetime_display }} ({{ (hl/24)|round(1) }} يوم)</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div style="text-align:center;color:#888;padding:16px;font-size:13px;">✅ لا توجد اشتراكات على وشك الانتهاء خلال {{ alert_days }} أيام</div>
-        {% endif %}
+  </div>
+  {% if expiring %}
+  <div class="space-y-2">
+    {% for e in expiring %}
+    {% set hl = e.hours_left|float %}
+    <div class="flex justify-between items-center rounded-xl surface-2 p-3" style="border:1px solid var(--border);">
+      <span class="text-sm font-semibold text-main">{{ e.name }} <span class="text-muted font-normal">— {{ e.package_name or '—' }}</span></span>
+      <span class="text-xs font-bold text-muted">ينتهي: {{ e.renewal_date|datetime_display }} ({{ (hl/24)|round(1) }} يوم)</span>
     </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center text-muted text-sm py-4">لا توجد اشتراكات على وشك الانتهاء خلال {{ alert_days }} أيام</div>
+  {% endif %}
 </div>
 
-<div style="display:flex;flex-wrap:wrap;gap:10px;">
-    <a href="/customers" class="btn btn-primary">المشتركين</a>
-    <a href="/billing" class="btn btn-success">الفواتير</a>
-    <a href="/debts" class="btn btn-danger">الديون</a>
-    <a href="/tickets" class="btn btn-warning">طلبات الصيانة</a>
-    <a href="/settings" class="btn">الإعدادات</a>
-    <a href="/api/export/excel" class="btn">📥 تصدير Excel</a>
-    <a href="/api/backup" class="btn" onclick="backupNow(event)">💾 نسخ احتياطي</a>
+<!-- Quick links (monochrome) -->
+<div class="grid grid-cols-2 gap-3">
+  <a href="/more" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+    <div class="flex-1">
+      <div class="font-bold text-sm text-main">المزيد من الأدوات</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">الفواتير والديون والإعدادات</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
+  </a>
+  <a href="/network" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+    <div class="flex-1">
+      <div class="font-bold text-sm text-main">الأجهزة</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">Ping وفحص الإشارة</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
+  </a>
+  <a href="/api/export/excel" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+    <div class="flex-1">
+      <div class="font-bold text-sm text-main">تصدير Excel</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">تصدير بيانات المشتركين</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
+  </a>
+  <a href="/api/backup" onclick="backupNow(event)" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+    <div class="flex-1">
+      <div class="font-bold text-sm text-main">نسخ احتياطي</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">تحميل نسخة من قاعدة البيانات</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
+  </a>
 </div>
 
 {% endblock %}
 {% block extra_scripts %}
 <script>
-// Numbers are already formatted server-side via |numeral and |dinar filters
-function applyAlertDays(){var d=document.getElementById('alertDaysInput').value;window.location.href='/?alert_days='+(parseInt(d)||3);}
-async function backupNow(e){
-    e.preventDefault();
-    window.location.href='/api/backup';
-}
+function applyAlertDays(){ var d = document.getElementById('alertDaysInput').value; window.location.href = '/?alert_days=' + (parseInt(d)||3); }
+async function backupNow(e){ e.preventDefault(); window.location.href = '/api/backup'; }
 </script>
 {% endblock %}

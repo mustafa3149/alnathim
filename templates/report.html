@@ -1,129 +1,145 @@
 {% extends "layout.html" %}
-{% block title %}التقرير الشهري{% endblock %}
+{% block title %}الاحصائيات{% endblock %}
 {% block content %}
 
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-    <div>
-        <h2 style="font-size:20px;font-weight:700;color:#1a1a1a;margin:0;">التقرير الشهري</h2>
-        <p style="font-size:12px;color:#777;margin-top:2px;">ملخص الإيرادات والمصروفات وصافي الربح</p>
-    </div>
+<div class="mb-6">
+  <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">الاحصائيات المالية</h1>
+  <p class="text-sm text-muted mt-1 font-tajawal">ملخص الإيرادات والديون والمصروفات</p>
 </div>
 
-<div class="card" style="margin-bottom:12px;">
-    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;padding:10px 12px;">
-        <div>
-            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">الشهر</label>
-            <select id="monthSelect" onchange="changeMonth()" class="input" style="width:100px;font-size:12px;">
-                {% set months=['يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'] %}
-                {% for i in range(1,13) %}<option value="{{ i }}" {% if month==i %}selected{% endif %}>{{ months[i-1] }}</option>{% endfor %}
-            </select>
-        </div>
-        <div>
-            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">السنة</label>
-            <select id="yearSelect" onchange="changeMonth()" class="input" style="width:80px;font-size:12px;">
-                {% for y in range(2024,2031) %}<option value="{{ y }}" {% if year==y %}selected{% endif %}>{{ y }}</option>{% endfor %}
-            </select>
-        </div>
-    </div>
+<!-- Month/Year selector (numeric) -->
+<div class="card card-pad p-3 mb-5 flex items-center gap-3">
+  <select id="monthSelect" onchange="changeMonth()" class="input w-auto">
+    {% for i in range(1,13) %}<option value="{{ i }}" {% if month==i %}selected{% endif %}>{{ '%02d'|format(i) }}</option>{% endfor %}
+  </select>
+  <select id="yearSelect" onchange="changeMonth()" class="input w-auto">
+    {% for y in range(2024,2031) %}<option value="{{ y }}" {% if year==y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <span class="text-xs text-faint font-tajawal hidden sm:block">{{ '%02d'|format(month) }}/{{ year }}</span>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-    <div class="card">
-        <div class="card-header">اجمالي الفواتير</div>
-        <div class="card-body">
-            <div class="stat-value" id="expectedDisplay">{{ expected }}</div>
-            <div class="stat-label">اجمالي الفواتير للشهر</div>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-header">المتحصل</div>
-        <div class="card-body">
-            <div class="stat-value" style="color:#0d6e3c;" id="collectedDisplay">{{ collected }}</div>
-            <div class="stat-label">المبالغ المحصلة</div>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-header" style="color:#b91c1c;">المتبقي</div>
-        <div class="card-body">
-            <div class="stat-value" style="color:#b91c1c;" id="remainingDisplay">{{ remaining }}</div>
-            <div class="stat-label">المبالغ غير المحصلة</div>
-        </div>
-    </div>
+<!-- Hero financial cards (monochrome) -->
+<div class="grid grid-cols-1 gap-3 mb-5">
+  <div class="card card-pad">
+    <div class="text-sm text-muted font-semibold">الدخل المتوقع</div>
+    <div class="stat-value mt-1">{{ expected|dinar }}</div>
+    <div class="stat-label font-tajawal">فواتير الشهر {{ '%02d'|format(month) }}/{{ year }}</div>
+  </div>
+  <div class="card card-pad">
+    <div class="text-sm text-muted font-semibold">إجمالي الديون</div>
+    <div class="stat-value mt-1">{{ total_debt|dinar }}</div>
+    <div class="stat-label font-tajawal">كل المبالغ غير المسددة</div>
+  </div>
+  <div class="card card-pad">
+    <div class="text-sm text-muted font-semibold">المحصل اليوم</div>
+    <div class="stat-value mt-1">{{ collected_today|dinar }}</div>
+    <div class="stat-label font-tajawal">مدفوعات اليوم</div>
+  </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-    <div class="card">
-        <div class="card-header">اجمالي المصروفات</div>
-        <div class="card-body">
-            <div class="stat-value" style="color:#b91c1c;" id="expensesDisplay">{{ expenses_total }}</div>
-            <div class="stat-label">مصروفات الشهر</div>
-        </div>
-    </div>
-    <div class="card" style="{% if net_profit >= 0 %}border-color:#0d6e3c;{% else %}border-color:#b91c1c;{% endif %}">
-        <div class="card-header" style="{% if net_profit >= 0 %}color:#0d6e3c;{% else %}color:#b91c1c;{% endif %}">صافي الربح</div>
-        <div class="card-body">
-            <div class="stat-value" style="{% if net_profit >= 0 %}color:#0d6e3c;{% else %}color:#b91c1c;{% endif %}" id="profitDisplay">{{ net_profit }}</div>
-            <div class="stat-label">المتحصل - المصروفات</div>
-        </div>
-    </div>
+<!-- Mid cards (monochrome) -->
+<div class="grid grid-cols-2 gap-3 mb-5">
+  <div class="card card-pad p-4">
+    <div class="text-xs text-muted font-semibold">المتحصل هذا الشهر</div>
+    <div class="text-xl font-extrabold text-main mt-1">{{ collected|dinar }}</div>
+  </div>
+  <div class="card card-pad p-4">
+    <div class="text-xs text-muted font-semibold">المتبقي</div>
+    <div class="text-xl font-extrabold text-main mt-1">{{ remaining|dinar }}</div>
+  </div>
+  <div class="card card-pad p-4">
+    <div class="text-xs text-muted font-semibold">المصروفات</div>
+    <div class="text-xl font-extrabold text-main mt-1">{{ expenses_total|dinar }}</div>
+  </div>
+  <div class="card card-pad p-4">
+    <div class="text-xs text-muted font-semibold">صافي الربح</div>
+    <div class="text-xl font-extrabold text-main mt-1">{{ net_profit|dinar }}</div>
+  </div>
+  <div class="card card-pad p-4">
+    <div class="text-xs text-muted font-semibold">فواتير غير مدفوعة</div>
+    <div class="text-xl font-extrabold text-main mt-1">{{ unpaid_count|numeral }}</div>
+  </div>
+  <div class="card card-pad p-4">
+    <div class="text-xs text-muted font-semibold">الإجمالي المتجمع</div>
+    <div class="text-xl font-extrabold text-main mt-1">{{ (expected + total_debt)|dinar }}</div>
+  </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-    <div class="card">
-        <div class="card-header">حالة الفواتير</div>
-        <div class="card-body">
-            <div style="display:flex;justify-content:space-between;gap:16px;">
-                <div style="text-align:center;">
-                    <div style="font-size:24px;font-weight:700;color:#0d6e3c;" id="paidCountDisplay">{{ paid_count }}</div>
-                    <div style="font-size:11px;color:#777;">مدفوعة</div>
-                </div>
-                <div style="text-align:center;">
-                    <div style="font-size:24px;font-weight:700;color:#b91c1c;">{{ total_invoices - paid_count }}</div>
-                    <div style="font-size:11px;color:#777;">غير مدفوعة</div>
-                </div>
-                <div style="text-align:center;">
-                    <div style="font-size:24px;font-weight:700;">{{ total_invoices }}</div>
-                    <div style="font-size:11px;color:#777;">العدد الكلي</div>
-                </div>
-            </div>
-        </div>
+<!-- Revenue chart (monochrome, numeric labels) -->
+<div class="card card-pad mb-6">
+  <div class="text-sm font-bold text-main mb-3">الإيرادات الشهرية</div>
+  <canvas id="revenueChart" height="120"></canvas>
+</div>
+
+<!-- Invoice status + expenses (monochrome) -->
+<div class="grid grid-cols-1 gap-3 mb-5">
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-3">حالة الفواتير</div>
+    <div class="grid grid-cols-3 gap-2 text-center">
+      <div class="rounded-xl surface-2 p-3" style="border:1px solid var(--border);">
+        <div class="text-xl font-extrabold text-main">{{ paid_count|numeral }}</div>
+        <div class="text-[10px] text-muted font-tajawal">مدفوعة</div>
+      </div>
+      <div class="rounded-xl surface-2 p-3" style="border:1px solid var(--border);">
+        <div class="text-xl font-extrabold text-main">{{ (total_invoices - paid_count)|numeral }}</div>
+        <div class="text-[10px] text-muted font-tajawal">غير مدفوعة</div>
+      </div>
+      <div class="rounded-xl surface-2 p-3" style="border:1px solid var(--border);">
+        <div class="text-xl font-extrabold text-main">{{ total_invoices|numeral }}</div>
+        <div class="text-[10px] text-muted font-tajawal">الكل</div>
+      </div>
     </div>
-    <div class="card">
-        <div class="card-header">تفصيل المصروفات</div>
-        <div class="card-body">
-            {% if expense_categories %}
-            <div style="display:flex;flex-direction:column;gap:6px;">
-                {% for cat in expense_categories %}
-                <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px dotted #eee;">
-                    <span style="color:#555;">{{ cat.category }}</span>
-                    <span style="font-weight:700;" class="cat-expense">{{ cat.total }}</span>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div style="text-align:center;padding:16px;color:#999;font-size:13px;">لا توجد مصروفات لهذا الشهر</div>
-            {% endif %}
-        </div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-3">تفصيل المصروفات</div>
+    {% if expense_categories %}
+    <div class="space-y-2">
+      {% for cat in expense_categories %}
+      <div class="flex justify-between items-center rounded-xl surface-2 p-3 text-sm" style="border:1px solid var(--border);">
+        <span class="text-main font-semibold">{{ cat.category }}</span>
+        <span class="font-bold text-main">{{ cat.total|dinar }}</span>
+      </div>
+      {% endfor %}
     </div>
+    {% else %}
+    <div class="text-center text-muted py-4 font-tajawal">لا توجد مصروفات لهذا الشهر</div>
+    {% endif %}
+  </div>
 </div>
 
 {% endblock %}
 {% block extra_scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('expectedDisplay').textContent = formatDinar(document.getElementById('expectedDisplay').textContent);
-    document.getElementById('collectedDisplay').textContent = formatDinar(document.getElementById('collectedDisplay').textContent);
-    document.getElementById('remainingDisplay').textContent = formatDinar(document.getElementById('remainingDisplay').textContent);
-    document.getElementById('expensesDisplay').textContent = formatDinar(document.getElementById('expensesDisplay').textContent);
-    document.getElementById('profitDisplay').textContent = formatDinar(document.getElementById('profitDisplay').textContent);
-    document.getElementById('paidCountDisplay').textContent = toArabicNum(document.getElementById('paidCountDisplay').textContent);
-    document.querySelectorAll('.cat-expense').forEach(function(c) { c.textContent = formatDinar(c.textContent); });
+function changeMonth(){ var m = document.getElementById('monthSelect').value; var y = document.getElementById('yearSelect').value; window.location.href = '/report?month=' + m + '&year=' + y; }
+document.addEventListener('DOMContentLoaded', function(){
+  var revCtx = document.getElementById('revenueChart');
+  if(revCtx && window.Chart){
+    new Chart(revCtx, {
+      type: 'bar',
+      data: {
+        labels: ['01','02','03','04','05','06','07','08','09','10','11','12'],
+        datasets: [{
+          label: 'الإيرادات',
+          data: [{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }},{{ expected|round|default(0) }}],
+          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--text'),
+          borderWidth: 0,
+          borderRadius: 6,
+          barPercentage: 0.6
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--surface-2'), titleColor: getComputedStyle(document.documentElement).getPropertyValue('--text'), bodyColor: getComputedStyle(document.documentElement).getPropertyValue('--text') }
+        },
+        scales: {
+          x: { grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border') }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted') } },
+          y: { grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border') }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted') } }
+        }
+      }
+    });
+  }
 });
-
-function changeMonth() {
-    var m = document.getElementById('monthSelect').value;
-    var y = document.getElementById('yearSelect').value;
-    window.location.href = '/report?month=' + m + '&year=' + y;
-}
 </script>
 {% endblock %}
