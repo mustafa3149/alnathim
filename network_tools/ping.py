@@ -27,6 +27,28 @@ def validate_host(host):
     return True
 
 
+def is_private_ip(host):
+    """Return True when host looks like a private/LAN IPv4 (RFC1918 etc.).
+
+    Private ranges (10.x, 192.168.x, 172.16-31.x) are only reachable from
+    inside the operator's LAN. A public server (e.g. Render) cannot reach
+    them, so the UI uses this flag to explain why a device check fails
+    instead of showing a generic offline/timeout message.
+
+    Args:
+        host: IP or hostname to classify.
+
+    Returns:
+        True when host is a private IPv4/IPv6 address; False for hostnames.
+    """
+    import ipaddress
+
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
+
+
 def _pick_command(host, count):
     """Return a subprocess arg list for the current platform.
 
