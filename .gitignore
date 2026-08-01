@@ -12,6 +12,7 @@ venv/
 # ── One-off scripts ──────────────────────
 generate_icons.py
 thread_safety_test.py
+finance_audit_test.py
 
 # ── Editor / OS ──────────────────────────
 .vscode/

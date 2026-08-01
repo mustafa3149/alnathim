@@ -141,7 +141,7 @@ function openDetailModal(custId, name) {
             var h = '<h4 style="font-size:14px;margin-bottom:10px;color:#555;">الفواتير</h4><div class="table-responsive"><table><thead><tr><th>الشهر</th><th>السنة</th><th>الاجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>';
             d.invoices.forEach(function(inv) {
                 var rem = inv.total_amount - inv.paid_amount;
-                var sb = inv.is_paid ? '<span class="badge badge-green">مدفوع</span>' : (inv.paid_amount > 0 ? '<span class="badge" style="background:#fffbeb;color:#92400e;border-color:#fcd34d;">جزئي</span>' : '<span class="badge badge-red">غير</span>');
+                var sb = inv.is_paid ? '<span class="badge badge-green">مسدد</span>' : (inv.paid_amount > 0 ? '<span class="badge badge-amber">مدفوع جزئياً</span>' : '<span class="badge badge-red">غير مسدد</span>');
                 h += '<tr><td>'+months[inv.month]+'</td><td>'+inv.year+'</td><td><strong>'+formatDinar(inv.total_amount)+'</strong></td><td>'+formatDinar(inv.paid_amount)+'</td><td style="'+(rem>0?'color:#b91c1c;font-weight:700;':'color:#0d6e3c;')+'">'+formatDinar(rem)+'</td><td>'+sb+'</td></tr>';
             });
             h += '</tbody></table></div>';

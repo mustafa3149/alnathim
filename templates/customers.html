@@ -344,9 +344,9 @@ function openDetailModal(id,name){
         d.invoices.forEach(function(inv){
             var rem=inv.total_amount-inv.paid_amount;
             var sb='';
-            if(inv.is_paid){sb='<span class="badge badge-green">مدفوع</span>';}
-            else if(inv.paid_amount>0){sb='<span class="badge badge-amber">جزئي</span>';}
-            else{sb='<span class="badge badge-red">غير</span>';}
+            if(inv.is_paid){sb='<span class="badge badge-green">مسدد</span>';}
+            else if(inv.paid_amount>0){sb='<span class="badge badge-amber">مدفوع جزئياً</span>';}
+            else{sb='<span class="badge badge-red">غير مسدد</span>';}
             h+='<tr><td>'+months[inv.month]+'</td><td>'+inv.year+'</td><td>'+(inv.package_name||'—')+'</td><td><strong>'+formatDinar(inv.total_amount)+'</strong></td><td>'+formatDinar(inv.paid_amount)+'</td><td style="'+(rem>0?'color:#b91c1c;font-weight:700;':'color:#0d6e3c;')+'">'+formatDinar(rem)+'</td><td>'+sb+'</td></tr>';
         });
         h+='</tbody></table></div>';

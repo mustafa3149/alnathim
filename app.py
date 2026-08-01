@@ -281,6 +281,9 @@ def customers_page():
         query = query.order_by(col.desc() if sort_dir == "desc" else col.asc())
         customers = query.all()
 
+        from datetime import datetime as _dt
+        cur_month, cur_year = now_dt().month, now_dt().year
+
         customer_list = []
         for c in customers:
             total_debt = db.query(func.coalesce(func.sum(Invoice.total_amount - Invoice.paid_amount), 0)).filter(
@@ -288,6 +291,21 @@ def customers_page():
                 Invoice.customer_id == c.id,
                 Invoice.is_paid == False,
             ).scalar() or 0
+
+            # Current-month invoice status for the "الدفع" badge:
+            # 1 = fully paid, 0 = unpaid, and partial amount shown when >0
+            cur = db.query(Invoice).filter(
+                Invoice.owner_id == oid, Invoice.customer_id == c.id,
+                Invoice.month == cur_month, Invoice.year == cur_year,
+            ).first()
+            if cur is None:
+                current_month_paid = 0
+                current_month_paid_amount = 0
+            else:
+                paid_c = min(float(cur.paid_amount or 0), float(cur.total_amount or 0))
+                current_month_paid = 1 if paid_c >= float(cur.total_amount or 0) else 0
+                current_month_paid_amount = paid_c
+
             customer_list.append({
                 "id": c.id, "name": c.name, "phone": c.phone, "phone2": c.phone2,
                 "address": c.address, "region": c.region, "username": c.username,
@@ -296,6 +314,8 @@ def customers_page():
                 "renewal_date": c.renewal_date, "subscription_status": c.subscription_status,
                 "is_active": c.is_active, "created_at": c.created_at,
                 "subscription_date": c.subscription_date, "total_debt": total_debt,
+                "current_month_paid": current_month_paid,
+                "current_month_paid_amount": current_month_paid_amount,
             })
 
         stats = {
@@ -460,11 +480,16 @@ def billing_page():
             extras = db.query(InvoiceExtra).filter(
                 InvoiceExtra.owner_id == oid, InvoiceExtra.invoice_id == inv.id
             ).all()
+            # Normalize paid state: clamp paid to total and recompute is_paid
+            # so any historical desync (paid == total but is_paid False, or
+            # paid > total after extras) self-heals in the UI on load.
+            paid = min(float(inv.paid_amount or 0), float(inv.total_amount or 0))
+            is_paid = paid >= float(inv.total_amount or 0)
             inv_list.append({
                 "id": inv.id, "customer_id": inv.customer_id, "customer_name": cust_name,
                 "month": inv.month, "year": inv.year, "package_name": inv.package_name,
                 "package_price": inv.package_price, "total_amount": inv.total_amount,
-                "paid_amount": inv.paid_amount, "is_paid": inv.is_paid,
+                "paid_amount": paid, "is_paid": is_paid,
                 "previous_debt": inv.previous_debt,
                 "extras": [{"id": e.id, "item_name": e.item_name, "item_price": e.item_price} for e in extras],
                 "extras_total": sum(e.item_price for e in extras),
@@ -919,11 +944,14 @@ def api_customer_history(customer_id):
             extras = db.query(InvoiceExtra).filter(
                 InvoiceExtra.owner_id == oid, InvoiceExtra.invoice_id == inv.id
             ).all()
+            # Normalize paid state (same as billing page) for consistent badges
+            paid = min(float(inv.paid_amount or 0), float(inv.total_amount or 0))
+            is_paid = paid >= float(inv.total_amount or 0)
             inv_list.append({
                 "id": inv.id, "month": inv.month, "year": inv.year,
                 "package_name": inv.package_name, "package_price": inv.package_price,
-                "total_amount": inv.total_amount, "paid_amount": inv.paid_amount,
-                "is_paid": inv.is_paid,
+                "total_amount": inv.total_amount, "paid_amount": paid,
+                "is_paid": is_paid,
                 "extras": [{"id": e.id, "item_name": e.item_name, "item_price": e.item_price} for e in extras],
             })
 
@@ -1418,6 +1446,13 @@ def api_invoice_extra_add():
             InvoiceExtra.owner_id == oid, InvoiceExtra.invoice_id == invoice_id
         ).scalar() or 0
         inv.total_amount = (inv.package_price or 0) + extras_total
+        # Adding an extra raises the total — recompute paid state so a fully-paid
+        # invoice that gains an extra correctly becomes "مدفوع جزئياً".
+        paid = inv.paid_amount or 0
+        if paid > inv.total_amount:
+            paid = inv.total_amount
+            inv.paid_amount = paid
+        inv.is_paid = paid >= inv.total_amount
         db.commit()
         return jsonify({"ok": True, "new_total": inv.total_amount})
     except Exception as e:
@@ -1444,6 +1479,13 @@ def api_invoice_extra_delete(extra_id):
                 InvoiceExtra.owner_id == oid, InvoiceExtra.invoice_id == inv.id
             ).scalar() or 0
             inv.total_amount = (inv.package_price or 0) + extras_total
+            # Removing an extra lowers the total — a previously partial invoice
+            # can become fully paid; recalc state to match the new amount.
+            paid = inv.paid_amount or 0
+            if paid > inv.total_amount:
+                paid = inv.total_amount
+                inv.paid_amount = paid
+            inv.is_paid = paid >= inv.total_amount
         db.commit()
         return jsonify({"ok": True})
     except Exception as e:
