@@ -88,6 +88,54 @@ def _parse_output(text):
     return result
 
 
+def _tcp_probe(host, count=3, timeout=5):
+    """Fallback probe when the system `ping` binary is unavailable.
+
+    Opens a TCP connection to port 80 (or 443) to determine reachability —
+    a meaningful liveness check in containers like Render where ICMP and raw
+    sockets are restricted.
+
+    Args:
+        host: validated host/IP.
+        count: number of attempts (1-3).
+        timeout: per-attempt timeout in seconds.
+
+    Returns:
+        dict result with ok/error/latencies; ok=True when a TCP connect succeeds.
+    """
+    import socket
+
+    latencies = []
+    last_error = "فشل فتح اتصال TCP"
+    for _ in range(max(1, min(int(count or 3), 5))):
+        for port in (80, 443):
+            try:
+                start = time.monotonic()
+                with socket.create_connection((host, port), timeout=timeout):
+                    latencies.append(round((time.monotonic() - start) * 1000, 2))
+                    break
+            except Exception as e:  # noqa: BLE001
+                last_error = f"فشل الاتصال بمنفذ {port}: {e}"
+            else:
+                break
+        if latencies:
+            break
+    if not latencies:
+        return {
+            "ok": False, "host": host,
+            "error": "لا يوجد استجابة — الجهاز غير متصل",
+            "latencies_ms": [],
+        }
+    return {
+        "ok": True, "host": host, "is_tcp_probe": True,
+        "sent": len(latencies), "received": len(latencies),
+        "loss_percent": 0.0, "latencies_ms": latencies,
+        "min_ms": round(min(latencies), 2),
+        "avg_ms": round(sum(latencies) / len(latencies), 2),
+        "max_ms": round(max(latencies), 2),
+    }
+
+
 def ping_host(host, count=4, timeout=15):
     """Run a real ICMP ping and return a result dict.
 
@@ -136,11 +184,9 @@ def ping_host(host, count=4, timeout=15):
             "latencies_ms": [],
         }
     except FileNotFoundError:
-        return {
-            "ok": False, "host": host,
-            "error": "أداة ping غير مثبتة على هذا النظام",
-            "latencies_ms": [],
-        }
+        # `ping` binary missing (e.g. Render minimal container) — fall back to
+        # a TCP probe so the feature keeps working and returns a meaningful result.
+        return _tcp_probe(host, count=count)
     except Exception as e:  # noqa: BLE001 — diagnostics must never crash
         return {
             "ok": False, "host": host,

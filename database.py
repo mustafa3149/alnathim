@@ -19,7 +19,7 @@ from datetime import date, datetime
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from config import LOCAL_DB_PATH
+from config import LOCAL_DB_PATH, SUPERADMIN_USERNAME, SUPERADMIN_PASSWORD
 
 # ── Defaults ────────────────────────────────────────────────
 
@@ -608,17 +608,35 @@ def seed_default_packages():
 
 
 def seed_default_admin():
-    """Create the default admin account if none exists."""
+    """Create or update the admin account using env credentials.
+
+    Uses config.SUPERADMIN_USERNAME / config.SUPERADMIN_PASSWORD:
+      - no users at all  -> creates the admin from env (falls back to
+        DEFAULT_ADMIN_* for local dev when env isn't set).
+      - admin username already exists -> updates its password hash + role to
+        keep it in sync with env (so an old 'admin/admin123' account becomes
+        the env credentials).
+    """
+    username = (SUPERADMIN_USERNAME or "").strip() or DEFAULT_ADMIN_USERNAME
+    password = SUPERADMIN_PASSWORD or DEFAULT_ADMIN_PASSWORD
     db = get_db()
     try:
-        row = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        if row == 0:
+        existing = db.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if existing:
             db.execute(
-                "INSERT INTO users (username, password_hash, role, full_name) "
-                "VALUES (?, ?, 'admin', 'مدير النظام')",
-                (DEFAULT_ADMIN_USERNAME, generate_password_hash(DEFAULT_ADMIN_PASSWORD)),
+                "UPDATE users SET password_hash = ?, role = 'admin', "
+                "status = 'active', failed_logins = 0 WHERE id = ?",
+                (generate_password_hash(password), existing["id"]),
             )
-            db.commit()
+        else:
+            db.execute(
+                "INSERT INTO users (username, password_hash, role, full_name, status) "
+                "VALUES (?, ?, 'admin', 'مدير النظام', 'active')",
+                (username, generate_password_hash(password)),
+            )
+        db.commit()
     finally:
         db.close()
 
