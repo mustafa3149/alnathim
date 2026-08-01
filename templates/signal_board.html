@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+{% block title %}لوحة الإشارة{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">لوحة الإشارة</h1>
+    <p class="text-sm text-muted mt-1 font-tajawal">جميع المشتركين — الإشارة و CCQ (تحديث تلقائي)</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <button onclick="refreshBoard()" class="btn btn-sm">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      تحديث
+    </button>
+    <span class="text-[11px] text-faint font-tajawal" id="boardUpdated">—</span>
+  </div>
+</div>
+
+<div id="boardContent">
+  <div class="text-center text-muted py-16 font-tajawal">جاري التحميل...</div>
+</div>
+
+<script>
+async function refreshBoard(){
+  var box = document.getElementById('boardContent');
+  try{
+    var r = await fetch('/api/signal-board-data');
+    var d = await r.json();
+    document.getElementById('boardUpdated').textContent = 'آخر تحديث: ' + (d.last_update || '—');
+    var items = d.items || [];
+    if(!items.length){ box.innerHTML = '<div class="text-center text-muted py-16 font-tajawal">لا توجد إشارات مخزنة بعد — شغّل السكَنر في شبكة المشغل</div>'; return; }
+    var h = '<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">';
+    items.forEach(function(it){
+      var statusColor = it.status==='good' ? 'var(--dot-active)' : 'var(--dot-expired)';
+      var sig = it.type==='optical'
+        ? '<div>RX <strong class="text-main">' + (it.rx_dbm||'—') + ' dBm</strong></div><div>TX <strong class="text-main">' + (it.tx_dbm||'—') + ' dBm</strong></div>'
+        : '<div>الإشارة <strong class="text-main">' + (it.signal_dbm||'—') + ' dBm</strong></div><div>CCQ <strong class="text-main">' + (it.ccq||'—') + '%</strong></div>';
+      h += '<div class="card p-3 flex flex-col gap-1" style="border-color:' + (it.status==='good'? 'var(--border)':'var(--dot-expired)') + ';">'
+        + '<div class="flex items-center justify-between gap-2">'
+        + '<span class="font-bold text-sm text-main truncate">' + (it.name || it.ip) + '</span>'
+        + '<span class="w-2 h-2 rounded-full" style="background:' + statusColor + '"></span></div>'
+        + '<div class="text-[11px] text-faint" dir="ltr" style="text-align:right;">' + it.ip + '</div>'
+        + '<div class="mt-1 text-xs leading-5">' + sig + '</div>'
+        + (it.last_updated ? '<div class="text-[10px] text-faint font-tajawal mt-1">آخر تحديث: ' + it.last_updated + '</div>' : '')
+        + '</div>';
+    });
+    h += '</div>';
+    box.innerHTML = h;
+  }catch(e){ box.innerHTML = '<div class="text-center text-muted py-16 font-tajawal">فشل تحميل اللوحة</div>'; }
+}
+setInterval(refreshBoard, 30000); // auto-refresh every 30s
+document.addEventListener('DOMContentLoaded', refreshBoard);
+</script>
+
+{% endblock %}

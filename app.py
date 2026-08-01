@@ -47,7 +47,7 @@ db.init_db()
 # ──────────────────────────────────────────────
 #  CSRF PROTECTION + SECURITY HEADERS (Phase 14.5)
 # ──────────────────────────────────────────────
-_CSRF_EXEMPT_PATHS = {"/login", "/register", "/logout"}
+_CSRF_EXEMPT_PATHS = {"/login", "/register", "/logout", "/api/agent/signal"}
 
 
 def get_csrf_token():
@@ -1509,6 +1509,70 @@ def api_network_ping():
     return jsonify(result)
 
 
+@app.route("/signal-board")
+@login_required
+def signal_board_page():
+    """All-subscribers signal board (local tower PC + remote views)."""
+    return render_template("signal_board.html")
+
+
+@app.route("/api/signal-board-data")
+@login_required
+def api_signal_board_data():
+    """Return cached signals joined with customer names for the board."""
+    cache_rows = db.list_signal_cache()
+    by_ip = {r["ip"]: dict(r) for r in cache_rows}
+    items = []
+    last_update = ""
+    for c in db.list_active_customers():
+        ip = (c.get("ip_address") or "").strip()
+        row = by_ip.get(ip)
+        if not row:
+            continue
+        dt = (c.get("device_type") or "").strip()
+        if dt == "كيبل ضوئي":
+            row["type"] = "optical"
+        else:
+            row["type"] = "wireless"
+        row["name"] = c["name"]
+        if row.get("last_updated") and row["last_updated"] > last_update:
+            last_update = row["last_updated"]
+        items.append(row)
+    # Also include cached entries whose customer is no longer active (still useful).
+    known = {i["ip"] for i in items}
+    for ip, row in by_ip.items():
+        if ip in known:
+            continue
+        row["type"] = "wireless"
+        row["name"] = ip
+        items.append(row)
+    return jsonify({"ok": True, "items": items, "last_update": last_update})
+
+
+@app.route("/api/agent/signal", methods=["POST"])
+def api_agent_signal():
+    """Accept ONE batched signal snapshot from the tower-LAN scanner.
+
+    Guardrails:
+      - requires `Authorization: Bearer <AGENT_TOKEN>` (missing/invalid → 401).
+      - accepts a single JSON batch (never per-subscriber requests).
+    """
+    from config import AGENT_TOKEN
+
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not token or token != AGENT_TOKEN:
+        return jsonify({"ok": False, "error": "غير مصرح"}), 401
+
+    data = request.get_json(silent=True) or {}
+    batch = data.get("batch") or []
+    if not isinstance(batch, list) or not batch:
+        return jsonify({"ok": False, "error": "batch فارغ"}), 400
+
+    db.upsert_signal_batch(batch)
+    return jsonify({"ok": True, "stored": len(batch)})
+
+
 def _private_ip_error(ip):
     """Return a friendly dict when the target IP is private/LAN-only.
 
@@ -1529,10 +1593,26 @@ def _private_ip_error(ip):
 @app.route("/api/network/signal", methods=["POST"])
 @admin_required
 def api_network_signal():
-    """Fetch the live signal of any Nano/optical device via SNMP."""
+    """Fetch the live signal of any Nano/optical device via SNMP.
+
+    Prefers the agent-cached reading (from the tower-LAN scanner) when one
+    exists, so remote/mobile views show real CCQ/dBm even for private IPs.
+    """
     data = request.get_json() or {}
     ip = data.get("ip", "").strip()
     device_type = data.get("device_type", "auto").strip().lower()
+    cached = db.get_cached_signal(ip)
+    if cached and cached["last_updated"]:
+        return jsonify({
+            "ok": cached["status"] == "good",
+            "ip": ip, "status": cached["status"],
+            "signal_dbm": cached["signal_dbm"] or None,
+            "ccq": cached["ccq"] or None,
+            "rx_dbm": cached["rx_dbm"] or None,
+            "tx_dbm": cached["tx_dbm"] or None,
+            "last_updated": cached["last_updated"],
+            "from_cache": True,
+        })
     if not ip:
         return jsonify({"ok": False, "error": "عنوان IP مطلوب"}), 400
     if not validate_host(ip):
@@ -1575,6 +1655,21 @@ def api_customer_signal(customer_id):
         device_type = "optical"
     else:
         device_type = "auto"
+
+    # Prefer the agent-cached reading when present.
+    cached = db.get_cached_signal(ip)
+    if cached and cached["last_updated"]:
+        return jsonify({
+            "ok": cached["status"] == "good",
+            "ip": ip, "status": cached["status"],
+            "signal_dbm": cached["signal_dbm"] or None,
+            "ccq": cached["ccq"] or None,
+            "rx_dbm": cached["rx_dbm"] or None,
+            "tx_dbm": cached["tx_dbm"] or None,
+            "last_updated": cached["last_updated"],
+            "from_cache": True,
+            "customer_name": customer["name"],
+        })
 
     # Private/LAN IPs are unreachable from a public server — explain this first.
     if is_private_ip(ip):

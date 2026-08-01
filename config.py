@@ -51,6 +51,17 @@ SUPERADMIN_PASSWORD = _clean(os.getenv("SUPERADMIN_PASSWORD"), DEFAULT_SUPERADMI
 ALLOW_OPEN_REGISTRATION = os.getenv("ALLOW_OPEN_REGISTRATION", "true").strip().lower() in ("1", "true", "yes", "on")
 SESSION_LIFETIME_MINUTES = int(os.getenv("SESSION_LIFETIME_MINUTES", "480") or 480)
 
+# ── Signal Agent (LAN scanner → Render relay, Phase 14.6) ──
+# AGENT_TOKEN must match between the tower-PC scanner and the server when
+# relaying batched signal snapshots. Missing/invalid → 401.
+AGENT_TOKEN = _clean(os.getenv("AGENT_TOKEN"), "change-me-agent-token")
+# How often the LAN scanner polls all subscribers (minutes).
+SCAN_INTERVAL_MINUTES = int(os.getenv("SCAN_INTERVAL_MINUTES", "3") or 3)
+# Concurrent SNMP workers in the scanner (keep modest to protect the MikroTik).
+SCAN_THREADS = int(os.getenv("SCAN_THREADS", "8") or 8)
+# Where the LAN agent relays batches (empty = disable relay; local SQLite cache still works).
+RELAY_URL = _clean(os.getenv("RELAY_URL"), "")
+
 # ── Security Hardening (Phase 14.5) ────────────────────────
 # Failed-login lockout: after MAX_FAILED_LOGINS wrong attempts the account
 # auto-suspends until an admin reactivates it.

@@ -262,6 +262,16 @@ CREATE TABLE IF NOT EXISTS generator_info (
     address     TEXT DEFAULT '',
     footer_note TEXT DEFAULT 'شكراً لتعاملكم معنا'
 );
+
+CREATE TABLE IF NOT EXISTS signal_cache (
+    ip           TEXT PRIMARY KEY,
+    signal_dbm   TEXT,
+    ccq          TEXT,
+    rx_dbm       TEXT,
+    tx_dbm       TEXT,
+    status       TEXT DEFAULT 'offline',
+    last_updated TEXT DEFAULT ''
+);
 """
 
 
@@ -1713,6 +1723,55 @@ def toggle_ticket(ticket_id):
 def delete_ticket(ticket_id):
     """Delete a ticket by id."""
     _execute("DELETE FROM maintenance_tickets WHERE id = ?", (ticket_id,))
+
+
+# ── Signal Cache (Phase 14.6) ───────────────────────────────
+
+def upsert_signal_batch(batch):
+    """Upsert a batch of signal readings (one commit, safe with SQLite).
+
+    Args:
+        batch: iterable of dicts with keys: ip, signal_dbm, ccq, rx_dbm,
+               tx_dbm, status, last_updated.
+    """
+    db = get_db()
+    try:
+        now = now_str()
+        db.executemany(
+            "INSERT INTO signal_cache (ip, signal_dbm, ccq, rx_dbm, tx_dbm, "
+            "status, last_updated) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(ip) DO UPDATE SET "
+            "signal_dbm = excluded.signal_dbm, ccq = excluded.ccq, "
+            "rx_dbm = excluded.rx_dbm, tx_dbm = excluded.tx_dbm, "
+            "status = excluded.status, last_updated = excluded.last_updated",
+            [
+                (
+                    r.get("ip", ""),
+                    str(r.get("signal_dbm") or "") if r.get("signal_dbm") is not None else "",
+                    str(r.get("ccq") or "") if r.get("ccq") is not None else "",
+                    str(r.get("rx_dbm") or "") if r.get("rx_dbm") is not None else "",
+                    str(r.get("tx_dbm") or "") if r.get("tx_dbm") is not None else "",
+                    str(r.get("status") or "offline"),
+                    str(r.get("last_updated") or now),
+                )
+                for r in batch
+                if r.get("ip")
+            ],
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def get_cached_signal(ip):
+    """Return a signal_cache row for an IP, or None."""
+    return _fetchone("SELECT * FROM signal_cache WHERE ip = ?", (ip,))
+
+
+def list_signal_cache():
+    """Return all cached signals."""
+    return _fetchall("SELECT * FROM signal_cache ORDER BY ip")
 
 
 # ── Network Links (Phase 13) ────────────────────────────────
