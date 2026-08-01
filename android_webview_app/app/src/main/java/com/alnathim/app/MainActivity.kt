@@ -22,7 +22,7 @@ class MainActivity : AppCompatActivity() {
      * Change this to your real production URL, e.g.:
      *   private val APP_URL = "https://your-app-name.onrender.com"
      */
-    private val APP_URL = "https://al-nathim.onrender.com"
+    private val APP_URL = "https://alnathim.onrender.com/"
 
     private lateinit var webView: WebView
 
