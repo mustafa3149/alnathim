@@ -242,6 +242,19 @@ def init_db():
     # ── Migration: add owner_id to existing tables (legacy single-user DB) ──
     _migrate_existing_db()
 
+    # One-time backfill: seed default packages for any owner who already has
+    # an account (created before auto-seeding existed) but still has none.
+    db = SessionLocal()
+    try:
+        owners_missing = db.query(ISPOwner).all()
+        for owner in owners_missing:
+            seed_default_packages(db, owner.id)
+    except Exception as e:
+        log.error(f"[DB] Package backfill failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
     # Seed default superadmin if none exists
     db = SessionLocal()
     try:
@@ -287,6 +300,35 @@ def _migrate_existing_db():
         log.error(f"[DB] Migration failed: {e}")
 
 
+def seed_default_packages(db, owner_id):
+    """
+    Insert the standard set of default ISP packages for an owner.
+
+    Idempotent: only seeds when the owner currently has ZERO packages,
+    so owners keep full control afterwards — they can edit prices, rename,
+    delete, or add new packages and nothing will overwrite or duplicate them.
+
+    Prices are in Iraqi Dinar (IQD).
+    """
+    defaults = [
+        ("Eco", 35000),
+        ("Plus", 45000),
+        ("Standard", 50000),
+        ("Turbo", 65000),
+        ("More", 75000),
+        ("Business", 100000),
+    ]
+
+    count = db.query(Package).filter_by(owner_id=owner_id).count()
+    if count > 0:
+        return  # owner already has packages — never duplicate
+
+    for name, price in defaults:
+        db.add(Package(owner_id=owner_id, name=name, price=price))
+    db.commit()
+    log.info(f"[DB] Seeded 6 default packages for owner_id={owner_id}.")
+
+
 def seed_default_owner():
     """Create a default owner (id=1) for backward compatibility / local testing."""
     db = SessionLocal()
@@ -302,18 +344,8 @@ def seed_default_owner():
             db.add(owner)
             db.commit()
 
-        # Seed default packages for this owner
-        pkg_count = db.query(Package).filter_by(owner_id=owner.id).count()
-        if pkg_count == 0:
-            defaults = [
-                ("Economy", 35000), ("Plus", 45000), ("Standard", 50000),
-                ("Turbo", 65000), ("More", 75000), ("Business", 100000),
-            ]
-            for name, price in defaults:
-                db.add(Package(owner_id=owner.id, name=name, price=price))
-            db.commit()
-            log.info("[DB] Seeded default packages for demo owner.")
-
+        # Seed default packages through the shared helper
+        seed_default_packages(db, owner.id)
         return owner.id
     except Exception as e:
         log.error(f"[DB] Seed default owner failed: {e}")

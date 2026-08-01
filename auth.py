@@ -13,7 +13,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 
 from sqlalchemy import func
 
-from database import db_session, ISPOwner, SuperAdmin, Customer, Payment, Invoice
+from database import db_session, ISPOwner, SuperAdmin, Customer, Payment, Invoice, seed_default_packages
 
 # ── Flask-Login setup ───────────────────────────────────────
 
@@ -108,6 +108,8 @@ def register():
         owner.set_password(password)
         db.add(owner)
         db.commit()
+        # Seed the standard default packages for this new owner
+        seed_default_packages(db, owner.id)
         return jsonify({
             "ok": True,
             "message": "تم إنشاء الحساب بنجاح! بانتظار موافقة الإدارة لتفعيله.",
@@ -265,6 +267,9 @@ def superadmin_approve(owner_id):
 
         owner.account_status = "active"
         db.commit()
+        # Seed default packages when the account is first approved
+        # (also fixes owners registered before this feature existed)
+        seed_default_packages(db, owner.id)
         return jsonify({"ok": True, "message": f"تم تفعيل حساب {owner.username}"})
     except Exception as e:
         db.rollback()
@@ -378,6 +383,8 @@ def superadmin_create_owner():
         owner.set_password(password)
         db.add(owner)
         db.commit()
+        # Seed the standard default packages for this new owner
+        seed_default_packages(db, owner.id)
         return jsonify({"ok": True, "message": f"تم إنشاء حساب {username} بنجاح"})
     except Exception as e:
         db.rollback()
