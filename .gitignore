@@ -27,6 +27,9 @@ Thumbs.db
 mawlidati_backup_*.db
 backup_*.db
 
+# ── MikroTik credentials ─────────────────────
+mikrotik_api/.env
+
 # ── Build artifacts ──────────────────────
 dist/
 build/
