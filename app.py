@@ -22,7 +22,7 @@ from config import (
 import database as db
 from auth import auth_bp, login_required, admin_required, current_user_id
 from billing_system.mikrotik_sync import sync_customer_debt, sync_mikrotik_status
-from network_tools.ping import ping_host, validate_host, is_private_ip
+from network_tools.ping import ping_host, validate_host
 from snmp_monitor.signal_monitor import SignalMonitor
 from mikrotik_api.mikrotik_manager import MikroTikManager
 
@@ -1573,23 +1573,6 @@ def api_agent_signal():
     return jsonify({"ok": True, "stored": len(batch)})
 
 
-def _private_ip_error(ip):
-    """Return a friendly dict when the target IP is private/LAN-only.
-
-    The deployed site runs on a public server (Render); private ranges
-    (10.x, 192.168.x, 172.16-31.x) can only be reached from inside the
-    operator's LAN. Return this before attempting SNMP so the user gets a
-    clear explanation instead of a generic offline/timeout message.
-    """
-    return {
-        "ok": False, "ip": ip, "status": "error",
-        "error": (
-            "عنوان الشبكة المحلية — فحص الإشارة من الخادم غير ممكن. "
-            "استخدم فحص الإشارة من داخل شبكة المشغل أو عبر جهاز في نفس الشبكة."
-        ),
-    }
-
-
 @app.route("/api/network/signal", methods=["POST"])
 @admin_required
 def api_network_signal():
@@ -1621,10 +1604,8 @@ def api_network_signal():
         device_type = "auto"
     community = data.get("community", "public").strip() or "public"
 
-    # Private/LAN IPs are unreachable from a public server — explain this first.
-    if is_private_ip(ip):
-        return jsonify(_private_ip_error(ip)), 200
-
+    # Always attempt a live SNMP probe — no IP pre-block. The configured
+    # timeout handles unreachable hosts naturally (offline/timeout result).
     try:
         monitor = SignalMonitor()
         signal = monitor.get_client_signal(ip, device_type, community=community)
@@ -1671,10 +1652,8 @@ def api_customer_signal(customer_id):
             "customer_name": customer["name"],
         })
 
-    # Private/LAN IPs are unreachable from a public server — explain this first.
-    if is_private_ip(ip):
-        return jsonify(_private_ip_error(ip)), 200
-
+    # Always attempt a live SNMP probe — no IP pre-block. The configured
+    # timeout handles unreachable hosts naturally (offline/timeout result).
     try:
         monitor = SignalMonitor()
         signal = monitor.get_client_signal(ip, device_type)

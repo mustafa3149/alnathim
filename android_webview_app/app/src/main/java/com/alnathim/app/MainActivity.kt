@@ -2,6 +2,9 @@ package com.alnathim.app
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -41,9 +44,14 @@ class MainActivity : AppCompatActivity() {
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
         settings.mediaPlaybackRequiresUserGesture = false
+        settings.textZoom = 100
         // Let the page handle its own zoom (viewport meta enforces user-scalable=no)
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
+
+        // Copy/paste is handled by the web app's built-in copy buttons (copyText)
+        // in the SNMP / customer pages. This avoids the system "Manage apps"
+        // context menu that Android shows inside WebView on long-press.
 
         // ── WebViewClient: route deep links to external apps ──────────────
         webView.webViewClient = object : WebViewClient() {
@@ -63,9 +71,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ── WebChromeClient: intercept window.open() popups ───────────────
-        // The app's reminder page calls window.open('https://wa.me/...') to
-        // open WhatsApp. WebView drops these by default — we intercept and
-        // send WhatsApp links to the external browser/app instead.
         webView.webChromeClient = object : WebChromeClient() {
 
             override fun onCreateWindow(
@@ -74,12 +79,6 @@ class MainActivity : AppCompatActivity() {
                 isUserGesture: Boolean,
                 resultMsg: android.os.Message?
             ): Boolean {
-                // We never render popups in a separate window.
-                // Instead we create a throwaway transport WebView whose
-                // client re-routes each popup:
-                //   - WhatsApp / external schemes → launch the real app
-                //   - regular http(s) popups (e.g. print pages, receipts)
-                //     → load in the MAIN WebView so they are visible.
                 val newWebView = WebView(this@MainActivity)
                 val transport = resultMsg?.obj as? WebView.WebViewTransport
                 transport?.webView = newWebView
@@ -91,7 +90,6 @@ class MainActivity : AppCompatActivity() {
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
 
-                        // WhatsApp deep links → open the real app
                         if (url.startsWith("whatsapp://") ||
                             url.startsWith("https://wa.me/") ||
                             url.startsWith("http://wa.me/") ||
@@ -101,14 +99,11 @@ class MainActivity : AppCompatActivity() {
                             return handleUrl(url)
                         }
 
-                        // Regular http(s) popups (print / receipts) →
-                        // show them in the main WebView so they are visible.
                         if (url.startsWith("http://") || url.startsWith("https://")) {
                             this@MainActivity.webView.loadUrl(url)
                             return true
                         }
 
-                        // Any other scheme → external app
                         return handleUrl(url)
                     }
                 }
@@ -116,7 +111,6 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // Allow the app's alert()/confirm() dialogs to work (e.g. confirm delete)
             override fun onJsAlert(
                 view: WebView?,
                 url: String?,
@@ -152,7 +146,6 @@ class MainActivity : AppCompatActivity() {
                 if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
-                    // Minimize the app (like a real native app home-press)
                     moveTaskToBack(false)
                 }
             }
@@ -161,6 +154,59 @@ class MainActivity : AppCompatActivity() {
         // Preserve URL across configuration changes (rotation / resize)
         val savedUrl = savedInstanceState?.getString(KEY_URL)
         webView.loadUrl(savedUrl ?: APP_URL)
+    }
+
+    private fun getClipboardManager(): ClipboardManager {
+        return getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
+
+    private fun copySelectedText() {
+        // Evaluate JS to copy the selected text into an element we can read
+        webView.evaluateJavascript(
+            """
+            (function(){
+                var sel = window.getSelection();
+                if(!sel || sel.toString().trim() === '') return '';
+                var ta = document.createElement('textarea');
+                ta.value = sel.toString();
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                ta.style.top = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                var copied = '';
+                try { document.execCommand('copy'); copied = ta.value; } catch(e) {}
+                document.body.removeChild(ta);
+                return copied;
+            })()
+            """.trimIndent()
+        ) { result ->
+            val value = result?.trim()?.trim('"') ?: ""
+            if (value.isNotEmpty()) {
+                val clip = ClipData.newPlainText("text", value)
+                getClipboardManager().setPrimaryClip(clip)
+                Toast.makeText(this, "تم النسخ", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "لا يوجد نص محدد", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /** Minimal JSON string escaping helper for pasting into JS. */
+    private fun escapeJs(s: String): String {
+        val sb = StringBuilder()
+        for (c in s) {
+            when (c) {
+                '\\' -> sb.append("\\\\")
+                '"' -> sb.append("\\\"")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                else -> sb.append(c)
+            }
+        }
+        return sb.toString()
     }
 
     /**
@@ -172,7 +218,6 @@ class MainActivity : AppCompatActivity() {
      */
     private fun handleUrl(url: String): Boolean {
 
-        // WhatsApp web deep links used by the reminders page
         if (url.startsWith("https://wa.me/") ||
             url.startsWith("http://wa.me/") ||
             url.startsWith("https://api.whatsapp.com/") ||
@@ -185,20 +230,17 @@ class MainActivity : AppCompatActivity() {
         return when {
             url.startsWith("http://") || url.startsWith("https://") -> false
 
-            // WhatsApp deep links — open the real WhatsApp app
             url.startsWith("whatsapp://") -> {
                 launchExternal(url)
                 true
             }
 
-            // intent:// scheme (some sites use intent-based deep links)
             url.startsWith("intent://") -> {
                 try {
                     val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
                     try {
                         startActivity(intent)
                     } catch (e: ActivityNotFoundException) {
-                        // Fall back: strip the intent fallback URL if present
                         val fallback = intent.getStringExtra("browser_fallback_url")
                         if (!fallback.isNullOrBlank()) {
                             webView.loadUrl(fallback)
@@ -212,7 +254,6 @@ class MainActivity : AppCompatActivity() {
                 true
             }
 
-            // Any other non-http scheme (tel:, mailto:, sms:, geo:, etc.)
             else -> {
                 launchExternal(url)
                 true
@@ -221,9 +262,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Launch an external app via ACTION_VIEW. Safe from crashes when
-     * no app can handle the URL (Android 11+ package visibility handled
-     * by the <queries> entries in the manifest).
+     * Launch an external app via ACTION_VIEW.
      */
     private fun launchExternal(url: String) {
         try {

@@ -24,6 +24,7 @@
         <div class="relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="pingHost" dir="ltr" placeholder="google.com أو 192.168.1.1" class="input pr-4 pl-10" onkeydown="if(event.key==='Enter')doPing()">
+          <button onclick="copyText(document.getElementById('pingHost').value,'تم نسخ العنوان')" class="absolute left-3 top-1/2 -translate-y-1/2 btn btn-sm" style="padding:4px 8px;min-height:28px;font-size:11px;" title="نسخ" type="button">📋</button>
         </div>
         <!-- Quick shortcuts (highly relevant targets) -->
         <div class="flex gap-2 mt-3 flex-wrap">
@@ -86,7 +87,13 @@
     <div class="space-y-4">
       <div>
         <label class="f-label">عنوان IP الجهاز</label>
-        <input type="text" id="signalIp" dir="ltr" placeholder="10.0.0.x" class="input" onkeydown="if(event.key==='Enter')checkSignal()">
+        <div class="relative">
+          <input type="text" id="signalIp" dir="ltr" placeholder="10.0.0.x" class="input" style="padding-left:82px;" onkeydown="if(event.key==='Enter')checkSignal()">
+          <div class="absolute left-2 top-1/2 -translate-y-1/2 flex gap-1" style="z-index:10;">
+            <button onclick="pasteText('signalIp','تم لصق العنوان')" class="btn btn-sm" style="padding:4px 8px;min-height:28px;font-size:11px;" title="لصق" type="button">📥</button>
+            <button onclick="copyText(document.getElementById('signalIp').value,'تم نسخ العنوان')" class="btn btn-sm" style="padding:4px 8px;min-height:28px;font-size:11px;" title="نسخ" type="button">📋</button>
+          </div>
+        </div>
       </div>
       <div>
         <label class="f-label">نوع الجهاز</label>
@@ -98,7 +105,13 @@
       </div>
       <div>
         <label class="f-label">SNMP Community</label>
-        <input type="text" id="signalCommunity" dir="ltr" value="public" class="input" placeholder="public">
+        <div class="relative">
+          <input type="text" id="signalCommunity" dir="ltr" value="public" class="input" style="padding-left:82px;" placeholder="public">
+          <div class="absolute left-2 top-1/2 -translate-y-1/2 flex gap-1" style="z-index:10;">
+            <button onclick="pasteText('signalCommunity','تم لصق المجتمع')" class="btn btn-sm" style="padding:4px 8px;min-height:28px;font-size:11px;" title="لصق" type="button">📥</button>
+            <button onclick="copyText(document.getElementById('signalCommunity').value,'تم نسخ المجتمع')" class="btn btn-sm" style="padding:4px 8px;min-height:28px;font-size:11px;" title="نسخ" type="button">📋</button>
+          </div>
+        </div>
       </div>
       <button onclick="checkSignal()" class="btn btn-primary w-full py-3">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>

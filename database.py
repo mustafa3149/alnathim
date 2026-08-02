@@ -1851,8 +1851,7 @@ def dashboard_stats(month, year):
     row = _fetchone(
         "SELECT "
         "(SELECT COUNT(*) FROM customers WHERE is_active = 1 AND status = 'active') AS active_customers, "
-        "(SELECT COUNT(*) FROM customers WHERE is_active = 1 AND status = 'active' "
-        "  AND package_id IS NOT NULL) AS total_packages, "
+        "(SELECT COUNT(*) FROM packages) AS total_packages, "
         "(SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE month = ? AND year = ?) AS expected_income, "
         "(SELECT COALESCE(SUM(paid_amount), 0) FROM invoices WHERE month = ? AND year = ?) AS collected, "
         "(SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM invoices WHERE is_paid = 0) AS total_debt",
