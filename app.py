@@ -1550,6 +1550,120 @@ def api_signal_board_data():
     return jsonify({"ok": True, "items": items, "last_update": last_update})
 
 
+@app.route("/api/sync/pull", methods=["POST"])
+@admin_required
+def api_sync_pull():
+    """Pull MikroTik router data into the local DB, then push to cloud.
+
+    Hybrid execution (Local Laptop/PC): this endpoint:
+      1. Connects to the MikroTik router over the LAN,
+      2. Auto-maps packages + upserts subscribers (sync_pull_router),
+      3. Pushes the resulting snapshot to Render via /api/sync/push
+         (sync_push_cloud) when RELAY_URL is configured.
+
+    Returns:
+        JSON with {pull, push} summaries.
+    """
+    from billing_system.mikrotik_sync import sync_pull_router, sync_push_cloud
+
+    try:
+        pull = sync_pull_router(dry_run=False)
+        push = {}
+        if pull.get("secrets", 0) > 0:
+            push = sync_push_cloud()
+        return jsonify({"ok": True, "pull": pull,
+                        "push": push,
+                        "message": "تم سحب بيانات الراوتر ومزامنة السحابة"})
+    except Exception as e:
+        log.error("Hybrid sync failed: %s", e)
+        return jsonify({"ok": False, "error": f"فشل المزامنة: {e}"}), 500
+
+
+@app.route("/api/sync/push", methods=["POST"])
+def api_sync_push():
+    """Accept a full DB snapshot pushed from a local laptop/PC (hybrid upload).
+
+    Guarded by the same Bearer token as the agent signal relay. Upserts
+    packages + customers into the cloud DB so remote/mobile views see the
+    local tower snapshot instantly.
+    """
+    from config import AGENT_TOKEN
+
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not token or token != AGENT_TOKEN:
+        return jsonify({"ok": False, "error": "غير مصرح"}), 401
+
+    data = request.get_json(silent=True) or {}
+    customers = data.get("customers") or []
+    packages = data.get("packages") or []
+    upserted = 0
+
+    # Upsert packages first so customer FK references resolve.
+    for p in packages:
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        existing = db.get_package_by_name(name)
+        if existing:
+            db.update_package(existing["id"], price=p.get("price", 0), speed=p.get("speed", ""))
+        else:
+            db.add_package(name=name, price=p.get("price", 0), speed=p.get("speed", ""))
+
+    # Upsert customers by mikrotik_username (single subscriber identity).
+    for c in customers:
+        username = (c.get("username") or "").strip()
+        if not username:
+            continue
+        pkg = None
+        pkg_name = (c.get("package_name") or "").strip()
+        if pkg_name:
+            p = db.get_package_by_name(pkg_name)
+            pkg = p["id"] if p else None
+        rows = db._fetchall("SELECT id FROM customers WHERE mikrotik_username = ?", (username,))
+        if rows:
+            db.update_customer(
+                rows[0]["id"],
+                name=c.get("name", ""),
+                phone=c.get("phone", ""),
+                phone2=c.get("phone2", ""),
+                whatsapp_phone=c.get("whatsapp_phone", ""),
+                address=c.get("address", ""),
+                region=c.get("region", ""),
+                package_id=pkg,
+                username=username,
+                ip_address=c.get("ip_address", ""),
+                device_type=c.get("device_type", ""),
+                status=c.get("subscription_status", "active"),
+                subscription_status=c.get("subscription_status", "active"),
+                renewal_date=c.get("renewal_date", ""),
+                notes=c.get("notes", ""),
+            )
+        else:
+            db.add_customer(
+                full_name=c.get("name") or username,
+                phone=c.get("phone", ""),
+                phone2=c.get("phone2", ""),
+                whatsapp_phone=c.get("whatsapp_phone", ""),
+                address=c.get("address", ""),
+                region=c.get("region", ""),
+                package_id=pkg,
+                mikrotik_username=username,
+                mikrotik_password=c.get("password", ""),
+                nano_ip=c.get("ip_address", ""),
+                device_type=c.get("device_type", ""),
+                subscription_date=c.get("subscription_date", ""),
+                renewal_date=c.get("renewal_date", ""),
+                status=c.get("subscription_status", "active"),
+            )
+        upserted += 1
+
+    _audit("مزامنة سحابية", "sync", None,
+           f"تم استلام {len(packages)} باقة و {len(customers)} مشترك من الجهاز المحلي")
+    return jsonify({"ok": True, "customers_upserted": upserted,
+                    "packages_received": len(packages)})
+
+
 @app.route("/api/agent/signal", methods=["POST"])
 def api_agent_signal():
     """Accept ONE batched signal snapshot from the tower-LAN scanner.

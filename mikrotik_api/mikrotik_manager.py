@@ -84,6 +84,15 @@ class MikroTikManager:
         secrets = self._get_resource("/ppp secret")
         return [self._as_dict(e) for e in secrets.get()]
 
+    def get_ppp_profiles(self):
+        """Return all /ppp profile names as a list of dicts.
+
+        RouterOS profiles carry a `name` and optionally `rate-limit`
+        (e.g. "20M/20M") which we map to package speed.
+        """
+        profiles = self._get_resource("/ppp profile")
+        return [self._as_dict(e) for e in profiles.get()]
+
     def get_ppp_active(self):
         """Return all /ppp active sessions as a list of dicts (incl. IPs)."""
         active = self._get_resource("/ppp active")

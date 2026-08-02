@@ -71,6 +71,10 @@
                         <button onclick="saveTowerConnection()" class="btn btn-primary" style="flex:1;">حفظ اعدادات اللوحة</button>
                         <button onclick="testTowerConnection()" class="btn" style="flex:1;">اختبار الاتصال</button>
                     </div>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="runHybridSync()" class="btn" style="flex:1;border-color:#d4d4d4;background:#f9f9f9;" id="syncBtn">🔄 مزامنة الراوتر + رفع للسحابة</button>
+                    </div>
+                    <div id="syncResult" style="display:none;margin-top:8px;font-size:12px;font-weight:600;text-align:center;"></div>
                 </div>
             </div>
         </div>
@@ -127,5 +131,21 @@ function collectTowerData(){return {
 };}
 async function saveTowerConnection(){var r=await fetch('/api/settings/tower-connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(collectTowerData())});var j=await r.json();showToast(j.ok?j.message:(j.error||'خطأ'),j.ok?'':'error');}
 async function testTowerConnection(){var btn=document.querySelector('[onclick="testTowerConnection()"]');btn.textContent='جاري الاختبار...';btn.disabled=true;var r=await fetch('/api/settings/tower-test',{method:'POST'});var j=await r.json();showToast(j.ok?j.message:(j.error||'خطأ'),j.ok?'':'error');btn.textContent='اختبار الاتصال';btn.disabled=false;}
+async function runHybridSync(){
+  var btn=document.getElementById('syncBtn');var box=document.getElementById('syncResult');
+  box.style.display='block';box.textContent='جاري سحب بيانات الراوتر...';box.style.color='#555';
+  btn.disabled=true;btn.textContent='⏳ جاري المزامنة...';
+  try{
+    var r=await fetch('/api/sync/pull',{method:'POST'});
+    var j=await r.json();
+    if(j.ok){
+      var p=j.pull||{};var pu=j.push||{};
+      box.style.color='#0d6e3c';
+      box.textContent='✅ تم السحب: '+p.secrets+' مشترك، '+p.profiles+' بروفايل، '+p.packages_created+' باقة جديدة'+(pu.ok?' — تم الرفع للسحابة ('+pu.customers_upserted+' مشترك)':'');
+      showToast('تمت المزامنة بنجاح');
+    } else { box.style.color='#dc2626'; box.textContent='❌ '+(j.error||'فشلت المزامنة'); showToast(j.error||'خطأ','error'); }
+  }catch(e){ box.style.color='#dc2626'; box.textContent='❌ خطأ في الاتصال بالراوتر'; showToast('فشل الاتصال','error'); }
+  btn.disabled=false;btn.textContent='🔄 مزامنة الراوتر + رفع للسحابة';
+}
 </script>
 {% endblock %}
