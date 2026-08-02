@@ -1505,6 +1505,7 @@ def api_network_ping():
         count = int(data.get("count", 4))
     except (ValueError, TypeError):
         count = 4
+    log.info("PING API host=%s count=%s", host, count)
     result = ping_host(host, count=count)
     return jsonify(result)
 

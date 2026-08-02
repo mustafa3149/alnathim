@@ -55,6 +55,10 @@ class SignalMonitor:
             return str(community).strip()
         return self.community
 
+    def _community_debug(self, community=None):
+        """Print the exact community string that will be used for SNMP (diagnostics)."""
+        print(f"SNMP using community='{self._community(community)}' port={self.port} timeout={self.timeout} retries={self.retries}")
+
     async def _on_get(self, oid, ip, community=None):
         """Async coroutine: SNMP GET, return value string or None.
 
@@ -80,9 +84,11 @@ class SignalMonitor:
                 ObjectType(ObjectIdentity(oid)),
             )
             engine.close_dispatcher()
-        except Exception:
+        except Exception as e:
+            print(f"SNMP GET ERROR [{ip}] OID={oid} community='{self._community(community)}': {e}")
             return None
         if error_indication or error_status:
+            print(f"SNMP GET INDICATION [{ip}] OID={oid}: {error_indication or error_status}")
             return None
         if var_binds:
             return var_binds[0][1].prettyPrint()
@@ -118,12 +124,13 @@ class SignalMonitor:
             )
             async for error_indication, error_status, error_index, var_binds in it:
                 if error_indication or error_status:
+                    print(f"SNMP WALK INDICATION [{ip}] base={oid_base}: {error_indication or error_status}")
                     break
                 for name, val in var_binds:
                     results[name.prettyPrint()] = val.prettyPrint()
             engine.close_dispatcher()
-        except Exception:
-            pass  # never raise — caller treats empty results as offline/timeout
+        except Exception as e:
+            print(f"SNMP WALK ERROR [{ip}] base={oid_base} community='{self._community(community)}': {e}")
         return results
 
     # ── Low-level primitives (never raise) ──────────────────────
@@ -317,17 +324,20 @@ class SignalMonitor:
             wireless checks fail.
         """
         dtype = (device_type or "auto").strip().lower()
+        self._community_debug(community)
 
         if dtype == "wireless":
             try:
                 return self.get_wireless_signal(ip, community=community)
-            except Exception:
+            except Exception as e:
+                print(f"SNMP GET_CLIENT ERROR [{ip}] type=wireless: {e}")
                 return {"ip": ip, "status": "offline/timeout"}
 
         if dtype == "optical":
             try:
                 return self.get_optical_signal(ip, community=community)
-            except Exception:
+            except Exception as e:
+                print(f"SNMP GET_CLIENT ERROR [{ip}] type=optical: {e}")
                 return {"ip": ip, "status": "offline/timeout"}
 
         # auto / standard: optical first, then WIRELESS — a failed or
@@ -335,7 +345,8 @@ class SignalMonitor:
         optical = None
         try:
             optical = self.get_optical_signal(ip, community=community)
-        except Exception:
+        except Exception as e:
+            print(f"SNMP GET_CLIENT ERROR [{ip}] type=optical(auto): {e}")
             optical = None  # keep going — do not halt on a probe error
 
         if self._is_good(optical):
@@ -344,7 +355,8 @@ class SignalMonitor:
         wireless = None
         try:
             wireless = self.get_wireless_signal(ip, community=community)
-        except Exception:
+        except Exception as e:
+            print(f"SNMP GET_CLIENT ERROR [{ip}] type=wireless(auto): {e}")
             wireless = None
 
         if self._is_good(wireless):

@@ -5,10 +5,13 @@ Uses the platform-appropriate `ping` binary via subprocess argument arrays
 returns a dict describing the outcome.
 """
 
+import logging
 import re
 import subprocess
 import sys
 import time
+
+log = logging.getLogger(__name__)
 
 # Host validation: IP v4/v6 or hostname (letters, digits, dots, dashes, colon, underscore).
 HOST_RE = re.compile(r"^[A-Za-z0-9.\-_:]+$")
@@ -183,6 +186,7 @@ def ping_host(host, count=4, timeout=15):
 
     count = max(1, min(int(count or 4), 10))
     cmd = _pick_command(host, count)
+    log.info("PING host=%s count=%d cmd=%s", host, count, cmd)
     try:
         start = time.monotonic()
         proc = subprocess.run(

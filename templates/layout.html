@@ -65,6 +65,20 @@
     .no-scrollbar::-webkit-scrollbar { display:none; }
     .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
 
+    /* ─────────────── Native text selection (Android WebView) ───────────────
+       Allow the browser's native long-press context menu (Select/Copy/Paste)
+       on input fields. `-webkit-touch-callout: none` on body prevents a long
+       press on background from opening iOS-style callouts, while inputs keep
+       the native Android ActionMode (خصائص متصفح أندرويد الأصلية). */
+    input, textarea {
+        -webkit-user-select: text !important;
+        user-select: text !important;
+        -webkit-touch-callout: default !important;
+    }
+    body {
+        -webkit-touch-callout: none;
+    }
+
     /* ─────────────── Surfaces ─────────────── */
     .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; }
     .card-pad { padding:20px; }
@@ -476,49 +490,8 @@
     }
     if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/service-worker.js');}
 
-    /* ─────────────── Universal copy-to-clipboard helper ─────────────── */
-    function copyText(text, label){
-      if(!text){ showToast('لا يوجد نص للنسخ','error'); return; }
-      function done(){
-        showToast((label||'تم النسخ') + (typeof ClipboardEvent==='undefined'?' — اضغط مطولاً على الحقل للصق':''));
-      }
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(done).catch(function(){
-          fallbackCopy(text); done();
-        });
-      } else { fallbackCopy(text); done(); }
-    }
-    function fallbackCopy(text){
-      try{
-        var ta=document.createElement('textarea');
-        ta.value=text;
-        ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='0';
-        document.body.appendChild(ta); ta.focus(); ta.select();
-        try{document.execCommand('copy');}catch(e){}
-        document.body.removeChild(ta);
-      }catch(e){}
-    }
-
-    /* ─────────────── Paste from clipboard into an input ─────────────── */
-    function pasteText(inputId, label){
-      var input = document.getElementById(inputId);
-      if(!input){ showToast('حقل غير موجود','error'); return; }
-      function setVal(t){
-        if(!t){ showToast('الحافظة فارغة','error'); return; }
-        input.value = t;
-        input.focus();
-        showToast(label || 'تم اللصق');
-      }
-      if(navigator.clipboard && navigator.clipboard.readText){
-        navigator.clipboard.readText().then(setVal).catch(function(){
-          showToast('تعذر قراءة الحافظة','error');
-        });
-      } else {
-        // Fallback: focus the field so the system paste menu can be used
-        input.focus();
-        showToast('اضغط مطولاً على الحقل ثم اختر لصق');
-      }
-    }
+    /* Copy/paste uses the browser's NATIVE long-press menu (Android Select/Copy/Paste).
+       No custom clipboard helpers are needed — see the CSS user-select rules above. */
   </script>
   {% block extra_scripts %}{% endblock %}
 </body>
