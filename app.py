@@ -48,7 +48,11 @@ db.init_db()
 # ──────────────────────────────────────────────
 #  CSRF PROTECTION + SECURITY HEADERS (Phase 14.5)
 # ──────────────────────────────────────────────
-_CSRF_EXEMPT_PATHS = {"/login", "/register", "/logout", "/api/agent/signal", "/api/remote/login"}
+_CSRF_EXEMPT_PATHS = {
+    "/login", "/register", "/logout", "/api/agent/signal", "/api/remote/login",
+    "/api/auth/check-status", "/api/device/hwid", "/api/device/activate",
+    "/api/device/status", "/api/sync/push",
+}
 
 
 def get_csrf_token():
@@ -1552,6 +1556,23 @@ def api_signal_board_data():
     return jsonify({"ok": True, "items": items, "last_update": last_update})
 
 
+def _current_owner_token():
+    """Build the owner token for the logged-in session (Phase 14.7).
+
+    When the user is logged in locally (after desktop activation or normal
+    login) we mint a signed activation-style token from their user id so the
+    Render cloud can verify and attach imported subscribers to their account.
+    """
+    uid = current_user_id()
+    if not uid:
+        return uid, ""
+    try:
+        from auth import _sign_activation
+        return uid, _sign_activation(uid, "launcher", None)
+    except Exception:  # noqa: BLE001
+        return uid, ""
+
+
 @app.route("/api/sync/pull", methods=["POST"])
 @admin_required
 def api_sync_pull():
@@ -1563,16 +1584,20 @@ def api_sync_pull():
       3. Pushes the resulting snapshot to Render via /api/sync/push
          (sync_push_cloud) when RELAY_URL is configured.
 
+    Phase 14.7: the cloud push includes the logged-in user's id + token so
+    subscribers are attached to their cloud account (owner_user_id).
+
     Returns:
         JSON with {pull, push} summaries.
     """
     from billing_system.mikrotik_sync import sync_pull_router, sync_push_cloud
 
+    uid, owner_token = _current_owner_token()
     try:
         pull = sync_pull_router(dry_run=False)
         push = {}
         if pull.get("secrets", 0) > 0:
-            push = sync_push_cloud()
+            push = sync_push_cloud(user_id=uid, token=owner_token or None)
         return jsonify({"ok": True, "pull": pull,
                         "push": push,
                         "message": "تم سحب بيانات الراوتر ومزامنة السحابة"})
@@ -1600,6 +1625,29 @@ def api_sync_push():
     customers = data.get("customers") or []
     packages = data.get("packages") or []
     upserted = 0
+
+    # ── Phase 14.7: owner linking ──────────────────────────────
+    # The desktop launcher passes its authenticated user's id + token so the
+    # cloud attaches every imported subscriber to THAT user's cloud record.
+    owner_user_id = data.get("user_id")
+    owner_token = (data.get("token") or "").strip()
+    if owner_user_id is not None:
+        try:
+            owner_user_id = int(owner_user_id)
+        except (TypeError, ValueError):
+            owner_user_id = None
+    if owner_user_id is not None:
+        _owner = db.get_user_by_id(owner_user_id)
+        if _owner is None or not db.is_user_active(_owner):
+            owner_user_id = None
+        elif owner_token:
+            # Loose sanity check: token must look like a signed activation key.
+            from auth import _parse_activation_key
+            if _parse_activation_key(owner_token) is None:
+                owner_user_id = None
+    if owner_user_id is None:
+        from auth import current_user_id as _current_uid
+        owner_user_id = _current_uid() or None
 
     # Upsert packages first so customer FK references resolve.
     for p in packages:
@@ -1640,6 +1688,7 @@ def api_sync_push():
                 subscription_status=c.get("subscription_status", "active"),
                 renewal_date=c.get("renewal_date", ""),
                 notes=c.get("notes", ""),
+                owner_user_id=owner_user_id,
             )
         else:
             db.add_customer(
@@ -1657,6 +1706,7 @@ def api_sync_push():
                 subscription_date=c.get("subscription_date", ""),
                 renewal_date=c.get("renewal_date", ""),
                 status=c.get("subscription_status", "active"),
+                owner_user_id=owner_user_id,
             )
         upserted += 1
 

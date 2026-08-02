@@ -39,6 +39,7 @@
   <button onclick="switchTab('members')" id="tab-members" class="tab-btn px-4 py-2">الأعضاء</button>
   <button onclick="switchTab('access')" id="tab-access" class="tab-btn px-4 py-2">منح وصول</button>
   <button onclick="switchTab('invites')" id="tab-invites" class="tab-btn px-4 py-2">رموز الدخول</button>
+  <button onclick="switchTab('pcs')" id="tab-pcs" class="tab-btn px-4 py-2">تفعيل حاسبة</button>
 </div>
 
 <!-- ═══ Registrations tab ═══ -->
@@ -146,6 +147,47 @@
   </div>
 </section>
 
+<!-- ═══ PC Activation tab ═══ -->
+<section id="view-pcs" class="hidden">
+  <div class="card card-pad">
+    <div class="text-sm font-bold text-main mb-1">تفعيل حاسبة جديد (HWID)</div>
+    <div class="text-xs text-muted font-tajawal mb-5">أدخل معرّف الجهاز الذي يعرضه برنامج الحاسبة، واختر الحساب المستهدف ومدة الوصول — سيتولّد كود تفعيل يُمكّن الحاسبة من المزامنة مع حسابه في السحابة.</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="sm:col-span-2">
+        <label class="f-label">معرّف الحاسبة (HWID)</label>
+        <input type="text" id="pcHwid" class="input" dir="ltr" placeholder="مثال: A1B2C3D4E5F6...">
+      </div>
+      <div>
+        <label class="f-label">الحساب المستهدف</label>
+        <select id="pcUser" class="input"></select>
+      </div>
+      <div>
+        <label class="f-label">مدة الوصول</label>
+        <select id="pcDuration" class="input">
+          <option value="forever">دائم</option>
+          <option value="30d">٣٠ يوم</option>
+          <option value="day">يوم واحد</option>
+        </select>
+      </div>
+    </div>
+    <button onclick="generatePcKey()" class="btn btn-primary w-full py-3 mt-6">توليد كود التفعيل</button>
+    <div id="pcResult" class="hidden mt-4 rounded-xl surface-2 p-4 text-center" style="border:1px solid var(--border);">
+      <div class="text-xs text-muted font-tajawal mb-2">انسخ هذا الكود وأرسله لمستخدم الحاسبة:</div>
+      <div class="text-sm font-extrabold text-main tracking-wider break-all" id="pcKeyText" dir="ltr">—</div>
+      <div class="text-xs text-muted font-tajawal mt-2" id="pcKeyMeta"></div>
+      <button onclick="copyPcKey()" class="btn btn-sm mt-3">نسخ الكود</button>
+    </div>
+  </div>
+
+  <!-- All activations -->
+  <div class="card overflow-hidden mt-5">
+    <div class="px-5 py-4 divider font-bold text-main text-sm">الحاسبات المفعلة</div>
+    <div id="pcList" class="divide-y">
+      <div class="text-center text-muted py-6 font-tajawal text-sm">جاري التحميل...</div>
+    </div>
+  </div>
+</section>
+
 <!-- ═══════════ Add/Edit User Modal ═══════════ -->
 <div id="userModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
   <div class="min-h-full flex items-center justify-center p-4">
@@ -179,15 +221,18 @@
 var allUsers = [];
 
 function switchTab(tab){
-  ['registrations','members','access','invites'].forEach(function(t){
-    document.getElementById('view-' + t).classList.add('hidden');
-    document.getElementById('tab-' + t).classList.remove('tab-active');
+  ['registrations','members','access','invites','pcs'].forEach(function(t){
+    var v = document.getElementById('view-' + t);
+    var tb = document.getElementById('tab-' + t);
+    if(v) v.classList.add('hidden');
+    if(tb) tb.classList.remove('tab-active');
   });
   document.getElementById('view-' + tab).classList.remove('hidden');
   document.getElementById('tab-' + tab).classList.add('tab-active');
   if(tab === 'members') renderMembers();
   if(tab === 'access') renderAccessForm();
   if(tab === 'invites') renderInvites();
+  if(tab === 'pcs') renderPcList();
 }
 
 function statusBadge(s){
@@ -299,6 +344,14 @@ function renderAccessForm(){
   allUsers.forEach(function(u){
     invites.innerHTML += '<option value="' + u.id + '"' + (String(u.id)===icur?' selected':'') + '>' + (u.full_name || u.username) + ' (' + u.username + ')</option>';
   });
+  var pcSel = document.getElementById('pcUser');
+  if(pcSel){
+    var pcur = pcSel.value;
+    pcSel.innerHTML = '<option value="">— اختر الحساب —</option>';
+    allUsers.filter(function(u){return u.status === 'active';}).forEach(function(u){
+      pcSel.innerHTML += '<option value="' + u.username + '"' + (u.username===pcur?' selected':'') + '>' + (u.full_name || u.username) + ' (' + u.username + ')</option>';
+    });
+  }
   renderGrants();
 }
 function renderGrants(){
@@ -391,6 +444,56 @@ function copyInviteCode(){
   var code = document.getElementById('inviteCodeText').textContent;
   if(navigator.clipboard){ navigator.clipboard.writeText(code).then(function(){ showToast('تم نسخ الرمز'); }); }
   else showToast(code, '');
+}
+
+/* ── PC Activation (Phase 14.7: HWID) ── */
+function renderPcList(){
+  var el = document.getElementById('pcList');
+  fetch('/api/admin/activate-pc/list').then(function(r){return r.json();}).then(function(d){
+    var acts = d.activations || [];
+    if(!acts.length){ el.innerHTML = '<div class="text-center text-muted py-6 font-tajawal text-sm">لا توجد حاسبات مفعلة بعد</div>'; return; }
+    var h = '';
+    acts.forEach(function(a){
+      var exp = a.expires_at ? ('<span dir="ltr">' + a.expires_at + '</span>') : '<span style="color:var(--dot-active);">دائم</span>';
+      h += '<div class="px-5 py-4 flex items-center justify-between gap-3">'
+        + '<div class="min-w-0"><div class="font-bold text-main text-sm truncate">' + (a.full_name || a.username) + '</div>'
+        + '<div class="text-[10px] font-mono text-muted mt-0.5 break-all" dir="ltr">' + a.hwid + '</div>'
+        + '<div class="text-xs text-muted mt-0.5 font-tajawal">ينتهي: ' + exp + '</div>'
+        + '<div class="text-[10px] font-mono text-faint mt-0.5 break-all" dir="ltr">' + a.activation_key + '</div></div>'
+        + '<button onclick="revokePc(' + a.id + ')" class="btn btn-sm btn-danger shrink-0">إلغاء التفعيل</button></div>';
+    });
+    el.innerHTML = h;
+  }).catch(function(){ el.innerHTML = '<div class="text-center text-muted py-6 font-tajawal text-sm">تعذر التحميل</div>'; });
+}
+function generatePcKey(){
+  var hwid = document.getElementById('pcHwid').value.trim();
+  var uid = document.getElementById('pcUser').value;
+  var dur = document.getElementById('pcDuration').value;
+  if(!hwid){ showToast('أدخل معرّف الحاسبة HWID', 'error'); return; }
+  if(!uid){ showToast('اختر الحساب المستهدف', 'error'); return; }
+  fetch('/api/admin/activate-pc', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({hwid:hwid, username:uid, duration:dur})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        document.getElementById('pcKeyText').textContent = d.activation_key;
+        document.getElementById('pcKeyMeta').textContent = 'الحساب: ' + d.username + ' · المدة: ' + d.expiry_label;
+        document.getElementById('pcResult').classList.remove('hidden');
+        showToast('تم توليد كود التفعيل');
+        renderPcList();
+      } else showToast(d.error || 'خطأ', 'error');
+    });
+}
+function copyPcKey(){
+  var code = document.getElementById('pcKeyText').textContent;
+  if(navigator.clipboard){ navigator.clipboard.writeText(code).then(function(){ showToast('تم نسخ الكود'); }); }
+  else showToast(code, '');
+}
+function revokePc(id){
+  showConfirm('إلغاء تفعيل هذه الحاسبة؟', function(){
+    fetch('/api/admin/activate-pc/' + id + '/revoke', {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      showToast(d.ok ? 'تم الإلغاء' : (d.error || 'خطأ'), d.ok ? '' : 'error');
+      renderPcList();
+    });
+  });
 }
 
 /* ── Add / Edit member ── */

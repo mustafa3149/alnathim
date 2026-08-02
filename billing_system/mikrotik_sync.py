@@ -231,16 +231,22 @@ def sync_pull_router(dry_run=False, host=None, username=None, password=None,
     return summary
 
 
-def sync_push_cloud(payload=None):
+def sync_push_cloud(payload=None, user_id=None, token=None):
     """Push the local DB (or a provided payload) to the Render cloud via API.
 
     Hybrid upload (Local Laptop/PC): the user runs this locally (e.g. from a
     script or the settings page) to forward the entire local snapshot to the
     Render endpoint `/api/sync/push` so mobile/web remote views see it instantly.
 
+    Phase 14.7: when `user_id` (+ `token`) is provided the payload carries the
+    authenticated desktop user identity so Render attaches every imported
+    subscriber to THAT user's cloud record (owner_user_id).
+
     Args:
         payload: optional dict of subscribers/packages to push. When None the
             local DB is read fully (customers + packages + current invoices).
+        user_id: optional authenticated desktop user id (owner linking).
+        token: optional signed activation token proving the desktop is unlocked.
 
     Returns:
         dict with {ok, sent_customers, sent_packages} or raises on failure.
@@ -281,6 +287,12 @@ def sync_push_cloud(payload=None):
             for p in db.list_packages()
         ]
         payload = {"customers": customers, "packages": packages}
+
+    # Phase 14.7: attach the authenticated desktop owner to the snapshot.
+    if user_id is not None:
+        payload["user_id"] = user_id
+    if token:
+        payload["token"] = token
 
     body = json.dumps(payload).encode("utf-8")
     url = RELAY_URL.rstrip("/") + "/api/sync/push"

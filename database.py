@@ -273,6 +273,17 @@ CREATE TABLE IF NOT EXISTS signal_cache (
     status       TEXT DEFAULT 'offline',
     last_updated TEXT DEFAULT ''
 );
+
+-- ── Desktop PC activation (Phase 14.7: HWID activation codes) ──
+CREATE TABLE IF NOT EXISTS device_activations (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    hwid           TEXT NOT NULL,
+    activation_key TEXT NOT NULL UNIQUE,
+    expires_at     TEXT DEFAULT NULL,
+    created_at     TEXT DEFAULT (datetime('now','localtime')),
+    UNIQUE(user_id, hwid)
+);
 """
 
 
@@ -585,6 +596,7 @@ def init_db():
             ("invite_max_uses", "ALTER TABLE users ADD COLUMN invite_max_uses INTEGER NOT NULL DEFAULT 0"),
             ("failed_logins", "ALTER TABLE users ADD COLUMN failed_logins INTEGER NOT NULL DEFAULT 0"),
             ("created_at", "ALTER TABLE users ADD COLUMN created_at TEXT DEFAULT (datetime('now','localtime'))"),
+            ("hwid", "ALTER TABLE users ADD COLUMN hwid TEXT DEFAULT ''"),
         ):
             if col not in ucols:
                 db = get_db()
@@ -595,6 +607,18 @@ def init_db():
                     pass  # column may already exist in a concurrent boot
                 finally:
                     db.close()
+
+    # ── Phase 14.7: ensure customers has owner_user_id (render linking) ──
+    ccols = _table_cols("customers")
+    if ccols and "owner_user_id" not in ccols:
+        db = get_db()
+        try:
+            db.execute("ALTER TABLE customers ADD COLUMN owner_user_id INTEGER DEFAULT NULL")
+            db.commit()
+        except sqlite3.OperationalError:
+            pass  # column may already exist in a concurrent boot
+        finally:
+            db.close()
 
     seed_default_packages()
     seed_default_admin()
@@ -942,6 +966,68 @@ def is_user_active(user_row, now=None):
     return True
 
 
+# ── Desktop PC Activation (Phase 14.7: HWID) ───────────────
+
+def save_device_activation(user_id, hwid, activation_key, expires_at=None):
+    """Store a desktop activation record (one per user+hwid).
+
+    Args:
+        user_id: the target user's id the PC is being activated for.
+        hwid: the desktop's hardware id string.
+        activation_key: the signed activation key shown to the user.
+        expires_at: optional DB datetime string (None = permanent).
+
+    Returns:
+        int: the new activation row id.
+    """
+    return _insert(
+        "INSERT INTO device_activations (user_id, hwid, activation_key, expires_at) "
+        "VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, hwid) DO UPDATE SET "
+        "activation_key = excluded.activation_key, expires_at = excluded.expires_at",
+        (user_id, hwid, activation_key, expires_at),
+    )
+
+
+def get_device_activation_by_key(activation_key):
+    """Return a device_activations row matching a key, or None."""
+    return _fetchone(
+        "SELECT * FROM device_activations WHERE activation_key = ?",
+        (activation_key,),
+    )
+
+
+def get_device_activation(user_id, hwid):
+    """Return a device_activations row for a user+hwid, or None."""
+    return _fetchone(
+        "SELECT * FROM device_activations WHERE user_id = ? AND hwid = ?",
+        (user_id, hwid),
+    )
+
+
+def list_device_activations():
+    """Return all activation records (admin center)."""
+    return _fetchall(
+        "SELECT da.*, u.username, u.full_name "
+        "FROM device_activations da JOIN users u ON u.id = da.user_id "
+        "ORDER BY da.created_at DESC"
+    )
+
+
+def revoke_device_activation(activation_id):
+    """Delete an activation record by id. Returns True when deleted."""
+    return _execute(
+        "DELETE FROM device_activations WHERE id = ?", (activation_id,)
+    ) > 0
+
+
+def set_user_hwid(user_id, hwid):
+    """Store the bound HWID on the user record (local EXE keeps it in sync)."""
+    return _execute(
+        "UPDATE users SET hwid = ? WHERE id = ?", (hwid or "", user_id)
+    ) > 0
+
+
 # ── Audit Log ──────────────────────────────────────────────
 
 def log_action(user_id=None, username="", action="", target_type="", target_id=None, details=""):
@@ -1079,7 +1165,7 @@ def _customer_select():
         "c.address, c.region, c.package_id, c.mikrotik_username AS username, "
         "c.mikrotik_password AS password, c.nano_ip AS ip_address, c.device_type, "
         "c.status AS subscription_status, c.is_active, c.subscription_date, "
-        "c.renewal_date, c.previous_debt, c.notes, c.created_at, "
+        "c.renewal_date, c.previous_debt, c.notes, c.created_at, c.owner_user_id, "
         "p.name AS package_name, p.price AS package_price "
         "FROM customers c LEFT JOIN packages p ON p.id = c.package_id "
     )
@@ -1160,19 +1246,20 @@ def add_customer(full_name, phone="", phone2="", whatsapp_phone="", address="",
                  region="", package_id=None, mikrotik_username="",
                  mikrotik_password="", nano_ip="", device_type="",
                  subscription_date=None, renewal_date=None, status="active",
-                 previous_debt=0, notes=""):
+                 previous_debt=0, notes="", owner_user_id=None):
     """Insert a customer. Returns the new id."""
     return _insert(
         "INSERT INTO customers (full_name, phone, phone2, whatsapp_phone, address, "
         "region, package_id, mikrotik_username, mikrotik_password, nano_ip, "
         "device_type, subscription_date, renewal_date, status, is_active, "
-        "previous_debt, notes) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "previous_debt, notes, owner_user_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             full_name, phone, phone2, whatsapp_phone, address,
             region, package_id, mikrotik_username, mikrotik_password, nano_ip,
             device_type, subscription_date or now_str(), renewal_date, status,
             1 if status in ("active",) else 0, previous_debt or 0, notes,
+            owner_user_id,
         ),
     )
 
@@ -1201,6 +1288,7 @@ def update_customer(customer_id, **fields):
         "subscription_date": "subscription_date",
         "previous_debt": "previous_debt",
         "notes": "notes",
+        "owner_user_id": "owner_user_id",
     }
     updates = {}
     for key, value in fields.items():

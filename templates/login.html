@@ -25,8 +25,44 @@
         </p>
       </div>
     </div>
+
+    <div class="rounded-2xl bg-slate-900/60 border border-slate-700/50 p-5 mt-4 shadow-xl" dir="rtl">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-bold text-slate-400">معرّف هذا الجهاز (HWID)</span>
+        <button onclick="copyHwid()" class="text-[11px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-indigo-300 hover:border-indigo-500 transition">نسخ</button>
+      </div>
+      <div id="hwidBox" class="text-[11px] font-mono text-slate-300 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 break-all text-left" dir="ltr">...</div>
+      <input type="text" id="activationKey" dir="ltr" placeholder="ألصق كود التفعيل هنا" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-4 py-2.5 text-slate-50 text-xs mt-3 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition">
+      <button onclick="activateDevice()" class="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 text-sm mt-2 transition shadow-lg shadow-emerald-500/20">تفعيل هذه الحاسبة</button>
+    </div>
   </div>
 <script>
+var deviceHwid='';
+async function loadHwid(){
+  try{
+    var r=await fetch('/api/device/hwid');
+    var d=await r.json();
+    if(d.ok){deviceHwid=d.hwid;document.getElementById('hwidBox').textContent=deviceHwid;}
+  }catch(e){}
+}
+function copyHwid(){
+  if(deviceHwid){navigator.clipboard.writeText(deviceHwid).then(function(){showToast('تم نسخ المعرّف');}).catch(function(){showToast('تعذر النسخ','error');});}
+}
+async function activateDevice(){
+  var key=document.getElementById('activationKey').value.trim();
+  if(!key){showToast('أدخل كود التفعيل','error');return;}
+  if(!deviceHwid){showToast('لم يتم تحميل معرّف الجهاز','error');return;}
+  showToast('جاري التحقق من كود التفعيل...');
+  var r=await fetch('/api/device/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activation_key:key,hwid:deviceHwid})});
+  var d=await r.json();
+  if(d.ok&&d.approved){
+    showToast('✅ تم تفعيل الحاسبة');
+    localStorage.setItem('alnathim_token',d.token||'');
+    localStorage.setItem('alnathim_user_id',String(d.user_id||''));
+    setTimeout(function(){window.location.href='/';},500);
+  }
+  else{showToast('❌ '+(d.error||'كود التفعيل غير صالح'),'error');}
+}
 async function doLogin(){
   var u=document.getElementById('username').value.trim();var p=document.getElementById('password').value;
   if(!u||!p){showToast('أدخل اسم المستخدم وكلمة المرور','error');return;}
@@ -37,5 +73,6 @@ async function doLogin(){
   else{showToast('❌ '+(d.error||'فشل الدخول'),'error');}
 }
 document.getElementById('password').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+loadHwid();
 </script>
 {% endblock %}

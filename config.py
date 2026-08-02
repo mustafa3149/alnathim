@@ -95,6 +95,12 @@ SCAN_THREADS = int(os.getenv("SCAN_THREADS", "8") or 8)
 # Where the LAN agent relays batches (empty = disable relay; local SQLite cache still works).
 RELAY_URL = _clean(os.getenv("RELAY_URL"), "")
 
+# ── Desktop PC Activation (Phase 14.7: HWID keys) ───────────
+# HMAC-SHA256 signing secret for desktop activation keys. Must be identical
+# on the cloud (Render) and the local EXE so a key issued on the website can
+# be validated by the desktop app. Falls back to SECRET_KEY when unset.
+ACTIVATION_KEY_SECRET = _clean(os.getenv("ACTIVATION_KEY_SECRET"), SECRET_KEY)
+
 # ── Security Hardening (Phase 14.5) ────────────────────────
 # Failed-login lockout: after MAX_FAILED_LOGINS wrong attempts the account
 # auto-suspends until an admin reactivates it.
