@@ -48,7 +48,7 @@ db.init_db()
 # ──────────────────────────────────────────────
 #  CSRF PROTECTION + SECURITY HEADERS (Phase 14.5)
 # ──────────────────────────────────────────────
-_CSRF_EXEMPT_PATHS = {"/login", "/register", "/logout", "/api/agent/signal"}
+_CSRF_EXEMPT_PATHS = {"/login", "/register", "/logout", "/api/agent/signal", "/api/remote/login"}
 
 
 def get_csrf_token():

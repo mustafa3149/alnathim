@@ -130,24 +130,76 @@ def login():
     # Timing-safe: always run a real hash check (dummy when user is unknown).
     if user is None:
         check_password_hash(_DUMMY_HASH, password)
-        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+        password_ok = False
+    else:
+        password_ok = db.verify_password(user, password)
 
-    password_ok = db.verify_password(user, password)
+    # ── Hybrid: local EXE accepts cloud accounts too (same web login) ──
+    # When this app is NOT running on Render (desktop EXE at the tower) and the
+    # local DB has no such user (or the password differs — because the approved
+    # account lives in the cloud DB), ask the cloud to validate the credentials
+    # and mirror the account locally so sessions/redirects keep working here.
+    if not IS_RENDER and RELAY_URL and (user is None or not password_ok):
+        try:
+            import json as _json
+            import urllib.request as _ur
+            _req = _ur.Request(
+                RELAY_URL.rstrip("/") + "/api/remote/login",
+                data=_json.dumps({"username": username, "password": password}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur.urlopen(_req, timeout=20) as _resp:
+                _res = _json.loads(_resp.read().decode("utf-8", "replace"))
+            if _res.get("ok") and _res.get("user"):
+                _ru = _res["user"]
+                _local = db.get_user_by_username(username)
+                if _local is None:
+                    db.create_user(
+                        username, password,
+                        role=_ru.get("role", "agent"),
+                        full_name=_ru.get("full_name", ""),
+                        phone=_ru.get("phone", ""),
+                    )
+                _local = db.get_user_by_username(username)
+                db.update_user(
+                    _local["id"],
+                    full_name=_ru.get("full_name", ""),
+                    phone=_ru.get("phone", ""),
+                    role=_ru.get("role", "agent"),
+                    status="active",
+                )
+                user = db.get_user_by_username(username)
+                password_ok = db.verify_password(user, password)
+                if password_ok:
+                    db.reset_failed_logins(user["id"])
+                    _clear_rate_limit()
+        except Exception as e:  # noqa: BLE001 — cloud unreachable → keep local error
+            import logging
+            logging.getLogger(__name__).warning("[HybridLogin] cloud check failed: %s", e)
+        # Fall through: `password_ok` stays False → normal "invalid credentials"
+        # response below if the cloud was unreachable or rejected the login.
 
     # Phase 14.5: failed-login lockout
     if not password_ok:
-        db.increment_failed_logins(user["id"])
-        if db.count_failed_logins(user["id"]) >= MAX_FAILED_LOGINS:
-            db.lock_user(user["id"])
-            db.log_action(
-                user_id=user["id"],
-                username=user["full_name"] or user["username"],
-                action="قفل الحساب",
-                target_type="user",
-                target_id=user["id"],
-                details=f"تم قفل الحساب تلقائياً بعد {MAX_FAILED_LOGINS} محاولات فاشلة",
-            )
-            return jsonify({"ok": False, "error": "تم قفل الحساب بسبب محاولات كثيرة — راجع المدير"}), 403
+        local_user = db.get_user_by_username(username)
+        if local_user is not None:
+            db.increment_failed_logins(local_user["id"])
+            if db.count_failed_logins(local_user["id"]) >= MAX_FAILED_LOGINS:
+                db.lock_user(local_user["id"])
+                db.log_action(
+                    user_id=local_user["id"],
+                    username=local_user["full_name"] or local_user["username"],
+                    action="قفل الحساب",
+                    target_type="user",
+                    target_id=local_user["id"],
+                    details=f"تم قفل الحساب تلقائياً بعد {MAX_FAILED_LOGINS} محاولات فاشلة",
+                )
+                return jsonify({"ok": False, "error": "تم قفل الحساب بسبب محاولات كثيرة — راجع المدير"}), 403
+        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+
+    # Safety: after successful verification the user must exist locally.
+    if user is None:
         return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
 
     # Reset the failed-login counter on success.
@@ -179,6 +231,54 @@ def login():
             "redirect": "/admin" if user["role"] == "admin" else "/",
         }
     )
+
+
+@auth_bp.route("/api/remote/login", methods=["POST"])
+def api_remote_login():
+    """Cloud-side credential check used by the local desktop EXE.
+
+    The tower EXE keeps its own local SQLite, but users are approved on the
+    cloud. When a user tries to log in on the EXE, it forwards the username +
+    password here; on success the EXE mirrors the account locally.
+
+    This endpoint is intentionally CSRF-exempt (server-to-server call) and
+    guarded by the same rate-limiter as the regular login.
+    """
+    if _rate_limited():
+        return jsonify({"ok": False, "error": "محاولات كثيرة — حاول بعد قليل"}), 429
+
+    data = request.get_json() or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "أدخل اسم المستخدم وكلمة المرور"}), 400
+
+    user = db.get_user_by_username(username)
+
+    # Timing-safe path for an unknown user.
+    if user is None:
+        check_password_hash(_DUMMY_HASH, password)
+        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+
+    if not db.verify_password(user, password):
+        db.increment_failed_logins(user["id"])
+        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+
+    # Only active accounts can log in (same gate as the web login).
+    if not db.is_user_active(user):
+        return jsonify({"ok": False, "error": "الحساب غير نشط أو منتهي الصلاحية"}), 403
+
+    db.reset_failed_logins(user["id"])
+    return jsonify({
+        "ok": True,
+        "user": {
+            "username": user["username"],
+            "full_name": user["full_name"] or "",
+            "phone": user["phone"] or "",
+            "role": user["role"],
+        },
+    })
 
 
 @auth_bp.route("/logout", methods=["POST"])
