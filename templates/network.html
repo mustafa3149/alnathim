@@ -172,10 +172,13 @@ function showNetTab(tab){
 }
 async function doPing(){
   var host = document.getElementById('pingHost').value.trim();
-  var count = parseInt(document.getElementById('pingCount').value)||4;
+  // اقرأ عدد الحزم من حقل الإدخال مع تقييد بين 1 و 10
+  var rawCount = parseInt(document.getElementById('pingCount').value, 10);
+  var count = Math.min(Math.max(isNaN(rawCount) ? 4 : rawCount, 1), 10);
+  document.getElementById('pingCount').value = count; // عكس القيمة المقيدة في الحقل
   if(!host){ showToast('يرجى ادخال عنوان', 'error'); return; }
   var btn = document.getElementById('pingBtn'); btn.textContent = '⏳ جاري الفحص...'; btn.disabled = true;
-  var box = document.getElementById('pingResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري الفحص...</div>';
+  var box = document.getElementById('pingResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري الفحص ('+count+' حزم)...</div>';
   try{
     var r = await fetch('/api/network/ping', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host:host, count:count})});
     var d = await r.json();
@@ -186,7 +189,7 @@ async function doPing(){
         + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أقل</div><div class="font-extrabold text-lg text-main">'+(d.min_ms!==null?d.min_ms+' ms':'—')+'</div></div>'
         + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أعلى</div><div class="font-extrabold text-lg text-main">'+(d.max_ms!==null?d.max_ms+' ms':'—')+'</div></div>'
         + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">فقدان</div><div class="font-extrabold text-lg" style="color:'+c+';">'+d.loss_percent+'%</div></div>'
-        + '</div><div class="text-center text-[11px] text-faint font-tajawal mt-3">أرسل '+d.sent+' · استلم '+d.received+' · زمن '+d.elapsed_sec+' ث</div></div>';
+        + '</div><div class="text-center text-[11px] text-faint font-tajawal mt-3">أرسل '+d.sent+' · استلم '+d.received+' · خسارة '+d.loss_percent+'% · زمن '+d.elapsed_sec+' ث</div></div>';
     } else { box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);font-weight:600;">'+(d.error||'فشل')+'</div>'; }
   } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
   btn.textContent = 'فحص'; btn.disabled = false;
