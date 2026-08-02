@@ -1,7 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import os
-
 a = Analysis(
     ['app.py'],
     pathex=['c:\\Users\\WARER\\Desktop\\projects\\internet'],
@@ -10,11 +8,8 @@ a = Analysis(
         ('templates', 'templates'),
         ('static', 'static'),
         ('al-nazim-icon.svg', '.'),
-        ('_license_core.py', '.'),
-        ('pyarmor_runtime_000000\\__init__.py', 'pyarmor_runtime_000000'),
-        ('pyarmor_runtime_000000\\pyarmor_runtime.pyd', 'pyarmor_runtime_000000'),
     ],
-    hiddenimports=['pyarmor_runtime_000000'],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -19,6 +19,8 @@ from config import (
     MAX_FAILED_LOGINS,
     LOGIN_RATE_LIMIT_ATTEMPTS,
     LOGIN_RATE_LIMIT_WINDOW_MINUTES,
+    IS_RENDER,
+    RELAY_URL,
 )
 
 auth_bp = Blueprint("auth", __name__)
@@ -217,6 +219,34 @@ def register():
     password = data.get("password", "")
     phone = data.get("phone", "").strip()
     invite_code = data.get("invite_code", "").strip()
+
+    # ── Hybrid: local desktop EXE forwards the registration to the cloud ──
+    # When this app is NOT running on Render (local EXE / laptop), the pending
+    # registration must go to the cloud DB so the admin sees it on the website.
+    # The cloud (Render) itself processes registrations locally (no recursion).
+    if not IS_RENDER and RELAY_URL:
+        try:
+            import json as _json
+            import urllib.request as _ur
+            _url = RELAY_URL.rstrip("/") + "/register"
+            _req = _ur.Request(
+                _url,
+                data=_json.dumps({
+                    "full_name": full_name, "username": username,
+                    "password": password, "phone": phone,
+                    "invite_code": invite_code,
+                }).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur.urlopen(_req, timeout=20) as _resp:
+                _res = _json.loads(_resp.read().decode("utf-8", "replace"))
+            if _res.get("ok"):
+                return jsonify(_res)
+            return jsonify(_res), 400
+        except Exception as e:  # noqa: BLE001 — cloud unreachable → local fallback
+            import logging
+            logging.getLogger(__name__).warning("[HybridRegister] cloud forward failed: %s", e)
 
     if not full_name or not username or not password:
         return jsonify({"ok": False, "error": "الاسم واسم المستخدم وكلمة المرور مطلوبة"}), 400

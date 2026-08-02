@@ -143,8 +143,6 @@ def _tcp_probe(host, count=3, timeout=5):
                 last_error = f"فشل الاتصال بمنفذ {port}: {e}"
             else:
                 break
-        if latencies:
-            break
     if not latencies:
         return {
             "ok": False, "host": host,

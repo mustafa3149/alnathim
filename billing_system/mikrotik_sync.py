@@ -96,19 +96,25 @@ def sync_customer_debt(customer):
     return sync_mikrotik_status(username or "", should_enable)
 
 
-def sync_pull_router(dry_run=False):
-    """Pull all /ppp secret + profiles from the router and upsert into cloud DB.
+def sync_pull_router(dry_run=False, host=None, username=None, password=None,
+                     port=8728, ssl=False):
+    """Pull all /ppp secret + profiles from a MikroTik router and upsert to DB.
 
-    Hybrid pull (Local Laptop/PC): this function connects to the MikroTik router
-    on the LAN, reads every PPP secret (name, profile, remote-address, disabled),
-    auto-creates missing packages via `auto_mapper`, and upserts subscribers into
-    the local/cloud database.
+    Hybrid pull (Local Laptop/PC): connects to the MikroTik router (either the
+    credentials passed here, or the globally configured one), reads every PPP
+    secret (name, profile, remote-address, disabled), auto-creates missing
+    packages via `auto_mapper`, and upserts subscribers into the database.
 
     Note: For rendering, callers must first pull the local DB snapshot then push
     it to Render via `/api/sync/push` (implemented at the app layer).
 
     Args:
         dry_run: when True, log actions without writing to the database.
+        host: optional router IP/hostname (overrides the global config).
+        username: optional router API username (default 'admin').
+        password: optional router API password.
+        port: optional RouterOS API port (default 8728).
+        ssl: optional boolean, use SSL when True (default False).
 
     Returns:
         dict summary {profiles, secrets, packages_created, subscribers_upserted,
@@ -116,11 +122,22 @@ def sync_pull_router(dry_run=False):
     """
     import database as db
     from mikrotik_api.auto_mapper import ensure_package_from_profile
-    from mikrotik_api.config import load_mikrotik_config
 
-    cfg = load_mikrotik_config()
     summary = {"profiles": 0, "secrets": 0, "packages_created": 0,
                "subscribers_upserted": 0, "errors": []}
+
+    if host and str(host).strip():
+        cfg = {
+            "host": str(host).strip(),
+            "username": (username or "admin").strip(),
+            "password": password or "",
+            "port": int(port or 8728),
+            "ssl": bool(ssl),
+        }
+    else:
+        from mikrotik_api.config import load_mikrotik_config
+        cfg = load_mikrotik_config()
+
     if not cfg.get("host"):
         log.warning("[MikroTik Pull] Router not configured — no-op")
         return summary
@@ -131,6 +148,7 @@ def sync_pull_router(dry_run=False):
             username=cfg["username"],
             password=cfg["password"],
             port=cfg["port"],
+            ssl=bool(cfg.get("ssl", False)),
         ) as router:
             # 1) Pull profiles to auto-create packages.
             profiles = router.get_ppp_profiles()
@@ -167,7 +185,7 @@ def sync_pull_router(dry_run=False):
                 # Find existing customer by mikrotik_username.
                 existing = None
                 for c in db.list_active_customers():
-                    if (c.get("username") or "").strip() == username:
+                    if (_row_get(c, "username") or "").strip() == username:
                         existing = c
                         break
                 if existing is None:

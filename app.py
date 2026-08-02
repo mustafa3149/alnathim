@@ -18,6 +18,7 @@ from config import (
     LOCAL_DB_PATH,
     SESSION_LIFETIME_MINUTES,
     COOKIE_SECURE,
+    RELAY_URL,
 )
 import database as db
 from auth import auth_bp, login_required, admin_required, current_user_id
@@ -239,6 +240,7 @@ def inject_globals():
         "is_admin": g.is_admin,
         "is_agent": g.is_agent,
         "csrf_token": get_csrf_token(),
+        "relay_url": RELAY_URL,
     }
 
 
@@ -1808,7 +1810,12 @@ def api_network_links_list():
 @app.route("/api/network/links/add", methods=["POST"])
 @admin_required
 def api_network_links_add():
-    """Add a network link (sector/link hardware)."""
+    """Add a network link (sector/link hardware).
+
+    When the device is a MikroTik with IP + username + password, the router
+    subscribers are pulled automatically into the customers table and pushed
+    to the cloud — so the tower owner sees everything on any device instantly.
+    """
     data = request.get_json() or {}
     name = data.get("name", "").strip()
     if not name:
@@ -1828,13 +1835,38 @@ def api_network_links_add():
         community=(data.get("community", "public").strip() or "public"),
     )
     _audit("اضافة جهاز شبكة", "network_link", link_id, f"تم اضافة الجهاز {name}")
-    return jsonify({"ok": True, "link_id": link_id})
+
+    # ══ AUTO PULL: MikroTik device with credentials → pull + push instantly ══
+    pull_summary = {}
+    if link_type == "MikroTik" and ip and data.get("username", "").strip():
+        try:
+            from billing_system.mikrotik_sync import sync_pull_router, sync_push_cloud
+            pull_summary = sync_pull_router(
+                host=ip,
+                username=data.get("username", "").strip(),
+                password=data.get("password", ""),
+                port=int(data.get("port", 8728) or 8728),
+            )
+            if pull_summary.get("secrets", 0) > 0:
+                try:
+                    sync_push_cloud()
+                except Exception as e:  # noqa: BLE001
+                    log.warning("[AutoSync] Cloud push failed: %s", e)
+        except Exception as e:  # noqa: BLE001 — never break link creation
+            log.error("[AutoSync] Pull failed for %s: %s", ip, e)
+            pull_summary = {"errors": [str(e)]}
+
+    return jsonify({"ok": True, "link_id": link_id, "auto_pull": pull_summary})
 
 
 @app.route("/api/network/links/edit/<int:link_id>", methods=["POST"])
 @admin_required
 def api_network_links_edit(link_id):
-    """Edit a network link."""
+    """Edit a network link.
+
+    For a MikroTik device with IP + credentials, subscribers are pulled
+    automatically so the tower owner's data stays current on every device.
+    """
     link = db.get_network_link(link_id)
     if not link:
         return jsonify({"ok": False, "error": "الجهاز غير موجود"}), 404
@@ -1854,7 +1886,29 @@ def api_network_links_edit(link_id):
         community=(data.get("community", "public").strip() or "public"),
     )
     _audit("تعديل جهاز شبكة", "network_link", link_id, f"تم تعديل الجهاز {link['name']}")
-    return jsonify({"ok": True})
+
+    # ══ AUTO PULL: MikroTik device with credentials → pull + push instantly ══
+    pull_summary = {}
+    link_type = data.get("link_type", link["link_type"] or "").strip()
+    if link_type == "MikroTik" and ip and data.get("username", "").strip():
+        try:
+            from billing_system.mikrotik_sync import sync_pull_router, sync_push_cloud
+            pull_summary = sync_pull_router(
+                host=ip,
+                username=data.get("username", "").strip(),
+                password=data.get("password", ""),
+                port=int(data.get("port", 8728) or 8728),
+            )
+            if pull_summary.get("secrets", 0) > 0:
+                try:
+                    sync_push_cloud()
+                except Exception as e:  # noqa: BLE001
+                    log.warning("[AutoSync] Cloud push failed: %s", e)
+        except Exception as e:  # noqa: BLE001 — never break link editing
+            log.error("[AutoSync] Pull failed for %s: %s", ip, e)
+            pull_summary = {"errors": [str(e)]}
+
+    return jsonify({"ok": True, "auto_pull": pull_summary})
 
 
 @app.route("/api/network/links/delete/<int:link_id>", methods=["POST"])
@@ -1867,6 +1921,62 @@ def api_network_links_delete(link_id):
     db.delete_network_link(link_id)
     _audit("حذف جهاز شبكة", "network_link", link_id, f"تم حذف الجهاز {link['name']}")
     return jsonify({"ok": True})
+
+
+@app.route("/api/network/sync", methods=["POST"])
+@admin_required
+def api_network_sync():
+    """Pull subscribers from every saved MikroTik sector and push to cloud.
+
+    One-button sync: every stored network link of type MikroTik that has an
+    IP + username is pulled (PPP secrets → customers) and the cloud snapshot
+    is refreshed, so the tower owner sees the same data on any device.
+    """
+    from billing_system.mikrotik_sync import sync_pull_router, sync_push_cloud
+
+    links = db.list_network_links()
+    results = []
+    total_secrets = 0
+    errors = []
+    for link in links:
+        if (link.get("link_type") or "") != "MikroTik":
+            continue
+        ip = (link.get("ip") or "").strip()
+        username = (link.get("username") or "").strip()
+        if not ip or not username:
+            continue
+        try:
+            pull = sync_pull_router(
+                host=ip,
+                username=username,
+                password=link.get("password") or "",
+                port=int(link.get("port") or 8728),
+            )
+            total_secrets += pull.get("secrets", 0)
+            results.append({"name": link["name"], "ip": ip, **pull})
+        except Exception as e:  # noqa: BLE001 — one failure must not block others
+            log.error("[NetSync] %s (%s): %s", link.get("name"), ip, e)
+            errors.append(f"{link.get('name', ip)}: {e}")
+        break  # single primary MikroTik is the tower's PPPoE source
+
+    if total_secrets > 0:
+        try:
+            push = sync_push_cloud()
+        except Exception as e:  # noqa: BLE001
+            log.warning("[NetSync] Cloud push failed: %s", e)
+            push = {"ok": False, "error": str(e)}
+    else:
+        push = {}
+
+    _audit("سحب مشتركين من الميكروتيك", "network", None,
+           f"تم سحب {total_secrets} مشترك من الأجهزة")
+    return jsonify({
+        "ok": True,
+        "links": results,
+        "total_secrets": total_secrets,
+        "errors": errors,
+        "push": push,
+    })
 
 
 # ──────────────────────────────────────────────
@@ -2124,4 +2234,12 @@ def api_backup():
 # ──────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    import threading
+    import webbrowser
+
+    # فتح المتصفح تلقائياً بعد بدء الخادم (حتى لا يبدو البرنامج "لا يعمل")
+    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:5000")).start()
+    # debug=False مهم جداً للنسخة المجمعة (PyInstaller onefile):
+    # debug=True يفعّل auto-reloader الذي يفرز عملية فرعية ويجعل
+    # نافذة الـ EXE المجمع تختفي فوراً ولا تفتح شيئاً.
+    app.run(debug=False, host="0.0.0.0", port=5000)

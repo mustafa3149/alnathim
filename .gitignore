@@ -36,4 +36,5 @@ snmp_monitor/.env
 # ── Build artifacts ──────────────────────
 dist/
 build/
+installer/
 *.spec.bak

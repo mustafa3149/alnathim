@@ -52,10 +52,13 @@
   <div class="card card-pad">
     <div class="flex items-center justify-between mb-4">
       <div class="text-sm font-bold text-main">السيكتورات والروابط</div>
-      <button onclick="openLinkModal()" class="btn btn-sm">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        اضافة
-      </button>
+      <div class="flex gap-2">
+        <button onclick="syncAll()" id="syncAllBtn" class="btn btn-sm">سحب المشتركين</button>
+        <button onclick="openLinkModal()" class="btn btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          اضافة
+        </button>
+      </div>
     </div>
     <div class="space-y-2">
       {% for l in links %}
@@ -161,7 +164,7 @@
 {% endblock %}
 {% block extra_scripts %}
 <script>
-function setPingHost(host){ document.getElementById('pingHost').value = host; document.getElementById('pingHost').focus(); }
+function setPingHost(host){ document.getElementById('pingHost').value = host; }
 function showNetTab(tab){
   ['ping','sectors','snmp'].forEach(t=>{
     document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('hidden', t!==tab);
@@ -234,11 +237,40 @@ async function saveLink(){
   var id = document.getElementById('linkEditId').value;
   var data = {name: document.getElementById('linkName').value.trim(), link_type: document.getElementById('linkType').value, ip: document.getElementById('linkIp').value.trim(), location: document.getElementById('linkLocation').value.trim(), notes: document.getElementById('linkNotes').value.trim(), username: document.getElementById('linkUsername').value.trim(), password: document.getElementById('linkPassword').value.trim(), community: document.getElementById('linkCommunity').value.trim()||'public'};
   if(!data.name){ showToast('اسم الجهاز مطلوب', 'error'); return; }
+  var btn = document.querySelector('#linkModal .btn-primary');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ جاري الحفظ والسحب...'; }
   var url = id ? '/api/network/links/edit/' + id : '/api/network/links/add';
-  var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
-  var j = await r.json();
-  if(j.ok){ showToast(id?'تم التعديل':'تمت الاضافة'); document.getElementById('linkModal').style.display='none'; setTimeout(()=>location.reload(), 500); }
-  else { showToast(j.error || 'خطأ', 'error'); }
+  try{
+    var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    var j = await r.json();
+    if(j.ok){
+      var msg = (id?'تم التعديل':'تمت الاضافة');
+      if(j.auto_pull){
+        var s = j.auto_pull.secrets || 0;
+        if(s > 0){ msg += ' — تم سحب '+s+' مشترك بنجاح ✔'; }
+        else if(j.auto_pull.errors && j.auto_pull.errors.length){ msg += ' — تعذر السحب: '+j.auto_pull.errors[0]; }
+        else if(j.auto_pull.secrets !== undefined){ msg += ' — لا يوجد مشتركين على الراوتر'; }
+      }
+      showToast(msg, s > 0 ? 'success' : (j.auto_pull && j.auto_pull.errors && j.auto_pull.errors.length ? 'error' : ''));
+      document.getElementById('linkModal').style.display='none';
+      setTimeout(()=>location.reload(), 600);
+    } else { showToast(j.error || 'خطأ', 'error'); }
+  } catch(e){ showToast('خطأ في الاتصال', 'error'); }
+  if(btn){ btn.disabled = false; btn.textContent = 'حفظ'; }
+}
+async function syncAll(){
+  var btn = document.getElementById('syncAllBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ جاري السحب...'; }
+  try{
+    var r = await fetch('/api/network/sync', {method:'POST', headers:{'Content-Type':'application/json'}});
+    var j = await r.json();
+    if(j.ok){
+      if(j.total_secrets > 0){ showToast('تم سحب '+j.total_secrets+' مشترك من الميكروتيك ✔'); }
+      else if(j.errors && j.errors.length){ showToast('تعذر السحب: '+j.errors[0], 'error'); }
+      else { showToast('لا يوجد مشتركين — تأكد من اعدادات الميكروتيك'); }
+    } else { showToast(j.error || 'فشل السحب', 'error'); }
+  } catch(e){ showToast('خطأ في الاتصال', 'error'); }
+  if(btn){ btn.disabled = false; btn.textContent = 'سحب المشتركين'; }
 }
 function deleteLink(btn){
   var row = btn.closest('[data-id]');

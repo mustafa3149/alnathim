@@ -7,6 +7,7 @@ Reads configuration from environment variables (.env file).
 """
 
 import os
+import secrets
 from dotenv import load_dotenv
 
 # Load .env if present (local development; Render uses real env vars)
@@ -35,10 +36,42 @@ SQLITE_PATH = _clean(os.getenv("SQLITE_PATH"), "")
 LOCAL_DB_PATH = SQLITE_PATH or os.path.join(LOCAL_DB_DIR, "mawlidati.db")
 
 IS_POSTGRES = False  # This build is SQLite-only; DATABASE_URL is not used.
+# True when hosted on Render (Render sets RENDER=true automatically in every
+# service env). The local desktop EXE does NOT have it → IS_RENDER=False →
+# registration requests are forwarded to RELAY_URL so the admin sees them
+# on the cloud immediately.
+IS_RENDER = os.getenv("RENDER", "").strip().lower() in ("1", "true", "yes", "on")
 
 # ── Flask ─────────────────────────────────────────────────
-DEFAULT_SECRET_KEY = "al-nathim-dev-secret-key-change-in-production"
-SECRET_KEY = _clean(os.getenv("SECRET_KEY"), DEFAULT_SECRET_KEY)
+# SECRET_KEY:
+#   1) Environment override (Render) wins — set it there to a random value.
+#   2) Otherwise (local EXE/desktop) we generate a random key ONCE and persist
+#      it in %APPDATA%\AlNathim\secret.key. This guarantees:
+#        - sessions survive restarts (key stays stable),
+#        - every installation has its own unique key (no shared/public key,
+#          no forged/leftover admin sessions from another device/tester).
+_DEFAULT_SECRET_KEY = "al-nathim-dev-secret-key-change-in-production"
+_env_secret = _clean(os.getenv("SECRET_KEY"), "")
+if _env_secret:
+    SECRET_KEY = _env_secret
+else:
+    _secret_file = os.path.join(LOCAL_DB_DIR, "secret.key")
+    if os.path.exists(_secret_file):
+        try:
+            with open(_secret_file, "r", encoding="utf-8") as _sf:
+                _stored = _sf.read().strip()
+            SECRET_KEY = _stored if _stored else _DEFAULT_SECRET_KEY
+        except OSError:
+            SECRET_KEY = _DEFAULT_SECRET_KEY
+    else:
+        SECRET_KEY = secrets.token_hex(32)
+        try:
+            os.makedirs(LOCAL_DB_DIR, exist_ok=True)
+            with open(_secret_file, "w", encoding="utf-8") as _sf:
+                _sf.write(SECRET_KEY)
+        except OSError:
+            pass
+del _env_secret
 
 # ── SuperAdmin (first-run seed) ───────────────────────────
 DEFAULT_SUPERADMIN_PASSWORD = "admin123"
@@ -86,7 +119,7 @@ def _assert_secure():
         return  # local/SQLite build is fine with defaults
 
     problems = []
-    if SECRET_KEY == DEFAULT_SECRET_KEY:
+    if SECRET_KEY == _DEFAULT_SECRET_KEY:
         problems.append("SECRET_KEY is still the publicly-known default key.")
     if SUPERADMIN_PASSWORD == DEFAULT_SUPERADMIN_PASSWORD:
         problems.append("SUPERADMIN_PASSWORD is still the default 'admin123'.")
