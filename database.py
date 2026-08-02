@@ -138,7 +138,8 @@ CREATE TABLE IF NOT EXISTS users (
     invite_code    TEXT DEFAULT '',
     invite_uses    INTEGER NOT NULL DEFAULT 0,
     invite_max_uses INTEGER NOT NULL DEFAULT 0,
-    failed_logins  INTEGER NOT NULL DEFAULT 0
+    failed_logins  INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS packages (
@@ -583,6 +584,7 @@ def init_db():
             ("invite_uses", "ALTER TABLE users ADD COLUMN invite_uses INTEGER NOT NULL DEFAULT 0"),
             ("invite_max_uses", "ALTER TABLE users ADD COLUMN invite_max_uses INTEGER NOT NULL DEFAULT 0"),
             ("failed_logins", "ALTER TABLE users ADD COLUMN failed_logins INTEGER NOT NULL DEFAULT 0"),
+            ("created_at", "ALTER TABLE users ADD COLUMN created_at TEXT DEFAULT (datetime('now','localtime'))"),
         ):
             if col not in ucols:
                 db = get_db()

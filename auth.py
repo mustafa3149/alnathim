@@ -414,7 +414,9 @@ def api_admin_registrations():
                 "full_name": u["full_name"],
                 "username": u["username"],
                 "phone": u["phone"],
-                "created_at": u["created_at"] or "",
+                # created_at is added via schema migration; older DBs (or
+                # legacy rows) may lack the column — read defensively.
+                "created_at": (u["created_at"] if "created_at" in u.keys() else "") or "",
             }
             for u in users
         ],
