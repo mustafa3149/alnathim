@@ -1,6 +1,6 @@
 # 🚀 Render Cloud Deployment — Al-Nathim (الناظم)
 
-One-time setup. This app is **SQLite-based** and keeps its database on a [Render Persistent Disk](https://render.com/docs/disks). No external database service is required.
+One-time setup. The app is **SQLite-based**. On Render's **free plan** the recommended setup is the free **Turso cloud database** — your data survives every restart, redeploy, and monthly hour-reset with no paid disk. (A paid [Render Persistent Disk](https://render.com/docs/disks) is the alternative if you prefer self-managed storage.)
 
 ## 1. Create the Web Service
 
@@ -28,6 +28,9 @@ One-time setup. This app is **SQLite-based** and keeps its database on a [Render
 | `LOGIN_RATE_LIMIT_WINDOW_MINUTES` | `5` — the window the budget applies to |
 | `COOKIE_SECURE` | `true` on Render (HTTPS) — session cookie only over HTTPS |
 
+| `TURSO_DATABASE_URL` | `libsql://YOUR-DB-YOUR-ORG.turso.io` — **free cloud DB; set both Turso vars and skip the disk entirely** |
+| `TURSO_AUTH_TOKEN` | your Turso DB token (create in the Turso dashboard → Database → Connect) |
+
 > 💡 `COOKIE_SECURE` auto-defaults to `true` in production (when `SQLITE_PATH` or `DATABASE_URL` is set). Leave `false` only for local HTTP development.
 
 ## 2. After deployment
@@ -39,12 +42,13 @@ One-time setup. This app is **SQLite-based** and keeps its database on a [Render
   - **منح وصول** — grant timed access (days/hours/specific date)
   - **رموز الدخول** — generate invite/entry codes (activate accounts instantly)
 - Without an invite code, new self-registrations go **pending** until you approve them in the Admin Center.
-- **Data survives redeploys** because the DB lives on the persistent disk (`/var/data/mawlidati.db`).
+- **Data survives redeploys** because it lives in your Turso database (or on the persistent disk if you used one).
 - Before going public: change the admin password, consider `ALLOW_OPEN_REGISTRATION=false`, and set a strong `SECRET_KEY`.
 
 ### Data & backups
 
-- **Back up** the disk: **More → نسخة احتياطية** downloads `mawlidati.db` directly.
+- **Back up** with the in-app **نسخ احتياطي** button (`/api/backup`): with Turso it downloads a full `.sql` dump of the whole cloud DB; locally it downloads `mawlidati.db`.
+- Turso free plan includes **1-day point-in-time restore** — you can roll the DB back to any point in the last 24h from the Turso dashboard.
 - Snapshot disk & resources are available in the Render dashboard (Disks → Snapshot).
 - Your local Windows DB (`%APPDATA%\AlNathim\mawlidati.db`) is separate — production starts fresh.
 

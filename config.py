@@ -35,6 +35,17 @@ LOCAL_DB_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), 
 SQLITE_PATH = _clean(os.getenv("SQLITE_PATH"), "")
 LOCAL_DB_PATH = SQLITE_PATH or os.path.join(LOCAL_DB_DIR, "mawlidati.db")
 
+# ── Turso (hosted libSQL) — free-tier cloud durability ─────────
+# When BOTH variables are present the main database connects to the
+# hosted Turso database instead of the local SQLite file (survives every
+# Render restart / redeploy for free). Set them in Render's environment
+# (cloud) or in .env (desktop EXE) to use Turso; leave empty to stay on
+# the local SQLite file — the desktop launcher keeps working offline.
+TURSO_DATABASE_URL = _clean(os.getenv("TURSO_DATABASE_URL"), "")
+TURSO_AUTH_TOKEN = _clean(os.getenv("TURSO_AUTH_TOKEN"), "")
+USE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+
+
 IS_POSTGRES = False  # This build is SQLite-only; DATABASE_URL is not used.
 # True when hosted on Render (Render sets RENDER=true automatically in every
 # service env). The local desktop EXE does NOT have it → IS_RENDER=False →

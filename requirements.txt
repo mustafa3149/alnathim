@@ -15,3 +15,10 @@ uvicorn[standard]==0.24.0
 # Phase 1/2 dependencies imported by the gateway at module load
 routeros_api==0.21.0
 pysnmp==7.1.28
+# ── Turso (hosted libSQL) — cloud database for Render ──
+# database.py connects to Turso via its SQL-over-HTTP endpoint using Python
+# STDLIB only (urllib/json) — NO third-party package is required. We
+# deliberately avoid libsql-experimental because it ships as a Rust extension
+# without Windows wheels and fails to install (would break the Render build).
+# The local desktop EXE stays on the local SQLite file.
+

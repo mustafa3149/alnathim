@@ -18,6 +18,7 @@ a = Analysis(
     hiddenimports=[
         'auth',
         'database',
+        'turso_db',
         'billing_system',
         'billing_system.billing_logic',
         'billing_system.database',

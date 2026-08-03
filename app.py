@@ -11,11 +11,14 @@ import os
 import secrets
 from datetime import datetime, timedelta, date
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, g, abort
+from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, g, abort
 
 from config import (
     SECRET_KEY,
     LOCAL_DB_PATH,
+    TURSO_DATABASE_URL,
+    TURSO_AUTH_TOKEN,
+    USE_TURSO,
     SESSION_LIFETIME_MINUTES,
     COOKIE_SECURE,
     RELAY_URL,
@@ -43,6 +46,20 @@ app.register_blueprint(auth_bp)
 
 # Initialize DB + seed defaults on startup
 db.init_db()
+
+# ── STARTUP DB-MODE INDICATOR (check Render logs for this line) ──
+if db.USE_TURSO:
+    log.info("DB backend: TURSO (hosted libSQL) — accounts are durable")
+    try:
+        print('✅ AL-NATHIM: Connected to TURSO DB successfully', flush=True)
+    except Exception:
+        pass
+else:
+    log.info("DB backend: LOCAL SQLITE (ephemeral on Render free plan!)")
+    try:
+        print('⚠️ AL-NATHIM: Falling back to LOCAL SQLITE', flush=True)
+    except Exception:
+        pass
 
 
 # ──────────────────────────────────────────────
@@ -2311,14 +2328,26 @@ def api_export_payments_excel():
 @app.route("/api/backup")
 @admin_required
 def api_backup():
-    """Download the SQLite database file (admin only)."""
+    """Download a full database backup (admin only)."""
+    stamp = now_dt().strftime("%Y-%m-%d")
+    if USE_TURSO:
+        from turso_db import dump_database
+        dump = dump_database(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+        if dump is None:
+            return jsonify({"ok": False, "error": "تعذر إنشاء النسخة الاحتياطية من السحابة"}), 500
+        _audit("نسخ احتياطي", "settings", None, "تم تحميل النسخة الاحتياطية لقاعدة البيانات (سحابة)")
+        return Response(
+            dump,
+            mimetype="application/sql",
+            headers={"Content-Disposition": f'attachment; filename="isp_backup_{stamp}.sql"'},
+        )
     if not os.path.exists(LOCAL_DB_PATH):
         return jsonify({"ok": False, "error": "قاعدة البيانات غير موجودة"}), 404
     _audit("نسخ احتياطي", "settings", None, "تم تحميل النسخة الاحتياطية لقاعدة البيانات")
     return send_file(
         LOCAL_DB_PATH,
         as_attachment=True,
-        download_name=f"isp_backup_{now_dt().strftime('%Y-%m-%d')}.db",
+        download_name=f"isp_backup_{stamp}.db",
         mimetype="application/x-sqlite3",
     )
 
@@ -2328,12 +2357,43 @@ def api_backup():
 # ──────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import socket
+    import sys
     import threading
     import webbrowser
 
+    # Pick a free port instead of hard-coding 5000 (prevents silent crash
+    # when another Al-Nathim instance is already running on port 5000).
+    port = 5000
+    for candidate in range(5000, 5015):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _probe:
+                _probe.bind(("127.0.0.1", candidate))
+            port = candidate
+            break
+        except OSError:
+            continue
+
     # فتح المتصفح تلقائياً بعد بدء الخادم (حتى لا يبدو البرنامج "لا يعمل")
-    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:5000")).start()
+    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:{0}".format(port))).start()
     # debug=False مهم جداً للنسخة المجمعة (PyInstaller onefile):
     # debug=True يفعّل auto-reloader الذي يفرز عملية فرعية ويجعل
     # نافذة الـ EXE المجمع تختفي فوراً ولا تفتح شيئاً.
-    app.run(debug=False, host="0.0.0.0", port=5000)
+    try:
+        app.run(debug=False, host="0.0.0.0", port=port)
+    except Exception as e:  # console=False hides errors -> show a dialog
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            _root = tk.Tk()
+            _root.withdraw()
+            messagebox.showerror(
+                "\u0627\u0644\u0646\u0627\u0638\u0645 \u2014 \u062e\u0637\u0623 \u0641\u064a \u0627\u0644\u062a\u0634\u063a\u064a\u0644",
+                "\u062a\u0639\u0630\u0631 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u062e\u0627\u062f\u0645:\n"
+                + str(e)
+                + "\n\n\u0623\u063a\u0644\u0642 \u0623\u064a \u0646\u0633\u062e\u0629 \u0623\u062e\u0631\u0649 \u0645\u0646 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u062b\u0645 \u0623\u0639\u062f \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629.",
+            )
+            _root.destroy()
+        except Exception:
+            print("FATAL:", e, file=sys.stderr)
+        raise

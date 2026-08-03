@@ -241,7 +241,7 @@ def login():
             )
             import urllib.error as _uerr
             try:
-                with _ur.urlopen(_req, timeout=45) as _resp:
+                with _ur.urlopen(_req, timeout=90) as _resp:
                     _res = _json.loads(_resp.read().decode("utf-8", "replace"))
             except _uerr.HTTPError as _e:
                 # Non-2xx still carries a JSON verdict (pending/suspended/
@@ -502,7 +502,7 @@ def api_auth_check_status():
             )
             import urllib.error as _uerr
             try:
-                with _ur.urlopen(_req, timeout=45) as _resp:
+                with _ur.urlopen(_req, timeout=90) as _resp:
                     _res = _json.loads(_resp.read().decode("utf-8", "replace"))
             except _uerr.HTTPError as _e:
                 # Non-2xx still carries a JSON verdict (pending/suspended/
@@ -865,7 +865,7 @@ def register():
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with _ur.urlopen(_req, timeout=20) as _resp:
+            with _ur.urlopen(_req, timeout=90) as _resp:
                 _res = _json.loads(_resp.read().decode("utf-8", "replace"))
             if _res.get("ok"):
                 return jsonify(_res)

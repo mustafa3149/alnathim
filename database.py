@@ -19,7 +19,14 @@ from datetime import date, datetime
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from config import LOCAL_DB_PATH, SUPERADMIN_USERNAME, SUPERADMIN_PASSWORD
+from config import (
+    LOCAL_DB_PATH,
+    SUPERADMIN_USERNAME,
+    SUPERADMIN_PASSWORD,
+    TURSO_DATABASE_URL,
+    TURSO_AUTH_TOKEN,
+    USE_TURSO,
+)
 
 # ── Defaults ────────────────────────────────────────────────
 
@@ -55,12 +62,16 @@ DATETIME_DB = "%Y-%m-%d %H:%M"
 # ── Connection ──────────────────────────────────────────────
 
 def get_db():
-    """Open a SQLite connection to mawlidati.db.
+    """Open a database connection (Turso cloud DB or local SQLite file).
 
     Returns:
+        A TursoConnection (hosted libSQL) when USE_TURSO is set, otherwise a
         sqlite3.Connection with Row factory and foreign keys enabled.
     """
     os.makedirs(os.path.dirname(LOCAL_DB_PATH) or ".", exist_ok=True)
+    if USE_TURSO:
+        from turso_db import connect
+        return connect(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
     conn = sqlite3.connect(LOCAL_DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -342,7 +353,7 @@ def _migrate_legacy_business_tables():
         # Open a dedicated connection WITHOUT foreign_keys so the SQLite
         # rebuild recipe (CREATE -> COPY -> DROP -> RENAME) can drop the old
         # table even though child tables still reference it by FK.
-        db = sqlite3.connect(LOCAL_DB_PATH)
+        db = get_db()
         db.row_factory = sqlite3.Row
         try:
             db.execute("PRAGMA foreign_keys = OFF")
@@ -528,7 +539,9 @@ def _migrate_legacy_business_tables():
         tcols = _table_cols(table)
         if not tcols:
             continue  # table doesn't exist yet (fresh DB) — nothing to migrate
-        db = sqlite3.connect(LOCAL_DB_PATH)
+        if "owner_id" not in tcols:
+            continue  # already migrated to the current schema — leave untouched
+        db = get_db()
         db.row_factory = sqlite3.Row
         try:
             db.execute("PRAGMA foreign_keys = OFF")
