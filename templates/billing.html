@@ -4,22 +4,22 @@
 
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
     <div>
-        <h2 style="font-size:20px;font-weight:700;color:#1a1a1a;margin:0;">سجل الفواتير</h2>
-        <p style="font-size:12px;color:#777;margin-top:2px;">سجل الفواتير — جميع الفواتير المولدة تلقائياً عند تجديد كل مشترك</p>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0;">سجل الفواتير</h2>
+        <p style="font-size:12px;color:var(--muted);margin-top:2px;">سجل الفواتير — جميع الفواتير المولدة تلقائياً عند تجديد كل مشترك</p>
     </div>
 </div>
 
 <div class="card" style="margin-bottom:12px;">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;padding:10px 12px;">
         <div>
-            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">الشهر</label>
+            <label style="font-size:10px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px;">الشهر</label>
             <select id="monthSelect" onchange="changeMonthYear()" class="input" style="width:100px;font-size:12px;">
                 {% set months=['يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'] %}
                 {% for i in range(1,13) %}<option value="{{ i }}" {% if month==i %}selected{% endif %}>{{ months[i-1] }}</option>{% endfor %}
             </select>
         </div>
         <div>
-            <label style="font-size:10px;font-weight:600;color:#777;display:block;margin-bottom:3px;">السنة</label>
+            <label style="font-size:10px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px;">السنة</label>
             <select id="yearSelect" onchange="changeMonthYear()" class="input" style="width:80px;font-size:12px;">
                 {% for y in range(2024,2031) %}<option value="{{ y }}" {% if year==y %}selected{% endif %}>{{ y }}</option>{% endfor %}
             </select>
@@ -29,7 +29,7 @@
             <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:#aaa;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </div>
         <button onclick="searchBill()" class="btn btn-primary btn-sm">بحث</button>
-        <span style="font-size:11px;color:#888;margin-right:auto;">يتم توليد الفواتير تلقائياً عند تجديد كل مشترك</span>
+        <span style="font-size:11px;color:var(--faint);margin-right:auto;">يتم توليد الفواتير تلقائياً عند تجديد كل مشترك</span>
     </div>
 </div>
 
@@ -47,7 +47,7 @@
                 <thead><tr><th>المشترك</th><th style="text-align:center;">الباقة</th><th style="text-align:center;">السعر</th><th style="text-align:center;">الاجمالي</th><th style="text-align:center;">المدفوع</th><th style="text-align:center;">المتبقي</th><th style="text-align:center;">الحالة</th></tr></thead>
                 <tbody>
                 {% for inv in invoices %}
-                <tr{% if inv.is_paid %} style="background:#f0fdf4;"{% endif %}>
+                <tr{% if inv.is_paid %} style="background:var(--surface-2);"{% endif %}>
                     <td style="font-weight:600;cursor:pointer;" onclick="openDetailModal({{ inv.cust_id }},'{{ inv.customer_name }}')" title="كشف حساب">{{ inv.customer_name }}</td>
                     <td style="text-align:center;">{{ inv.package_name or '—' }}</td>
                     <td style="text-align:center;" class="price-cell">{{ inv.package_price }}</td>
@@ -123,9 +123,9 @@
 <style>
 .desktop-table{display:block;}
 .mobile-cards{display:none;}
-.paid-bg{background:#f0fdf4 !important;}
-.m-card{border:1px solid #e5e5e5;background:#fff;padding:12px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:8px;display:flex;flex-direction:column;gap:6px;}
-.m-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.paid-bg{background:var(--surface-2) !important;}
+.m-card{border:1px solid var(--border);background:var(--surface);padding:12px;border-radius:16px;box-shadow:none;margin-bottom:8px;display:flex;flex-direction:column;gap:6px;color:var(--text);}
+.m-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text);}
 .m-actions{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
 .m-actions .btn-sm{padding:10px 14px;font-size:12px;min-height:40px;}
 @media (max-width:767px){.desktop-table{display:none !important;}.mobile-cards{display:block;}}

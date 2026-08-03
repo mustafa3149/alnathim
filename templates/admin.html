@@ -57,6 +57,10 @@
 
 <!-- ═══ Members tab ═══ -->
 <section id="view-members" class="hidden">
+  <div class="flex items-center justify-between mb-3">
+    <div class="text-sm font-bold text-main">الأعضاء</div>
+    <button onclick="resetAllUsers()" class="btn btn-sm btn-danger">إعادة تعيين المستخدمين (حذف الوكلاء)</button>
+  </div>
   <div class="card overflow-hidden">
     <div class="overflow-x-auto">
       <table>
@@ -167,7 +171,12 @@
           <option value="forever">دائم</option>
           <option value="30d">٣٠ يوم</option>
           <option value="day">يوم واحد</option>
+          <option value="custom">مخصص (اختر تاريخ)</option>
         </select>
+      </div>
+      <div id="pcCustomExpiryWrap" class="hidden">
+        <label class="f-label">حتى تاريخ (اختر من التقويم)</label>
+        <input type="datetime-local" id="pcExpires" class="input" dir="ltr">
       </div>
     </div>
     <button onclick="generatePcKey()" class="btn btn-primary w-full py-3 mt-6">توليد كود التفعيل</button>
@@ -330,6 +339,16 @@ function toggleStatus(id, action){
   });
 }
 
+/* ── إعادة تعيين المستخدمين (حذف كل الوكلاء — يبقى المدير) ── */
+function resetAllUsers(){
+  showConfirm('تحذير: سيتم حذف جميع حسابات الوكلاء نهائياً (حساب المدير يبقى). هل أنت متأكد؟', function(){
+    fetch('/api/admin/users/reset-all', {method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      showToast(d.ok ? ('تم حذف ' + (d.deleted || 0) + ' حساب وكيل') : (d.error || 'خطأ'), d.ok ? '' : 'error');
+      loadAll();
+    });
+  });
+}
+
 /* ── Access ── */
 function renderAccessForm(){
   var sel = document.getElementById('accessUser');
@@ -471,7 +490,13 @@ function generatePcKey(){
   var dur = document.getElementById('pcDuration').value;
   if(!hwid){ showToast('أدخل معرّف الحاسبة HWID', 'error'); return; }
   if(!uid){ showToast('اختر الحساب المستهدف', 'error'); return; }
-  fetch('/api/admin/activate-pc', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({hwid:hwid, username:uid, duration:dur})})
+  var body = {hwid:hwid, username:uid, duration:dur};
+  if(dur === 'custom'){
+    var exp = document.getElementById('pcExpires').value;
+    if(!exp){ showToast('اختر تاريخ الانتهاء من التقويم', 'error'); return; }
+    body.expires_at = exp;
+  }
+  fetch('/api/admin/activate-pc', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
     .then(function(r){return r.json();}).then(function(d){
       if(d.ok){
         document.getElementById('pcKeyText').textContent = d.activation_key;
@@ -482,6 +507,12 @@ function generatePcKey(){
       } else showToast(d.error || 'خطأ', 'error');
     });
 }
+document.addEventListener('change', function(e){
+  if(e.target && e.target.id === 'pcDuration'){
+    var wrap = document.getElementById('pcCustomExpiryWrap');
+    if(wrap) wrap.classList.toggle('hidden', e.target.value !== 'custom');
+  }
+});
 function copyPcKey(){
   var code = document.getElementById('pcKeyText').textContent;
   if(navigator.clipboard){ navigator.clipboard.writeText(code).then(function(){ showToast('تم نسخ الكود'); }); }

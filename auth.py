@@ -578,6 +578,7 @@ def api_admin_activate_pc():
     hwid = (data.get("hwid") or "").strip()
     username = (data.get("username") or "").strip()
     duration = (data.get("duration") or "forever").strip()
+    custom_expires = (data.get("expires_at") or "").strip()
 
     if not hwid or not username:
         return jsonify({"ok": False, "error": "أدخل معرّف الجهاز واسم الحساب"}), 400
@@ -589,7 +590,22 @@ def api_admin_activate_pc():
     # Compute the activation expiry.
     from datetime import timedelta
     expires_at = None  # permanent
-    if duration == "day":
+    if duration == "custom" and custom_expires:
+        # Date picked from the calendar — accept "YYYY-MM-DDTHH:MM" (datetime-local)
+        # or "YYYY-MM-DD HH:MM" / "YYYY-MM-DD".
+        try:
+            dt = datetime.strptime(custom_expires, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            try:
+                dt = datetime.strptime(custom_expires, "%Y-%m-%d %H:%M")
+            except ValueError:
+                try:
+                    dt = datetime.strptime(custom_expires, "%Y-%m-%d")
+                    dt = dt.replace(hour=23, minute=59)
+                except ValueError:
+                    return jsonify({"ok": False, "error": "تاريخ غير صالح"}), 400
+        expires_at = dt.strftime(db.DATETIME_DB)
+    elif duration == "day":
         expires_at = (datetime.now() + timedelta(days=1)).strftime(db.DATETIME_DB)
     elif duration == "30d":
         expires_at = (datetime.now() + timedelta(days=30)).strftime(db.DATETIME_DB)
@@ -612,6 +628,8 @@ def api_admin_activate_pc():
         expiry_label = "يوم واحد"
     elif duration == "30d":
         expiry_label = "٣٠ يوم"
+    elif duration == "custom" and expires_at:
+        expiry_label = "حتى " + expires_at
     else:
         expiry_label = "دائم"
     return jsonify({
@@ -856,6 +874,26 @@ def api_users_delete(user_id):
 
     db.delete_user(user_id)
     return jsonify({"ok": True, "message": "تم حذف المستخدم"})
+
+
+@auth_bp.route("/api/admin/users/reset-all", methods=["POST"])
+@admin_required
+def api_admin_reset_all_users():
+    """Delete every non-admin user (agents) — server reset keeping the admin.
+
+    Warning: permanently removes all agent accounts. Registered devices and
+    all non-admin access are cleared. The admin (owner) account survives.
+    """
+    deleted = db.delete_all_agents()
+    db.log_action(
+        user_id=session.get("user_id"),
+        username=session.get("user_name") or "",
+        action="إعادة تعيين المستخدمين",
+        target_type="users",
+        target_id=None,
+        details=f"تم حذف {deleted} حساب غير مدير (وكلاء) — بقي حساب المدير",
+    )
+    return jsonify({"ok": True, "deleted": deleted, "message": "تم حذف جميع الوكلاء"})
 
 
 @auth_bp.route("/api/change-password", methods=["POST"])

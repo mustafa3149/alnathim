@@ -578,7 +578,7 @@ def resolve_package_id(package_name):
 
 
 @app.route("/api/customers/add", methods=["POST"])
-@admin_required
+@login_required
 def api_customer_add():
     data = request.get_json() or {}
     name = data.get("name", "").strip()
@@ -657,7 +657,7 @@ def api_customer_add():
 
 
 @app.route("/api/customers/edit/<int:customer_id>", methods=["POST"])
-@admin_required
+@login_required
 def api_customer_edit(customer_id):
     data = request.get_json() or {}
     customer = db.get_customer(customer_id)
@@ -698,7 +698,7 @@ def api_customer_edit(customer_id):
 
 
 @app.route("/api/customers/toggle/<int:customer_id>", methods=["POST"])
-@admin_required
+@login_required
 def api_customer_toggle(customer_id):
     customer = db.get_customer(customer_id)
     if not customer:
@@ -709,7 +709,7 @@ def api_customer_toggle(customer_id):
 
 
 @app.route("/api/customers/status/<int:customer_id>", methods=["POST"])
-@admin_required
+@login_required
 def api_customer_status(customer_id):
     data = request.get_json() or {}
     new_status = data.get("status", "active")
@@ -794,7 +794,7 @@ def api_customer_renew(customer_id):
 
 
 @app.route("/api/customers/delete/<int:customer_id>", methods=["POST"])
-@admin_required
+@login_required
 def api_customer_delete(customer_id):
     customer = db.get_customer(customer_id)
     if not customer:
@@ -1294,6 +1294,29 @@ def api_ticket_add():
     return jsonify({"ok": True})
 
 
+@app.route("/api/tickets/edit/<int:ticket_id>", methods=["POST"])
+@login_required
+def api_ticket_edit(ticket_id):
+    """Edit a maintenance ticket (customer + description)."""
+    ticket = db.get_ticket(ticket_id)
+    if not ticket:
+        return jsonify({"ok": False, "error": "طلب الصيانة غير موجود"}), 404
+
+    data = request.get_json() or {}
+    customer_id = data.get("customer_id")
+    issue = data.get("issue_description", "").strip()
+    if not customer_id:
+        return jsonify({"ok": False, "error": "يرجى اختيار المشترك"}), 400
+    if not issue:
+        return jsonify({"ok": False, "error": "يرجى كتابة وصف المشكلة"}), 400
+    if not db.get_customer(customer_id):
+        return jsonify({"ok": False, "error": "المشترك غير موجود"}), 404
+
+    db.update_ticket(ticket_id, customer_id, issue)
+    _audit("تعديل طلب صيانة", "ticket", ticket_id, f"تم تعديل طلب الصيانة")
+    return jsonify({"ok": True})
+
+
 @app.route("/api/tickets/resolve/<int:ticket_id>", methods=["POST"])
 @login_required
 def api_ticket_resolve(ticket_id):
@@ -1403,9 +1426,9 @@ def api_isp_info_update():
 # ──────────────────────────────────────────────
 
 @app.route("/network")
-@admin_required
+@login_required
 def network_page():
-    """Network Tools & Tower Management page (admin only)."""
+    """Network Tools & Tower Management page."""
     links = db.list_network_links()
     settings = db.get_settings()
     return render_template("network.html", links=links, settings=settings)
@@ -1502,7 +1525,7 @@ def api_tower_connection_test():
 
 
 @app.route("/api/network/ping", methods=["POST"])
-@admin_required
+@login_required
 def api_network_ping():
     """Run a live ICMP ping against a target IP/host."""
     data = request.get_json() or {}
@@ -1741,7 +1764,7 @@ def api_agent_signal():
 
 
 @app.route("/api/network/signal", methods=["POST"])
-@admin_required
+@login_required
 def api_network_signal():
     """Fetch the live signal of any Nano/optical device via SNMP.
 
@@ -1838,7 +1861,7 @@ def api_customer_signal(customer_id):
 # ── Network Links CRUD (sectors & links) ────────────────────
 
 @app.route("/api/network/links")
-@admin_required
+@login_required
 def api_network_links_list():
     """List all network links (sectors/links)."""
     links = db.list_network_links()
@@ -1858,7 +1881,7 @@ def api_network_links_list():
 
 
 @app.route("/api/network/links/add", methods=["POST"])
-@admin_required
+@login_required
 def api_network_links_add():
     """Add a network link (sector/link hardware).
 
@@ -1910,7 +1933,7 @@ def api_network_links_add():
 
 
 @app.route("/api/network/links/edit/<int:link_id>", methods=["POST"])
-@admin_required
+@login_required
 def api_network_links_edit(link_id):
     """Edit a network link.
 
@@ -1962,7 +1985,7 @@ def api_network_links_edit(link_id):
 
 
 @app.route("/api/network/links/delete/<int:link_id>", methods=["POST"])
-@admin_required
+@login_required
 def api_network_links_delete(link_id):
     """Delete a network link."""
     link = db.get_network_link(link_id)
@@ -1974,7 +1997,7 @@ def api_network_links_delete(link_id):
 
 
 @app.route("/api/network/sync", methods=["POST"])
-@admin_required
+@login_required
 def api_network_sync():
     """Pull subscribers from every saved MikroTik sector and push to cloud.
 
@@ -2142,126 +2165,144 @@ def _write_sheet(ws, title, headers, rows, styles):
 @app.route("/api/export/excel")
 @login_required
 def api_export_excel():
-    from openpyxl import Workbook
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        return jsonify({"ok": False, "error": "مكتبة Excel غير مثبتة — شغّل: pip install openpyxl"}), 500
 
-    customers = db.export_customers()
-    invoices = db.export_invoices()
-    payments = db.export_payments()
+    try:
+        customers = db.export_customers()
+        invoices = db.export_invoices()
+        payments = db.export_payments()
 
-    wb = Workbook()
-    styles = _style_helpers()
-    status_map = {"active": "نشط", "inactive": "معطل", "suspended": "موقوف", "expired": "منتهي"}
+        wb = Workbook()
+        styles = _style_helpers()
+        status_map = {"active": "نشط", "inactive": "معطل", "suspended": "موقوف", "expired": "منتهي"}
 
-    ws1 = wb.active
-    _write_sheet(
-        ws1, "المشتركين",
-        ["ID", "الاسم", "الهاتف", "الهاتف 2", "العنوان", "المنطقة", "الباقة",
-         "سعر الباقة", "اسم المستخدم", "IP", "نوع الجهاز", "الحالة",
-         "تاريخ الاشتراك", "تاريخ التجديد", "ملاحظات"],
-        [[
-            c["id"], c["name"], c["phone"] or "", c["phone2"] or "", c["address"] or "",
-            c["region"] or "", c["package_name"] or "", c["package_price"] or 0,
-            c["username"] or "", c["ip_address"] or "", c["device_type"] or "",
-            status_map.get(c["subscription_status"], c["subscription_status"]),
-            fmt_dt(c["subscription_date"]), fmt_dt(c["renewal_date"]), c["notes"] or "",
-        ] for c in customers]
-    )
+        ws1 = wb.active
+        _write_sheet(
+            ws1, "المشتركين",
+            ["ID", "الاسم", "الهاتف", "الهاتف 2", "العنوان", "المنطقة", "الباقة",
+             "سعر الباقة", "اسم المستخدم", "IP", "نوع الجهاز", "الحالة",
+             "تاريخ الاشتراك", "تاريخ التجديد", "ملاحظات"],
+            [[
+                c["id"], c["name"], c["phone"] or "", c["phone2"] or "", c["address"] or "",
+                c["region"] or "", c["package_name"] or "", c["package_price"] or 0,
+                c["username"] or "", c["ip_address"] or "", c["device_type"] or "",
+                status_map.get(c["subscription_status"], c["subscription_status"]),
+                fmt_dt(c["subscription_date"]), fmt_dt(c["renewal_date"]), c["notes"] or "",
+            ] for c in customers],
+            styles,
+        )
 
-    ws2 = wb.create_sheet()
-    _write_sheet(
-        ws2, "الفواتير",
-        ["ID", "المشترك", "الشهر", "السنة", "الباقة", "سعر الباقة",
-         "الإجمالي", "المدفوع", "المتبقي", "الحالة"],
-        [[
-            inv["id"], inv["customer_name"], inv["month"], inv["year"], inv["package_name"] or "",
-            int(round(float(inv["package_price"] or 0))),
-            int(round(float(inv["total_amount"] or 0))),
-            int(round(float(inv["paid_amount"] or 0))),
-            int(round(float((inv["total_amount"] or 0) - (inv["paid_amount"] or 0)))),
-            "مسدد" if inv["is_paid"] else ("مدفوع جزئياً" if inv["paid_amount"] > 0 else "غير مسدد"),
-        ] for inv in invoices]
-    )
+        ws2 = wb.create_sheet()
+        _write_sheet(
+            ws2, "الفواتير",
+            ["ID", "المشترك", "الشهر", "السنة", "الباقة", "سعر الباقة",
+             "الإجمالي", "المدفوع", "المتبقي", "الحالة"],
+            [[
+                inv["id"], inv["customer_name"], inv["month"], inv["year"], inv["package_name"] or "",
+                int(round(float(inv["package_price"] or 0))),
+                int(round(float(inv["total_amount"] or 0))),
+                int(round(float(inv["paid_amount"] or 0))),
+                int(round(float((inv["total_amount"] or 0) - (inv["paid_amount"] or 0)))),
+                "مسدد" if inv["is_paid"] else ("مدفوع جزئياً" if inv["paid_amount"] > 0 else "غير مسدد"),
+            ] for inv in invoices],
+            styles,
+        )
 
-    ws3 = wb.create_sheet()
-    _write_sheet(
-        ws3, "المدفوعات",
-        ["ID", "المشترك", "المبلغ", "التاريخ", "طريقة الدفع", "ملاحظات"],
-        [[
-            p["id"], p["customer_name"], int(round(float(p["amount"]))),
-            p["payment_date"], p["payment_method"], p["notes"] or "",
-        ] for p in payments]
-    )
+        ws3 = wb.create_sheet()
+        _write_sheet(
+            ws3, "المدفوعات",
+            ["ID", "المشترك", "المبلغ", "التاريخ", "طريقة الدفع", "ملاحظات"],
+            [[
+                p["id"], p["customer_name"], int(round(float(p["amount"]))),
+                p["payment_date"], p["payment_method"], p["notes"] or "",
+            ] for p in payments],
+            styles,
+        )
 
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    today = now_dt().strftime("%Y-%m-%d")
-    return send_file(
-        output,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=f"isp_export_{today}.xlsx",
-    )
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        today = now_dt().strftime("%Y-%m-%d")
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"isp_export_{today}.xlsx",
+        )
+    except Exception as e:
+        log.error("Excel export failed: %s", e)
+        return jsonify({"ok": False, "error": f"فشل تصدير Excel: {e}"}), 500
 
 
 @app.route("/api/export/payments/excel")
 @login_required
 def api_export_payments_excel():
-    from openpyxl import Workbook
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        return jsonify({"ok": False, "error": "مكتبة Excel غير مثبتة — شغّل: pip install openpyxl"}), 500
 
-    payments = db.export_payments()
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "المدفوعات"
-    ws.views.sheetView[0].rightToLeft = True
-    styles = _style_helpers()
+    try:
+        payments = db.export_payments()
 
-    headers = ["ID", "المشترك", "المبلغ", "التاريخ", "الوقت", "طريقة الدفع", "ملاحظات"]
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_idx, value=h)
-        cell.fill = styles["header_fill"]
-        cell.font = styles["header_font"]
-        cell.alignment = styles["Alignment"](horizontal="center", vertical="center")
-        cell.border = styles["border"]
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "المدفوعات"
+        ws.views.sheetView[0].rightToLeft = True
+        styles = _style_helpers()
 
-    for row_idx, p in enumerate(payments, 2):
-        created_time = ""
-        if p["created_at"]:
-            try:
-                created_time = datetime.strptime(str(p["created_at"]), DATETIME_DB_S).strftime("%I:%M %p")
-            except ValueError:
-                created_time = str(p["created_at"])
-        row_data = [
-            p["id"], p["customer_name"], int(round(float(p["amount"]))),
-            p["payment_date"], created_time, p["payment_method"], p["notes"] or "",
-        ]
-        for col_idx, val in enumerate(row_data, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=val)
-            cell.font = styles["body_font"]
-            cell.alignment = styles["Alignment"](horizontal="right", vertical="center")
+        headers = ["ID", "المشترك", "المبلغ", "التاريخ", "الوقت", "طريقة الدفع", "ملاحظات"]
+        for col_idx, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=h)
+            cell.fill = styles["header_fill"]
+            cell.font = styles["header_font"]
+            cell.alignment = styles["Alignment"](horizontal="center", vertical="center")
             cell.border = styles["border"]
 
-    for col_cells in ws.columns:
-        max_len = 0
-        col_letter = col_cells[0].column_letter
-        for cell in col_cells:
-            try:
-                cell_len = len(str(cell.value or ""))
-                if cell_len > max_len:
-                    max_len = cell_len
-            except Exception:
-                pass
-        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+        for row_idx, p in enumerate(payments, 2):
+            created_time = ""
+            if p["created_at"]:
+                try:
+                    created_time = datetime.strptime(str(p["created_at"]), DATETIME_DB_S).strftime("%I:%M %p")
+                except ValueError:
+                    created_time = str(p["created_at"])
+            row_data = [
+                p["id"], p["customer_name"], int(round(float(p["amount"]))),
+                p["payment_date"], created_time, p["payment_method"], p["notes"] or "",
+            ]
+            for col_idx, val in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.font = styles["body_font"]
+                cell.alignment = styles["Alignment"](horizontal="right", vertical="center")
+                cell.border = styles["border"]
 
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return send_file(
-        output,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=f"payments_export_{now_dt().strftime('%Y-%m-%d')}.xlsx",
-    )
+        for col_cells in ws.columns:
+            max_len = 0
+            col_letter = col_cells[0].column_letter
+            for cell in col_cells:
+                try:
+                    cell_len = len(str(cell.value or ""))
+                    if cell_len > max_len:
+                        max_len = cell_len
+                except Exception:
+                    pass
+            ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"payments_export_{now_dt().strftime('%Y-%m-%d')}.xlsx",
+        )
+    except Exception as e:
+        log.error("Payments Excel export failed: %s", e)
+        return jsonify({"ok": False, "error": f"فشل تصدير Excel: {e}"}), 500
 
 
 @app.route("/api/backup")

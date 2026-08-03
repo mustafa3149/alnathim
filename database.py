@@ -769,6 +769,15 @@ def delete_user(user_id):
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
+def delete_all_agents():
+    """Delete every non-admin user (agents) — used by the server reset tool.
+
+    Keeps only users whose role is 'admin' so the owner account survives.
+    Returns the number of deleted users.
+    """
+    return _execute("DELETE FROM users WHERE role != 'admin' OR role IS NULL")
+
+
 # ── Registration / Invite / Access (Phase 14.4) ────────────
 
 def create_registration(full_name, username, password, phone="", invite_code=""):
@@ -1790,6 +1799,14 @@ def add_ticket(customer_id, issue_description):
 def get_ticket(ticket_id):
     """Return a ticket by id, or None."""
     return _fetchone("SELECT * FROM maintenance_tickets WHERE id = ?", (ticket_id,))
+
+
+def update_ticket(ticket_id, customer_id, issue_description):
+    """Update a maintenance ticket's customer + description."""
+    _execute(
+        "UPDATE maintenance_tickets SET customer_id = ?, issue_description = ? WHERE id = ?",
+        (customer_id, issue_description, ticket_id),
+    )
 
 
 def toggle_ticket(ticket_id):

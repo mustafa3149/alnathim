@@ -12,11 +12,9 @@
     <p class="text-sm text-muted mt-1 font-tajawal">إدارة المشتركين والاشتراكات</p>
   </div>
   <div class="flex items-center gap-2">
-    {% if is_admin %}
     <button onclick="openAddModal()" title="اضافة مشترك" class="btn btn-icon w-9 h-9">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
-    {% endif %}
     <a href="/api/export/excel" title="تصدير Excel" class="btn btn-icon w-9 h-9 hidden sm:inline-flex">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     </a>
@@ -157,16 +155,18 @@
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
           سجل الفواتير
         </button>
-        {% if is_admin %}
         <button onclick="sheetEdit()" class="btn w-full py-3">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           تعديل البيانات
+        </button>
+        <button onclick="sheetToggleActive()" class="btn w-full py-3" id="sheetToggleBtn">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="16" cy="12" r="3"/></svg>
+          <span id="sheetToggleText">إيقاف الخدمة</span>
         </button>
         <button onclick="sheetDelete()" class="btn btn-danger w-full py-3">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
           حذف المشترك
         </button>
-        {% endif %}
         <button onclick="closeCustomerSheet()" class="btn w-full py-3">اغلاق</button>
       </div>
     </div>
@@ -296,8 +296,41 @@ function openCustomerSheet(elm){
   var dot = document.getElementById('sheetDot');
   dot.className = 'dot ' + (currentSheet.status==='active' ? 'dot-active' : (currentSheet.status==='suspended' ? 'dot-suspended' : 'dot-expired'));
   document.getElementById('sheetDays').textContent = daysRemainingText(currentSheet.renewal);
+  updateSheetToggle();
   document.getElementById('customerSheet').style.display = 'block';
   autoFetchSignal(currentSheet);
+}
+function updateSheetToggle(){
+  var btn = document.getElementById('sheetToggleBtn');
+  var txt = document.getElementById('sheetToggleText');
+  if(!btn || !txt || !currentSheet) return;
+  if(currentSheet.status === 'suspended'){
+    txt.textContent = 'تفعيل الخدمة';
+    btn.style.color = 'var(--dot-active)';
+  } else {
+    txt.textContent = 'إيقاف الخدمة';
+    btn.style.color = 'var(--dot-expired)';
+  }
+}
+function sheetToggleActive(){
+  if(!currentSheet) return;
+  var isSuspended = currentSheet.status === 'suspended';
+  var targetStatus = isSuspended ? 'active' : 'suspended';
+  showConfirm((isSuspended ? 'تفعيل ' : 'إيقاف ') + currentSheet.name + '؟', async function(){
+    var r = await fetch('/api/customers/status/' + currentSheet.id, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status: targetStatus})
+    });
+    var d = await r.json();
+    if(d.ok){
+      showToast(isSuspended ? 'تم تفعيل الخدمة' : 'تم إيقاف الخدمة');
+      currentSheet.status = targetStatus;
+      updateSheetToggle();
+      setTimeout(()=>location.reload(), 500);
+    }
+    else { showToast(d.error || 'خطأ', 'error'); }
+  });
 }
 function closeCustomerSheet(){ document.getElementById('customerSheet').style.display = 'none'; }
 

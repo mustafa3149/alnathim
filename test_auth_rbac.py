@@ -3,8 +3,8 @@
 Asserts ABSOLUTE security for the login/session and admin-vs-agent roles:
   - Unauthenticated requests are redirected away from protected pages.
   - Wrong passwords are rejected.
-  - Agents can VIEW customers and PROCESS payments, but CANNOT:
-      delete customers, access Tower Settings, manage the team, or view audit logs.
+  - Agents can VIEW, ADD, EDIT, and DELETE customers, and PROCESS payments, but CANNOT:
+      access Tower Settings, manage the team, or view audit logs.
   - Admins can do everything.
   - Audit log rows are created for agent actions (who did what).
 
@@ -30,10 +30,20 @@ def assert_true(cond, msg):
 def login(client, username, password):
     """POST credentials and return (status, json)."""
     r = client.post("/login", json={"username": username, "password": password})
+    # Mirror the real app: after login the user lands on a page, which
+    # generates the session CSRF token (used by all authenticated POSTs).
+    client.get("/customers")
     try:
         return r.status_code, r.get_json()
     except Exception:
         return r.status_code, None
+
+
+def csrf_headers(client):
+    """Return the required X-CSRF-Token header from the current session."""
+    with client.session_transaction() as sess:
+        token = sess.get("_csrf_token", "")
+    return {"X-CSRF-Token": token} if token else {}
 
 
 def logout(client):
@@ -127,7 +137,7 @@ def test_agent_can_process_payment():
     before = db.audit_log_count()
     r = client.post(f"/api/payment/quick-pay/{customer_id}", json={
         "amount": 50000, "payment_date": "2026-08-01", "payment_method": "نقدي"
-    })
+    }, headers=csrf_headers(client))
     data = r.get_json()
     assert_true(r.status_code == 200 and data and data.get("ok"), "Agent can process payment")
     assert_true(db.audit_log_count() > before, "Payment created an audit log entry")
@@ -144,43 +154,87 @@ def test_agent_can_process_payment():
 
 
 def test_agent_blocked_from_admin_actions():
-    """Agents CANNOT delete customers, access settings/team/audit, or manage users."""
+    """Agents CANNOT access settings/team/audit, or manage users."""
     customer_id = setup_customer()
     client = app_module.app.test_client()
     login(client, "rbac_agent", "agent123")
 
-    # 1) Delete customer -> 403
-    r = client.post(f"/api/customers/delete/{customer_id}")
-    assert_true(r.status_code == 403, "Agent CANNOT delete customer (403)")
-    assert_true(db.get_customer(customer_id) is not None, "Customer still exists (not deleted)")
-
-    # 2) Settings page -> 403
+    # 1) Settings page -> 403
     r = client.get("/settings")
     assert_true(r.status_code == 403, "Agent CANNOT access Tower Settings (403)")
 
     # 3) Team page + user management API -> 403
     assert_true(client.get("/team").status_code == 403, "Agent CANNOT access /team (403)")
     assert_true(client.get("/api/users/list").status_code == 403, "Agent CANNOT list users (403)")
-    r = client.post("/api/users/add", json={"username": "evil", "password": "evil123"})
+    r = client.post("/api/users/add", json={"username": "evil", "password": "evil123"},
+                    headers=csrf_headers(client))
     assert_true(r.status_code == 403, "Agent CANNOT create users (403)")
 
     # 4) Audit log -> 403
     assert_true(client.get("/audit").status_code == 403, "Agent CANNOT access /audit (403)")
 
     # 5) Settings APIs -> 403
-    r = client.post("/api/settings/numeral-style", json={"numeral_style": "EN"})
+    r = client.post("/api/settings/numeral-style", json={"numeral_style": "EN"},
+                    headers=csrf_headers(client))
     assert_true(r.status_code == 403, "Agent CANNOT change settings (403)")
 
     # 6) Package write -> 403
-    r = client.post("/api/packages/add", json={"name": "HACK", "price": 1})
+    r = client.post("/api/packages/add", json={"name": "HACK", "price": 1},
+                    headers=csrf_headers(client))
     assert_true(r.status_code == 403, "Agent CANNOT add packages (403)")
-
-    # 7) Customer add/edit -> 403
-    r = client.post("/api/customers/add", json={"name": "HACK_CUST", "package_price": 5000})
-    assert_true(r.status_code == 403, "Agent CANNOT add customers (403)")
 
     logout(client)
     db.delete_customer(customer_id)
+
+
+def test_agent_can_add_customer():
+    """Agents CAN add customers (add button un-gated)."""
+    client = app_module.app.test_client()
+    login(client, "rbac_agent", "agent123")
+
+    r = client.post("/api/customers/add",
+                    json={"name": "RBAC_AGENT_ADDED", "phone": "111", "package_price": 5000},
+                    headers=csrf_headers(client))
+    assert_true(r.status_code == 200, "Agent CAN add customer (200)")
+
+    added = db.get_customer_by_name("RBAC_AGENT_ADDED")
+    assert_true(added is not None, "Temp customer created by agent")
+    if added:
+        db.delete_customer(added["id"])
+
+    logout(client)
+
+
+def test_agent_can_edit_customer():
+    """Agents CAN edit customers (edit button un-gated)."""
+    customer_id = setup_customer()
+    client = app_module.app.test_client()
+    login(client, "rbac_agent", "agent123")
+
+    r = client.post(f"/api/customers/edit/{customer_id}",
+                    json={"name": "RBAC_TEST_CUSTOMER", "phone": "07701234567"},
+                    headers=csrf_headers(client))
+    assert_true(r.status_code == 200, "Agent CAN edit customer (200)")
+
+    edited = db.get_customer(customer_id)
+    assert_true(edited is not None and edited["phone"] == "07701234567",
+                "Customer phone edited by agent")
+
+    logout(client)
+    db.delete_customer(customer_id)
+
+
+def test_agent_can_delete_customer():
+    """Agents CAN delete customers (delete button un-gated)."""
+    customer_id = setup_customer()
+    client = app_module.app.test_client()
+    login(client, "rbac_agent", "agent123")
+
+    r = client.post(f"/api/customers/delete/{customer_id}", headers=csrf_headers(client))
+    assert_true(r.status_code == 200, "Agent CAN delete customer (200)")
+    assert_true(db.get_customer(customer_id) is None, "Temp customer deleted by agent")
+
+    logout(client)
 
 
 def test_admin_can_do_all():
@@ -194,7 +248,7 @@ def test_admin_can_do_all():
     assert_true(client.get("/audit").status_code == 200, "Admin can access /audit")
     assert_true(client.get("/api/users/list").status_code == 200, "Admin can list users")
 
-    r = client.post(f"/api/customers/delete/{customer_id}")
+    r = client.post(f"/api/customers/delete/{customer_id}", headers=csrf_headers(client))
     assert_true(r.status_code == 200, "Admin can delete customer (200)")
     assert_true(db.get_customer(customer_id) is None, "Temp customer deleted by admin")
 
@@ -215,6 +269,9 @@ def main():
         test_agent_can_view_customers()
         test_agent_can_process_payment()
         test_agent_blocked_from_admin_actions()
+        test_agent_can_add_customer()
+        test_agent_can_edit_customer()
+        test_agent_can_delete_customer()
         test_admin_can_do_all()
     finally:
         cleanup(agent_id, admin_id)

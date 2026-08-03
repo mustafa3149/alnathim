@@ -52,6 +52,7 @@
             <td class="text-center">
               <div class="flex gap-1.5 flex-wrap justify-center">
                 <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm {% if t.status=='pending' %}btn-primary{% endif %}">{% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}</button>
+                <button onclick="openEditTicketModal(this)" data-ticket-id="{{ t.id }}" data-cust-id="{{ t.customer_id }}" data-cust-name="{{ t.customer_name }}" data-ticket-desc="{{ t.issue_description }}" class="btn btn-sm">تعديل</button>
                 <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger">حذف</button>
               </div>
             </td>
@@ -76,6 +77,7 @@
     <div class="mt-1 text-sm text-main">{{ t.issue_description }}</div>
     <div class="flex gap-2 mt-3">
         <button onclick="toggleResolve({{ t.id }})" class="btn btn-sm flex-1 {% if t.status=='pending' %}btn-primary{% endif %}">{% if t.status=='pending' %}حل{% else %}اعادة فتح{% endif %}</button>
+        <button onclick="openEditTicketModal(this)" data-ticket-id="{{ t.id }}" data-cust-id="{{ t.customer_id }}" data-cust-name="{{ t.customer_name }}" data-ticket-desc="{{ t.issue_description }}" class="btn btn-sm flex-1">تعديل</button>
         <button onclick="deleteTicket({{ t.id }})" class="btn btn-sm btn-danger">حذف</button>
     </div>
 </div>{% endfor %}
@@ -86,7 +88,8 @@
 <div id="ticketModal" class="fixed inset-0 z-[55] hidden overflow-y-auto modal-overlay">
   <div class="min-h-full flex items-center justify-center p-4">
     <div class="sheet w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
-      <h3 class="text-lg font-bold text-main mb-4">اضافة طلب صيانة</h3>
+      <h3 class="text-lg font-bold text-main mb-4" id="ticketModalTitle">اضافة طلب صيانة</h3>
+      <input type="hidden" id="editTicketId" value="">
       <div class="space-y-4">
         <div class="relative">
           <label class="f-label">المشترك *</label>
@@ -175,9 +178,20 @@ function selectCustomer(id, name){
     document.getElementById('searchResults').style.display='none';
 }
 function openAddTicketModal(){
+    document.getElementById('editTicketId').value='';
+    document.getElementById('ticketModalTitle').textContent='اضافة طلب صيانة';
     document.getElementById('ticketCustomerId').value='';
     document.getElementById('ticketCustomerSearch').value='';
     document.getElementById('ticketDescription').value='';
+    document.getElementById('searchResults').style.display='none';
+    document.getElementById('ticketModal').style.display='flex';
+}
+function openEditTicketModal(btn){
+    document.getElementById('editTicketId').value=btn.dataset.ticketId;
+    document.getElementById('ticketModalTitle').textContent='تعديل طلب الصيانة';
+    document.getElementById('ticketCustomerId').value=btn.dataset.custId;
+    document.getElementById('ticketCustomerSearch').value=btn.dataset.custName||'';
+    document.getElementById('ticketDescription').value=btn.dataset.ticketDesc||'';
     document.getElementById('searchResults').style.display='none';
     document.getElementById('ticketModal').style.display='flex';
 }
@@ -195,16 +209,18 @@ function filterStatus(s){
     window.location.href='/tickets?search={{ search }}&status='+s;
 }
 async function submitTicket(){
+    var editId=document.getElementById('editTicketId').value;
     var custId=document.getElementById('ticketCustomerId').value;
     var desc=document.getElementById('ticketDescription').value.trim();
     if(!custId){showToast('يرجى اختيار المشترك','error');return;}
     if(!desc){showToast('يرجى كتابة وصف المشكلة','error');return;}
-    var r=await fetch('/api/tickets/add',{
+    var url = editId ? '/api/tickets/edit/'+editId : '/api/tickets/add';
+    var r=await fetch(url,{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({customer_id:parseInt(custId),issue_description:desc})
     });
     var d=await r.json();
-    if(d.ok){showToast('تم اضافة طلب الصيانة');document.getElementById('ticketModal').style.display='none';setTimeout(function(){location.reload();},500);}
+    if(d.ok){showToast(editId?'تم تعديل طلب الصيانة':'تم اضافة طلب الصيانة');document.getElementById('ticketModal').style.display='none';setTimeout(function(){location.reload();},500);}
     else{showToast(d.error||'خطأ','error');}
 }
 async function toggleResolve(ticketId){
