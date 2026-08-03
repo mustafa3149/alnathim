@@ -51,7 +51,9 @@ async function doRegister() {
     var d = await r.json();
     if (d.ok) {
         showToast('✅ ' + d.message);
-        setTimeout(function(){ window.location.href = '/login'; }, 1500);
+        var isPending = (d.message || '').indexOf('بانتظار') !== -1;
+        var target = isPending ? '/login?username=' + encodeURIComponent(u) + '&pending=1' : '/login';
+        setTimeout(function(){ window.location.href = target; }, 1500);
     } else {
         showToast('❌ ' + (d.error || 'فشل التسجيل'), 'error');
     }

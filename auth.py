@@ -55,6 +55,76 @@ def _clear_rate_limit():
     _rate_attempts[ip].clear()
 
 
+# ── Machine-to-machine rate limiting (desktop launcher) ─────
+# The tower EXE polls /api/remote/login and /api/auth/check-status while a
+# registration is pending. Those are server-to-server calls, NOT human
+# logins: the strict /login limiter would lock the tower out after a few
+# polls, which made the launcher appear stuck on "بانتظار موافقة المدير"
+# even after the admin approved the account. Use a generous budget here.
+_MACHINE_RATE_ATTEMPTS = 120
+_MACHINE_RATE_WINDOW_SECONDS = 5 * 60
+_machine_rate_attempts = defaultdict(deque)
+
+
+def _machine_rate_limited():
+    """Return True when a server-to-server caller exceeded its poll budget."""
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    now = time()
+    window = _machine_rate_attempts[ip]
+    while window and now - window[0] > _MACHINE_RATE_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= _MACHINE_RATE_ATTEMPTS:
+        return True
+    window.append(now)
+    return False
+
+
+def _clear_machine_rate_limit():
+    """Reset the machine poll budget for the caller's IP after a success."""
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    _machine_rate_attempts[ip].clear()
+
+
+def _mirror_cloud_user(username, password, cloud_user):
+    """Create or refresh the local user row to mirror a cloud-approved account.
+
+    The cloud is the single source of truth for account state. This helper
+    writes the password hash, role, status and access expiry into the local
+    row so the launcher keeps working offline between polls and the local
+    status/expiry gates always match what the admin set on the website.
+
+    Args:
+        username: the login name.
+        password: the plaintext password the user typed (cloud verified it).
+        cloud_user: the user dict returned by /api/remote/login.
+
+    Returns:
+        the refreshed local user row, or None.
+    """
+    local = db.get_user_by_username(username)
+    if local is None:
+        local_id = db.create_user(
+            username, password,
+            role=cloud_user.get("role", "agent"),
+            full_name=cloud_user.get("full_name", ""),
+            phone=cloud_user.get("phone", ""),
+        )
+        local = db.get_user_by_id(local_id) or db.get_user_by_username(username)
+    if local is not None:
+        db.update_user(
+            local["id"],
+            full_name=cloud_user.get("full_name", ""),
+            phone=cloud_user.get("phone", ""),
+            role=cloud_user.get("role", "agent"),
+            status=cloud_user.get("status", "active"),
+            password=password,
+        )
+        expires = cloud_user.get("access_expires") or None
+        db.set_user_access_expiry(local["id"], expires)
+        local = db.get_user_by_username(username)
+    return local
+
+
 # ── Helpers ─────────────────────────────────────────────────
 
 def current_user():
@@ -153,6 +223,12 @@ def login():
             or _local_status in ("pending", "suspended")
         )
     )
+    # The cloud is the source of truth for account state. When it answers
+    # with an explicit state (pending/suspended/expired) we surface that
+    # instead of a generic 'invalid credentials' so the launcher can show
+    # the right screen (waiting / blocked / expired).
+    cloud_state = None
+    cloud_unreachable = False
     if _needs_cloud_check:
         try:
             import json as _json
@@ -163,37 +239,49 @@ def login():
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with _ur.urlopen(_req, timeout=20) as _resp:
-                _res = _json.loads(_resp.read().decode("utf-8", "replace"))
+            import urllib.error as _uerr
+            try:
+                with _ur.urlopen(_req, timeout=45) as _resp:
+                    _res = _json.loads(_resp.read().decode("utf-8", "replace"))
+            except _uerr.HTTPError as _e:
+                # Non-2xx still carries a JSON verdict (pending/suspended/
+                # expired/busy) that the launcher must surface.
+                try:
+                    _res = _json.loads(_e.read().decode("utf-8", "replace"))
+                except Exception:  # noqa: BLE001
+                    _res = {}
+            if isinstance(_res, dict):
+                cloud_state = _res.get("state")
+                if cloud_state == "busy":
+                    cloud_state = None
+                    cloud_unreachable = True
             if _res.get("ok") and _res.get("user"):
-                _ru = _res["user"]
-                _local = db.get_user_by_username(username)
-                if _local is None:
-                    db.create_user(
-                        username, password,
-                        role=_ru.get("role", "agent"),
-                        full_name=_ru.get("full_name", ""),
-                        phone=_ru.get("phone", ""),
-                    )
-                _local = db.get_user_by_username(username)
-                if _local is not None:
-                    db.update_user(
-                        _local["id"],
-                        full_name=_ru.get("full_name", ""),
-                        phone=_ru.get("phone", ""),
-                        role=_ru.get("role", "agent"),
-                        status="active",
-                    )
-                user = db.get_user_by_username(username)
-                password_ok = db.verify_password(user, password)
+                # Approved on the cloud → mirror password/status/expiry locally
+                # so the launcher keeps working offline between polls.
+                user = _mirror_cloud_user(username, password, _res["user"])
+                password_ok = bool(user) and db.verify_password(user, password)
                 if password_ok:
                     db.reset_failed_logins(user["id"])
                     _clear_rate_limit()
-        except Exception as e:  # noqa: BLE001 — cloud unreachable → keep local error
+        except Exception as e:  # noqa: BLE001 — cloud unreachable
+            cloud_unreachable = True
             import logging
             logging.getLogger(__name__).warning("[HybridLogin] cloud check failed: %s", e)
-        # Fall through: `password_ok` stays False → normal "invalid credentials"
-        # response below if the cloud was unreachable or rejected the login.
+
+    # Cloud is authoritative for pending/suspended/expired — never count
+    # those as failed logins locally (the password was already verified
+    # on the cloud).
+    if cloud_state == "suspended":
+        return jsonify({"ok": False, "state": "suspended", "error": "الحساب موقوف — راجع المدير"}), 403
+    if cloud_state == "expired":
+        return jsonify({"ok": False, "state": "expired", "error": "انتهت صلاحية الدخول — راجع المدير"}), 403
+    if cloud_state == "pending":
+        return jsonify({"ok": False, "state": "pending", "error": "بانتظار موافقة المدير"}), 403
+
+    # Cloud unreachable while the local copy is still pending/suspended →
+    # tell the truth (offline), not a misleading 'pending' forever.
+    if cloud_unreachable and _local_status in ("pending", "suspended"):
+        return jsonify({"ok": False, "state": "offline", "error": "تعذر الاتصال بالخادم — تأكد من الإنترنت وأعد المحاولة"}), 503
 
     # Phase 14.5: failed-login lockout
     if not password_ok:
@@ -210,24 +298,25 @@ def login():
                     target_id=local_user["id"],
                     details=f"تم قفل الحساب تلقائياً بعد {MAX_FAILED_LOGINS} محاولات فاشلة",
                 )
-                return jsonify({"ok": False, "error": "تم قفل الحساب بسبب محاولات كثيرة — راجع المدير"}), 403
-        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+                return jsonify({"ok": False, "state": "locked", "error": "تم قفل الحساب بسبب محاولات كثيرة — راجع المدير"}), 403
+        return jsonify({"ok": False, "state": "invalid", "error": "بيانات الدخول غير صحيحة"}), 400
 
     # Safety: after successful verification the user must exist locally.
     if user is None:
-        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+        return jsonify({"ok": False, "state": "invalid", "error": "بيانات الدخول غير صحيحة"}), 400
 
     # Reset the failed-login counter on success.
     db.reset_failed_logins(user["id"])
     _clear_rate_limit()
 
-    # Phase 14.4: status / expiry gate
-    if str(user["status"] or "active") == "suspended":
-        return jsonify({"ok": False, "error": "الحساب موقوف — راجع المدير"}), 403
-    if str(user["status"] or "active") == "pending":
-        return jsonify({"ok": False, "error": "بانتظار موافقة المدير"}), 403
+    # Phase 14.4: status / expiry gate (local copy is authoritative here).
+    _status = str(user["status"] or "active")
+    if _status == "suspended":
+        return jsonify({"ok": False, "state": "suspended", "error": "الحساب موقوف — راجع المدير"}), 403
+    if _status == "pending":
+        return jsonify({"ok": False, "state": "pending", "error": "بانتظار موافقة المدير"}), 403
     if not db.is_user_active(user):
-        return jsonify({"ok": False, "error": "انتهت صلاحية الدخول — راجع المدير"}), 403
+        return jsonify({"ok": False, "state": "expired", "error": "انتهت صلاحية الدخول — راجع المدير"}), 403
 
     session.permanent = True
     session["user_id"] = user["id"]
@@ -242,6 +331,7 @@ def login():
     return jsonify(
         {
             "ok": True,
+            "state": "approved",
             "message": "تم تسجيل الدخول بنجاح",
             "redirect": "/admin" if user["role"] == "admin" else "/",
         }
@@ -256,42 +346,54 @@ def api_remote_login():
     cloud. When a user tries to log in on the EXE, it forwards the username +
     password here; on success the EXE mirrors the account locally.
 
-    This endpoint is intentionally CSRF-exempt (server-to-server call) and
-    guarded by the same rate-limiter as the regular login.
+    This endpoint is intentionally CSRF-exempt (server-to-server call). It
+    uses the generous machine budget, NOT the human /login limiter — otherwise
+    a launcher that polls while a registration is pending would be locked out
+    and stay stuck on "بانتظار موافقة المدير" after approval.
     """
-    if _rate_limited():
-        return jsonify({"ok": False, "error": "محاولات كثيرة — حاول بعد قليل"}), 429
+    if _machine_rate_limited():
+        return jsonify({"ok": False, "state": "busy", "error": "محاولات كثيرة — حاول بعد قليل"}), 429
 
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
 
     if not username or not password:
-        return jsonify({"ok": False, "error": "أدخل اسم المستخدم وكلمة المرور"}), 400
+        return jsonify({"ok": False, "state": "invalid", "error": "أدخل اسم المستخدم وكلمة المرور"}), 400
 
     user = db.get_user_by_username(username)
 
     # Timing-safe path for an unknown user.
     if user is None:
         check_password_hash(_DUMMY_HASH, password)
-        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+        return jsonify({"ok": False, "state": "invalid", "error": "بيانات الدخول غير صحيحة"}), 400
 
     if not db.verify_password(user, password):
         db.increment_failed_logins(user["id"])
-        return jsonify({"ok": False, "error": "بيانات الدخول غير صحيحة"}), 400
+        return jsonify({"ok": False, "state": "invalid", "error": "بيانات الدخول غير صحيحة"}), 400
 
-    # Only active accounts can log in (same gate as the web login).
+    # Only active accounts can log in — but report the exact state so the
+    # launcher can show the right screen (waiting vs. blocked vs. expired).
+    _status = str(user["status"] or "active")
+    if _status == "suspended":
+        return jsonify({"ok": False, "state": "suspended", "error": "الحساب موقوف — راجع المدير"}), 403
+    if _status == "pending":
+        return jsonify({"ok": False, "state": "pending", "error": "بانتظار موافقة المدير"}), 403
     if not db.is_user_active(user):
-        return jsonify({"ok": False, "error": "الحساب غير نشط أو منتهي الصلاحية"}), 403
+        return jsonify({"ok": False, "state": "expired", "error": "انتهت صلاحية الدخول — راجع المدير"}), 403
 
     db.reset_failed_logins(user["id"])
+    _clear_machine_rate_limit()
     return jsonify({
         "ok": True,
+        "state": "approved",
         "user": {
             "username": user["username"],
             "full_name": user["full_name"] or "",
             "phone": user["phone"] or "",
             "role": user["role"],
+            "status": user["status"] or "active",
+            "access_expires": user["access_expires"] or None,
         },
     })
 
@@ -367,26 +469,28 @@ def api_auth_check_status():
 
     Body: {"username": "...", "password": "..."}
     Returns:
-        {"approved": true, "user_id": N, "token": "..."} when the account is
-        active (locally, or via the cloud relay), else {"approved": false}.
+        {"ok": true, "state": "approved", "user_id": N, "token": "...",
+         "redirect": "/..."} when the account is active, else
+        {"ok": false, "state": "pending"|"suspended"|"expired"|
+         "invalid"|"offline"} so the launcher can show the right screen.
     """
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
 
     if not username or not password:
-        return jsonify({"ok": False, "error": "بيانات ناقصة"}), 400
+        return jsonify({"ok": False, "state": "invalid", "error": "بيانات ناقصة"}), 400
 
     user = db.get_user_by_username(username)
     password_ok = bool(user) and db.verify_password(user, password)
     local_approved = password_ok and db.is_user_active(user)
 
-    # Cloud relay: when local status is stale (pending/suspended) or creds
-    # differ, ask the cloud for the authoritative answer (Phase 14.7).
-    cloud_approved = None
-    if not IS_RENDER and RELAY_URL and (_needs := (
-        user is None or not password_ok or not local_approved
-    )):
+    # Cloud relay: in hybrid mode the cloud is always consulted so the poll
+    # reflects the admin's latest decision (approve/suspend/extend). If the
+    # cloud is unreachable we fall back to the local copy.
+    cloud_state = None
+    cloud_unreachable = False
+    if not IS_RENDER and RELAY_URL:
         try:
             import json as _json
             import urllib.request as _ur
@@ -396,44 +500,67 @@ def api_auth_check_status():
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with _ur.urlopen(_req, timeout=20) as _resp:
-                _res = _json.loads(_resp.read().decode("utf-8", "replace"))
+            import urllib.error as _uerr
+            try:
+                with _ur.urlopen(_req, timeout=45) as _resp:
+                    _res = _json.loads(_resp.read().decode("utf-8", "replace"))
+            except _uerr.HTTPError as _e:
+                # Non-2xx still carries a JSON verdict (pending/suspended/
+                # expired/busy) that the launcher must surface.
+                try:
+                    _res = _json.loads(_e.read().decode("utf-8", "replace"))
+                except Exception:  # noqa: BLE001
+                    _res = {}
+            if isinstance(_res, dict):
+                cloud_state = _res.get("state")
+                if cloud_state == "busy":
+                    cloud_state = None
+                    cloud_unreachable = True
             if _res.get("ok") and _res.get("user"):
-                cloud_approved = True
-                # Mirror the approved account locally so normal login works.
-                _ru = _res["user"]
-                _local = db.get_user_by_username(username)
-                if _local is None:
-                    db.create_user(
-                        username, password,
-                        role=_ru.get("role", "agent"),
-                        full_name=_ru.get("full_name", ""),
-                        phone=_ru.get("phone", ""),
-                    )
-                _local = db.get_user_by_username(username)
-                if _local is not None:
-                    db.update_user(
-                        _local["id"],
-                        full_name=_ru.get("full_name", ""),
-                        phone=_ru.get("phone", ""),
-                        role=_ru.get("role", "agent"),
-                        status="active",
-                    )
-                user = db.get_user_by_username(username)
+                user = _mirror_cloud_user(username, password, _res["user"])
+                password_ok = bool(user) and db.verify_password(user, password)
         except Exception as e:  # noqa: BLE001 — cloud unreachable
+            cloud_unreachable = True
             import logging
             logging.getLogger(__name__).warning("[CheckStatus] cloud check failed: %s", e)
 
-    approved = bool(local_approved or cloud_approved)
-    if not approved:
-        return jsonify({"approved": False, "ok": True})
-
     if user is None:
         user = db.get_user_by_username(username)
-    uid = user["id"] if user else None
-    # Rotate a fresh desktop token so the launcher stores something usable.
-    token = _sign_activation(uid, "launcher", None) if uid else ""
-    return jsonify({"approved": True, "ok": True, "user_id": uid, "token": token})
+
+    # Local copy wins when it is already approved (offline tolerance).
+    if local_approved or (password_ok and user is not None and db.is_user_active(user)):
+        uid = user["id"]
+        # Rotate a fresh desktop token so the launcher stores something usable.
+        token = _sign_activation(uid, "launcher", None) if uid else ""
+        session.permanent = True
+        session["user_id"] = uid
+        session["user_role"] = user["role"]
+        session["user_name"] = user["full_name"] or user["username"]
+        return jsonify({
+            "ok": True,
+            "state": "approved",
+            "user_id": uid,
+            "token": token,
+            "redirect": "/admin" if user["role"] == "admin" else "/",
+        })
+
+    # Explicit cloud verdicts beat any local guess.
+    if cloud_state in ("pending", "suspended", "expired", "invalid"):
+        return jsonify({"ok": False, "state": cloud_state})
+
+    if cloud_unreachable:
+        return jsonify({"ok": False, "state": "offline", "error": "تعذر الاتصال بالخادم"})
+
+    # No cloud verdict → derive from the local row.
+    if user is not None:
+        _status = str(user["status"] or "active")
+        if _status == "suspended":
+            return jsonify({"ok": False, "state": "suspended"})
+        if _status == "pending":
+            return jsonify({"ok": False, "state": "pending"})
+        if not db.is_user_active(user):
+            return jsonify({"ok": False, "state": "expired"})
+    return jsonify({"ok": False, "state": "pending"})
 
 
 @auth_bp.route("/api/device/hwid", methods=["GET"])

@@ -1664,9 +1664,12 @@ def api_sync_push():
         if _owner is None or not db.is_user_active(_owner):
             owner_user_id = None
         elif owner_token:
-            # Loose sanity check: token must look like a signed activation key.
+            # Strict check: the signed owner token must have been minted for
+            # THIS user id (same shared ACTIVATION_KEY_SECRET on cloud + EXE),
+            # otherwise a token issued to another tower would be accepted.
             from auth import _parse_activation_key
-            if _parse_activation_key(owner_token) is None:
+            _payload = _parse_activation_key(owner_token)
+            if _payload is None or int(_payload.get("user_id") or 0) != owner_user_id:
                 owner_user_id = None
     if owner_user_id is None:
         from auth import current_user_id as _current_uid

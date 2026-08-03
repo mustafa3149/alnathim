@@ -9,7 +9,7 @@
       <p class="text-sm text-slate-400 font-tajawal mt-1">نظام إدارة أبراج الإنترنت</p>
     </div>
 
-    <div class="rounded-2xl bg-slate-800/70 border border-slate-700/60 backdrop-blur p-6 shadow-2xl">
+    <div id="loginCard" class="rounded-2xl bg-slate-800/70 border border-slate-700/60 backdrop-blur p-6 shadow-2xl">
       <div class="space-y-4">
         <div>
           <label class="text-xs text-slate-400 font-semibold mb-1.5 block">اسم المستخدم</label>
@@ -20,13 +20,14 @@
           <input type="password" id="password" dir="ltr" placeholder="••••••••" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-4 py-3 text-slate-50 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
         </div>
         <button onclick="doLogin()" class="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold py-3 transition shadow-lg shadow-indigo-500/30">دخول</button>
+        <p id="loginHint" style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px;display:none;">أدخل كلمة المرور ثم اضغط دخول — سننتظر موافقة المدير تلقائياً</p>
         <p style="text-align:center;font-size:13px;color:var(--muted);margin-top:12px;">
           ليس لديك حساب؟ <a href="/register" style="color:var(--dot-active);font-weight:600;">إنشاء حساب</a>
         </p>
       </div>
     </div>
 
-    <div class="rounded-2xl bg-slate-900/60 border border-slate-700/50 p-5 mt-4 shadow-xl" dir="rtl">
+    <div id="hwidCard" class="rounded-2xl bg-slate-900/60 border border-slate-700/50 p-5 mt-4 shadow-xl" dir="rtl">
       <div class="flex items-center justify-between mb-3">
         <span class="text-xs font-bold text-slate-400">معرّف هذا الجهاز (HWID)</span>
         <button onclick="copyHwid()" class="text-[11px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-indigo-300 hover:border-indigo-500 transition">نسخ</button>
@@ -35,9 +36,23 @@
       <input type="text" id="activationKey" dir="ltr" placeholder="ألصق كود التفعيل هنا" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-4 py-2.5 text-slate-50 text-xs mt-3 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition">
       <button onclick="activateDevice()" class="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 text-sm mt-2 transition shadow-lg shadow-emerald-500/20">تفعيل هذه الحاسبة</button>
     </div>
+
+    <div id="waitingCard" class="hidden rounded-2xl bg-slate-900/60 border border-slate-700/50 p-6 mt-4 shadow-xl text-center" dir="rtl">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-indigo-500/20 mb-4">
+        <svg class="animate-spin w-7 h-7 text-indigo-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+        </svg>
+      </div>
+      <div id="waitingMsg" class="text-sm font-bold text-slate-200 font-tajawal">بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة</div>
+      <div class="text-xs text-slate-500 font-tajawal mt-2">الحالة تُحدَّث تلقائياً — يمكنك المتابعة فور الموافقة</div>
+      <button onclick="cancelWaiting()" class="mt-5 w-full rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-bold py-2.5 text-sm hover:bg-slate-700 transition">إلغاء والعودة</button>
+    </div>
   </div>
+</div>
 <script>
 var deviceHwid='';
+var loginUser='';var loginPass='';var pollTimer=null;var pollCount=0;
 async function loadHwid(){
   try{
     var r=await fetch('/api/device/hwid');
@@ -63,15 +78,97 @@ async function activateDevice(){
   }
   else{showToast('❌ '+(d.error||'كود التفعيل غير صالح'),'error');}
 }
+function stopPolling(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+}
+function showWaiting(msg){
+  document.getElementById('loginCard').style.display='none';
+  document.getElementById('hwidCard').style.display='none';
+  document.getElementById('waitingCard').classList.remove('hidden');
+  document.getElementById('waitingMsg').textContent=msg||'بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة';
+}
+function showForm(){
+  stopPolling();
+  document.getElementById('waitingCard').classList.add('hidden');
+  document.getElementById('loginCard').style.display='';
+  document.getElementById('hwidCard').style.display='';
+}
+function handleLoginResult(d){
+  if(d.ok){
+    if(d.token){localStorage.setItem('alnathim_token',d.token);}
+    if(d.user_id){localStorage.setItem('alnathim_user_id',String(d.user_id));}
+    showToast('✅ تم تسجيل الدخول بنجاح');
+    setTimeout(function(){window.location.href=(d.redirect || '/');},400);
+    return;
+  }
+  var st=d.state||'invalid';
+  if(st==='pending'){
+    showWaiting('بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة');
+    startPolling();
+  }else if(st==='offline'){
+    showWaiting('تعذر الاتصال بالخادم — جارٍ إعادة المحاولة تلقائياً...');
+    startPolling();
+  }else if(st==='suspended'){
+    showToast('❌ الحساب موقوف — راجع المدير','error');
+  }else if(st==='expired'){
+    showToast('❌ انتهت صلاحية الدخول — راجع المدير','error');
+  }else if(st==='locked'){
+    showToast('❌ تم قفل الحساب بسبب محاولات كثيرة — راجع المدير','error');
+  }else{
+    showToast('❌ '+(d.error||'فشل الدخول'),'error');
+  }
+}
+function startPolling(){
+  stopPolling();
+  pollCount=0;
+  pollTimer=setInterval(pollStatus,10000);
+}
+async function pollStatus(){
+  pollCount++;
+  try{
+    var r=await fetch('/api/auth/check-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:loginUser,password:loginPass})});
+    var d=await r.json();
+    if(d.state==='approved'){
+      stopPolling();
+      if(d.token){localStorage.setItem('alnathim_token',d.token);}
+      if(d.user_id){localStorage.setItem('alnathim_user_id',String(d.user_id));}
+      showToast('✅ تمت الموافقة — جاري الدخول');
+      setTimeout(function(){window.location.href=(d.redirect || '/');},500);
+    }else if(d.state==='pending'){
+      document.getElementById('waitingMsg').textContent='بانتظار موافقة المدير — سيتم الدخول تلقائياً ('+Math.round(pollCount*10)+' ثانية)';
+    }else if(d.state==='offline'){
+      document.getElementById('waitingMsg').textContent='تعذر الاتصال بالخادم — جارٍ إعادة المحاولة...';
+    }else if(d.state==='suspended'||d.state==='expired'||d.state==='invalid'){
+      stopPolling();
+      showForm();
+      showToast('❌ '+(d.error||(d.state==='suspended'?'الحساب موقوف — راجع المدير':'انتهت صلاحية الدخول — راجع المدير')),'error');
+    }
+  }catch(e){
+    document.getElementById('waitingMsg').textContent='تعذر الاتصال بالخادم — جارٍ إعادة المحاولة...';
+  }
+}
 async function doLogin(){
   var u=document.getElementById('username').value.trim();var p=document.getElementById('password').value;
   if(!u||!p){showToast('أدخل اسم المستخدم وكلمة المرور','error');return;}
+  loginUser=u;loginPass=p;
   showToast('جاري الدخول...');
-  var r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
-  var d=await r.json();
-  if(d.ok){showToast('✅ تم تسجيل الدخول بنجاح');setTimeout(function(){window.location.href=(d.redirect || '/');},400);}
-  else{showToast('❌ '+(d.error||'فشل الدخول'),'error');}
+  try{
+    var r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    var d=await r.json();
+    handleLoginResult(d);
+  }catch(e){showToast('تعذر الاتصال بالخادم','error');}
 }
+function cancelWaiting(){
+  showForm();
+}
+(function(){
+  var q={};
+  location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi,function(m,k,v){q[k]=decodeURIComponent(v);});
+  if(q.username){document.getElementById('username').value=q.username;document.getElementById('password').focus();}
+  if(q.pending==='1'&&q.username){
+    var h=document.getElementById('loginHint');h.style.display='';h.textContent='أدخل كلمة المرور ثم اضغط دخول — سننتظر موافقة المدير تلقائياً';
+  }
+})();
 document.getElementById('password').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 loadHwid();
 </script>

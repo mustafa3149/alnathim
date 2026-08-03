@@ -93,7 +93,8 @@
       </div>
       <div>
         <label class="f-label">أو حتى تاريخ محدد</label>
-        <input type="datetime-local" id="accessExpires" class="input" dir="ltr">
+        <input type="text" id="accessExpires" class="input" dir="ltr" placeholder="YYYY-MM-DD HH:MM" readonly onclick="openDatePicker('accessExpires')">
+        <div class="text-[10px] text-muted font-tajawal mt-1">اضغط لفتح التقويم</div>
       </div>
       <div>
         <label class="f-label">أيام</label>
@@ -176,7 +177,8 @@
       </div>
       <div id="pcCustomExpiryWrap" class="hidden">
         <label class="f-label">حتى تاريخ (اختر من التقويم)</label>
-        <input type="datetime-local" id="pcExpires" class="input" dir="ltr">
+        <input type="text" id="pcExpires" class="input" dir="ltr" placeholder="YYYY-MM-DD HH:MM" readonly onclick="openDatePicker('pcExpires')">
+        <div class="text-[10px] text-muted font-tajawal mt-1">اضغط لفتح التقويم</div>
       </div>
     </div>
     <button onclick="generatePcKey()" class="btn btn-primary w-full py-3 mt-6">توليد كود التفعيل</button>
@@ -196,6 +198,45 @@
     </div>
   </div>
 </section>
+
+<!-- ═══════════ Custom Date Picker Modal ═══════════ -->
+<div id="datePickerModal" class="fixed inset-0 z-[60] hidden overflow-y-auto modal-overlay">
+  <div class="min-h-full flex items-center justify-center p-4">
+    <div class="sheet w-full max-w-xs p-5" style="font-family:inherit;">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-bold text-main text-sm">اختر التاريخ</div>
+        <button onclick="closeDatePicker()" class="text-muted text-lg leading-none" style="background:none;border:none;cursor:pointer;">&times;</button>
+      </div>
+      <div class="flex items-center justify-between mb-3">
+        <button onclick="datePickerPrevMonth()" class="btn btn-sm" type="button">‹</button>
+        <div class="font-bold text-main text-sm" id="dpMonthLabel">—</div>
+        <button onclick="datePickerNextMonth()" class="btn btn-sm" type="button">›</button>
+      </div>
+      <div class="grid grid-cols-7 gap-1 text-center mb-1">
+        <div class="text-[10px] text-muted font-bold">س</div>
+        <div class="text-[10px] text-muted font-bold">ح</div>
+        <div class="text-[10px] text-muted font-bold">ن</div>
+        <div class="text-[10px] text-muted font-bold">ث</div>
+        <div class="text-[10px] text-muted font-bold">ر</div>
+        <div class="text-[10px] text-muted font-bold">خ</div>
+        <div class="text-[10px] text-muted font-bold">ج</div>
+      </div>
+      <div id="dpDaysGrid" class="grid grid-cols-7 gap-1"></div>
+      <div class="mt-4">
+        <label class="f-label">الساعة</label>
+        <select id="dpHour" class="input w-full"></select>
+      </div>
+      <div class="mt-2">
+        <label class="f-label">الدقيقة</label>
+        <select id="dpMinute" class="input w-full"></select>
+      </div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="confirmDatePicker()" class="btn btn-primary flex-1 py-2.5">موافق</button>
+        <button onclick="closeDatePicker()" class="btn flex-1 py-2.5">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════ Add/Edit User Modal ═══════════ -->
 <div id="userModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
@@ -582,9 +623,124 @@ function deleteUser(id){
   });
 }
 
-document.addEventListener('DOMContentLoaded', loadAll);
+/* ── Custom Date Picker (works in Android WebView / all browsers) ── */
+var _dpTargetId = null;
+var _dpCursor = new Date();
+var _dpSelectedDay = null;
+
+var AR_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+var AR_WEEK = ['س','ح','ن','ث','ر','خ','ج'];
+
+function _pad2(n){ return (n < 10 ? '0' : '') + n; }
+
+function _parseExistingDate(str){
+  if(!str) return null;
+  var m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+  if(!m) return null;
+  var d = new Date(+m[1], +m[2]-1, +m[3], m[4] ? +m[4] : 23, m[5] ? +m[5] : 59, 0, 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function openDatePicker(targetId){
+  _dpTargetId = targetId;
+  var el = document.getElementById(targetId);
+  var existing = _parseExistingDate(el ? el.value : '');
+  var now = new Date();
+  // If a value exists, open on that date; otherwise default to the next day 23:59 (expiry default).
+  var base = existing || new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  _dpCursor = new Date(base.getFullYear(), base.getMonth(), 1);
+  _dpSelectedDay = base.getDate();
+
+  // Populate hour/min selects
+  var hourSel = document.getElementById('dpHour');
+  hourSel.innerHTML = '';
+  for(var h = 0; h < 24; h++){
+    var opt = document.createElement('option');
+    opt.value = _pad2(h);
+    opt.textContent = _pad2(h);
+    if(existing && existing.getHours() === h) opt.selected = true;
+    hourSel.appendChild(opt);
+  }
+  var minSel = document.getElementById('dpMinute');
+  minSel.innerHTML = '';
+  for(var mi = 0; mi < 60; mi += 5){
+    var opt2 = document.createElement('option');
+    opt2.value = _pad2(mi);
+    opt2.textContent = _pad2(mi);
+    if(existing && Math.floor(existing.getMinutes()/5)*5 === mi) opt2.selected = true;
+    minSel.appendChild(opt2);
+  }
+  renderDatePickerCalendar();
+  document.getElementById('datePickerModal').style.display = 'block';
+}
+
+function closeDatePicker(){
+  document.getElementById('datePickerModal').style.display = 'none';
+  _dpTargetId = null;
+}
+
+function renderDatePickerCalendar(){
+  var label = document.getElementById('dpMonthLabel');
+  label.textContent = AR_MONTHS[_dpCursor.getMonth()] + ' ' + _dpCursor.getFullYear();
+
+  var firstDay = new Date(_dpCursor.getFullYear(), _dpCursor.getMonth(), 1);
+  var daysInMonth = new Date(_dpCursor.getFullYear(), _dpCursor.getMonth() + 1, 0).getDate();
+  var lead = (firstDay.getDay() + 1) % 7; // convert 0=Sun..6=Sat to 0=Sat..6=Fri
+
+  var grid = document.getElementById('dpDaysGrid');
+  grid.innerHTML = '';
+  for(var i = 0; i < lead; i++){
+    var blank = document.createElement('div');
+    grid.appendChild(blank);
+  }
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' + _pad2(today.getMonth()+1) + '-' + _pad2(today.getDate());
+  for(var d = 1; d <= daysInMonth; d++){
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = d;
+    btn.style.cssText = 'width:100%;aspect-ratio:1;border-radius:8px;border:1px solid transparent;background:none;font-size:13px;font-weight:600;cursor:pointer;color:var(--text);';
+    if(d === _dpSelectedDay){
+      btn.style.background = 'var(--primary)';
+      btn.style.color = '#fff';
+    } else {
+      var ds = _dpCursor.getFullYear() + '-' + _pad2(_dpCursor.getMonth()+1) + '-' + _pad2(d);
+      if(ds === todayStr){
+        btn.style.borderColor = 'var(--primary)';
+        btn.style.color = 'var(--primary)';
+      }
+    }
+    btn.onclick = (function(day){ return function(){ _dpSelectedDay = day; renderDatePickerCalendar(); }; })(d);
+    grid.appendChild(btn);
+  }
+}
+
+function datePickerPrevMonth(){
+  _dpCursor = new Date(_dpCursor.getFullYear(), _dpCursor.getMonth() - 1, 1);
+  renderDatePickerCalendar();
+}
+function datePickerNextMonth(){
+  _dpCursor = new Date(_dpCursor.getFullYear(), _dpCursor.getMonth() + 1, 1);
+  renderDatePickerCalendar();
+}
+
+function confirmDatePicker(){
+  if(!_dpTargetId) return;
+  var hh = document.getElementById('dpHour').value;
+  var mm = document.getElementById('dpMinute').value;
+  var value = _dpCursor.getFullYear() + '-' + _pad2(_dpCursor.getMonth()+1) + '-' + _pad2(_dpSelectedDay) + ' ' + hh + ':' + mm;
+  var el = document.getElementById(_dpTargetId);
+  if(el) el.value = value;
+  closeDatePicker();
+}
+
 document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape') document.getElementById('userModal').style.display = 'none';
+  if(e.key === 'Escape'){
+    document.getElementById('userModal').style.display = 'none';
+    closeDatePicker();
+  }
 });
+
+document.addEventListener('DOMContentLoaded', loadAll);
 </script>
 {% endblock %}
