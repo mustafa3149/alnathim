@@ -178,7 +178,15 @@ window.onNativeResult = function(callbackId, json){
 function nativeCall(method, payload, cb){
   var id = 'cb' + (++_cbSeq);
   _cbs[id] = cb;
-  try { window.AlNathimNative[method](payload.ip||'', payload.username||'', payload.password||'', payload.community||'', id); }
+  var args;
+  if(method === 'probeSnmp'){
+    // التوقيع: (ip, device_type, community, callbackId)
+    args = [payload.ip||'', payload.device_type||'', payload.community||'public', id];
+  } else {
+    // التوقيع: (ip, username, password, community, callbackId)
+    args = [payload.ip||'', payload.username||'', payload.password||'', payload.community||'', id];
+  }
+  try { window.AlNathimNative[method].apply(null, args); }
   catch(e){ delete _cbs[id]; if(cb) cb({ok:false, error:'الفحص المحلي غير متاح'}); }
 }
 
@@ -246,15 +254,14 @@ async function checkSignal(){
     }
   }
   if(NATIVE){
-    // SNMP مباشرة من الهاتف عبر الجسر المحلي
-    nativeCall('probeSector', {ip: ip, community: document.getElementById('signalCommunity').value.trim()||'public'}, function(d){
-      if(d && d.ok && d.reachable && d.snmp_ok){
+    // SNMP مباشرة من الهاتف عبر الجسر المحلي (يدعم wireless + optical RX/TX)
+    nativeCall('probeSnmp', {ip: ip, device_type: type, community: document.getElementById('signalCommunity').value.trim()||'public'}, function(d){
+      if(d && d.ok && d.snmp_ok){
         d.is_native = true;
-        render(d);
-      } else if(d && d.ok && d.reachable){
-        render({status:'error', error: 'الجهاز متصل لكن لا توجد قراءة SNMP'});
+        // سلوك عرض: الجهاز متصل (SNMP رجع قراءة)
+        render({status:'good', snmp_ok:true, type: d.device_type === 'optical' ? 'optical' : 'wireless', signal_dbm: d.signal_dbm, ccq: d.ccq, rx_dbm: d.rx_dbm, tx_dbm: d.tx_dbm, is_native:true});
       } else {
-        render({status:'error', error: (d&&d.error)||'الجهاز غير متصل / مهلة انتهت'});
+        render({status:'error', error: (d&&d.error)||'الجهاز غير متصل / لا توجد قراءة SNMP — تحقق من الـ Community'});
       }
     });
   } else {
