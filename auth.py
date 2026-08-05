@@ -894,6 +894,16 @@ def register():
 
     if result["status"] == "active":
         return jsonify({"ok": True, "message": "تم إنشاء الحساب بنجاح — يمكنك تسجيل الدخول"})
+    # When running as a desktop EXE WITHOUT a working cloud relay, the pending
+    # request exists only in this device's local DB — it will NOT appear in the
+    # cloud admin's queue. Say so instead of promising it reached the website.
+    if not IS_RENDER:
+        return jsonify({
+            "ok": True,
+            "message": "تم حفظ طلب التسجيل على هذا الجهاز — بانتظار الموافقة من مدير النظام",
+        })
+
+
     return jsonify(
         {"ok": True, "message": "تم إرسال طلب التسجيل — بانتظار موافقة المدير"}
     )

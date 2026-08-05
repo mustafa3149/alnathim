@@ -21,14 +21,16 @@ from config import (
     USE_TURSO,
     SESSION_LIFETIME_MINUTES,
     COOKIE_SECURE,
+    IS_RENDER,
     RELAY_URL,
 )
 import database as db
 from auth import auth_bp, login_required, admin_required, current_user_id
 from billing_system.mikrotik_sync import sync_customer_debt, sync_mikrotik_status
-from network_tools.ping import ping_host, validate_host
+from network_tools.ping import ping_host, validate_host, is_private_ip
 from snmp_monitor.signal_monitor import SignalMonitor
 from mikrotik_api.mikrotik_manager import MikroTikManager
+from mobile_api import mobile_bp
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -43,6 +45,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = COOKIE_SECURE
 
 app.register_blueprint(auth_bp)
+# Mobile JSON API for the native Android app (Phase 2 — /api/mobile/v1).
+app.register_blueprint(mobile_bp)
 
 # Initialize DB + seed defaults on startup
 db.init_db()
@@ -80,6 +84,20 @@ def get_csrf_token():
 
 
 @app.before_request
+def block_path_traversal():
+    """Global Path Traversal filter (security hardening).
+
+    Rejects any request whose URL path contains traversal payloads
+    (".." or URL-encoded "%2e") with a 400 Bad Request — before any
+    route handler or static file server can touch the filesystem.
+    """
+    _path = request.path or ""
+    if ".." in _path or "%2e" in _path.lower():
+        return jsonify({"ok": False, "error": "مسار غير صالح"}), 400
+    return None
+
+
+@app.before_request
 def csrf_protect():
     """Reject unsafe (POST/PUT/PATCH/DELETE) requests without a valid CSRF header.
 
@@ -89,6 +107,10 @@ def csrf_protect():
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return None
     if request.path in _CSRF_EXEMPT_PATHS:
+        return None
+    # The mobile API (/api/mobile/v1/*) authenticates with signed Bearer
+    # tokens instead of session cookies — CSRF does not apply to it.
+    if request.path.startswith("/api/mobile/v1/"):
         return None
     token = request.headers.get("X-CSRF-Token", "")
     if not token or token != session.get("_csrf_token"):
@@ -1551,6 +1573,18 @@ def api_network_ping():
         count = int(data.get("count", 4))
     except (ValueError, TypeError):
         count = 4
+    # Cloud fast-fail: Render cannot reach private/LAN IPs — return instantly
+    # with a clear Arabic message instead of waiting for a timeout. The desktop
+    # EXE (running on the tower LAN) still performs real ping/probes locally.
+    if IS_RENDER and is_private_ip(host):
+        return jsonify({
+            "ok": False,
+            "host": host,
+            "error": "لا يمكن فحص الأجهزة الداخلية من السحابة — افتح برنامج الناظم على جهاز البرج (الكمبيوتر) لفحص الشبكة",
+            "cloud_blocked": True,
+            "latencies_ms": [],
+        })
+
     log.info("PING API host=%s count=%s", host, count)
     result = ping_host(host, count=count)
     return jsonify(result)
@@ -1806,6 +1840,18 @@ def api_network_signal():
             "last_updated": cached["last_updated"],
             "from_cache": True,
         })
+    # Cloud fast-fail: without an agent-cached reading there is nothing to show
+    # — probing LAN devices from Render would just time out. The tower scanner
+    # pushes readings via /api/agent/signal, so open the PC app there first.
+    if IS_RENDER and not cached and is_private_ip(ip):
+        return jsonify({
+            "ok": False,
+            "ip": ip,
+            "status": "error",
+            "error": "لا توجد قراءة مخزنة لهذا الجهاز — شغّل برنامج الناظم على جهاز البرج (الكمبيوتر) لقراءة الإشارة داخل الشبكة",
+            "cloud_blocked": True,
+        })
+
     if not ip:
         return jsonify({"ok": False, "error": "عنوان IP مطلوب"}), 400
     if not validate_host(ip):
@@ -2025,6 +2071,18 @@ def api_network_sync():
     IP + username is pulled (PPP secrets → customers) and the cloud snapshot
     is refreshed, so the tower owner sees the same data on any device.
     """
+    # Cloud (Render): the tower's MikroTik lives inside the LAN and is not
+    # reachable from here — pulling would just time out. The desktop EXE pulls
+    # locally and pushes the snapshot via /api/sync/push, so on the phone this
+    # button only reflects the latest tower-synced data (instant, no timeout).
+    if IS_RENDER:
+        return jsonify({
+            "ok": True,
+            "cloud_mode": True,
+            "total_secrets": 0,
+            "message": "السحب يتم على جهاز البرج (الكمبيوتر) — هذه الشاشة تعرض آخر بيانات تمت مزامنتها من البرج",
+        })
+
     from billing_system.mikrotik_sync import sync_pull_router, sync_push_cloud
 
     links = db.list_network_links()
@@ -2183,8 +2241,9 @@ def _write_sheet(ws, title, headers, rows, styles):
 
 
 @app.route("/api/export/excel")
-@login_required
+@admin_required
 def api_export_excel():
+    """Export full subscriber/invoice/payment data (admin only)."""
     try:
         from openpyxl import Workbook
     except ImportError:
@@ -2258,8 +2317,9 @@ def api_export_excel():
 
 
 @app.route("/api/export/payments/excel")
-@login_required
+@admin_required
 def api_export_payments_excel():
+    """Export payments data (admin only)."""
     try:
         from openpyxl import Workbook
     except ImportError:
@@ -2325,10 +2385,14 @@ def api_export_payments_excel():
         return jsonify({"ok": False, "error": f"فشل تصدير Excel: {e}"}), 500
 
 
-@app.route("/api/backup")
+@app.route("/api/backup", methods=["POST"])
 @admin_required
 def api_backup():
-    """Download a full database backup (admin only)."""
+    """Download a full database backup (admin only).
+
+    POST-only + CSRF token required — prevents drive-by download of the
+    database via a simple GET link (security hardening).
+    """
     stamp = now_dt().strftime("%Y-%m-%d")
     if USE_TURSO:
         from turso_db import dump_database

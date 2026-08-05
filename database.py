@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS packages (
 
 CREATE TABLE IF NOT EXISTS customers (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    updated_at         TEXT,
     full_name          TEXT NOT NULL,
     phone              TEXT DEFAULT '',
     phone2             TEXT DEFAULT '',
@@ -295,6 +296,23 @@ CREATE TABLE IF NOT EXISTS device_activations (
     created_at     TEXT DEFAULT (datetime('now','localtime')),
     UNIQUE(user_id, hwid)
 );
+
+-- ── Mobile API (Phase 2: native Android app) ──
+-- Revoked mobile bearer-token ids (logout / refresh rotation).
+CREATE TABLE IF NOT EXISTS mobile_revoked_tokens (
+    jti        TEXT PRIMARY KEY,
+    revoked_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
+-- FCM device tokens registered by the native app (push notifications, Phase 15).
+CREATE TABLE IF NOT EXISTS devices (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL,
+    platform   TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
 """
 
 
@@ -363,6 +381,7 @@ def _migrate_legacy_business_tables():
             db.executescript("""
                 CREATE TABLE customers_new (
                     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                    updated_at         TEXT,
                     full_name          TEXT NOT NULL,
                     phone              TEXT DEFAULT '',
                     phone2             TEXT DEFAULT '',
@@ -627,6 +646,18 @@ def init_db():
         db = get_db()
         try:
             db.execute("ALTER TABLE customers ADD COLUMN owner_user_id INTEGER DEFAULT NULL")
+            db.commit()
+        except sqlite3.OperationalError:
+            pass  # column may already exist in a concurrent boot
+        finally:
+            db.close()
+
+    # ── Phase 14.8: ensure customers has updated_at (incremental sync) ──
+    ccols = _table_cols("customers")
+    if ccols and "updated_at" not in ccols:
+        db = get_db()
+        try:
+            db.execute("ALTER TABLE customers ADD COLUMN updated_at TEXT DEFAULT NULL")
             db.commit()
         except sqlite3.OperationalError:
             pass  # column may already exist in a concurrent boot
@@ -1187,8 +1218,8 @@ def _customer_select():
         "c.address, c.region, c.package_id, c.mikrotik_username AS username, "
         "c.mikrotik_password AS password, c.nano_ip AS ip_address, c.device_type, "
         "c.status AS subscription_status, c.is_active, c.subscription_date, "
-        "c.renewal_date, c.previous_debt, c.notes, c.created_at, c.owner_user_id, "
-        "p.name AS package_name, p.price AS package_price "
+        "c.renewal_date, c.previous_debt, c.notes, c.created_at, c.updated_at, "
+        "c.owner_user_id, p.name AS package_name, p.price AS package_price "
         "FROM customers c LEFT JOIN packages p ON p.id = c.package_id "
     )
 
@@ -1196,6 +1227,26 @@ def _customer_select():
 def list_customers():
     """Return all customers with package join (legacy aliases)."""
     return _fetchall(_customer_select() + "ORDER BY c.created_at DESC, c.id DESC")
+
+
+def customers_changed_since(since):
+    """Customers whose updated_at is newer than the given sync cursor.
+
+    Args:
+        since: DB datetime string (e.g. '2026-08-05 01:00') or '' for all.
+
+    Returns:
+        list of customer rows (legacy aliases) changed after `since`.
+        Rows with no updated_at yet are included so a fresh install pulls
+        everything on first sync.
+    """
+    sql = _customer_select() + "WHERE 1 = 1 "
+    params = []
+    if since:
+        sql += "AND (c.updated_at IS NULL OR c.updated_at > ?) "
+        params.append(since)
+    sql += "ORDER BY c.updated_at DESC, c.id DESC"
+    return _fetchall(sql, tuple(params))
 
 
 def query_customers(search="", status="all", region="", debt=False,
@@ -1271,13 +1322,13 @@ def add_customer(full_name, phone="", phone2="", whatsapp_phone="", address="",
                  previous_debt=0, notes="", owner_user_id=None):
     """Insert a customer. Returns the new id."""
     return _insert(
-        "INSERT INTO customers (full_name, phone, phone2, whatsapp_phone, address, "
+        "INSERT INTO customers (updated_at, full_name, phone, phone2, whatsapp_phone, address, "
         "region, package_id, mikrotik_username, mikrotik_password, nano_ip, "
         "device_type, subscription_date, renewal_date, status, is_active, "
         "previous_debt, notes, owner_user_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            full_name, phone, phone2, whatsapp_phone, address,
+            now_str(), full_name, phone, phone2, whatsapp_phone, address,
             region, package_id, mikrotik_username, mikrotik_password, nano_ip,
             device_type, subscription_date or now_str(), renewal_date, status,
             1 if status in ("active",) else 0, previous_debt or 0, notes,
@@ -1321,7 +1372,10 @@ def update_customer(customer_id, **fields):
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    _execute(f"UPDATE customers SET {cols} WHERE id = ?", (*updates.values(), customer_id))
+    _execute(
+        f"UPDATE customers SET {cols}, updated_at = ? WHERE id = ?",
+        (*updates.values(), now_str(), customer_id),
+    )
 
 
 def update_customer_legacy_fields(customer_id, package_name="", package_price=0):
@@ -1347,8 +1401,8 @@ def set_customer_status(customer_id, status):
     db = get_db()
     try:
         db.execute(
-            "UPDATE customers SET status = ?, is_active = ? WHERE id = ?",
-            (status, 1 if status == "active" else 0, customer_id),
+            "UPDATE customers SET status = ?, is_active = ?, updated_at = ? WHERE id = ?",
+            (status, 1 if status == "active" else 0, now_str(), customer_id),
         )
         db.commit()
     finally:
@@ -1359,7 +1413,10 @@ def toggle_customer(customer_id):
     """Flip is_active."""
     db = get_db()
     try:
-        db.execute("UPDATE customers SET is_active = NOT is_active WHERE id = ?", (customer_id,))
+        db.execute(
+            "UPDATE customers SET is_active = NOT is_active, updated_at = ? WHERE id = ?",
+            (now_str(), customer_id),
+        )
         db.commit()
     finally:
         db.close()
@@ -2031,6 +2088,43 @@ def export_invoices():
 def export_payments():
     """All payments joined with customer name."""
     return _fetchall(_payment_select() + "ORDER BY pay.payment_date DESC")
+
+
+
+# ── Mobile API (Phase 2: native Android app) ────────────────
+
+def revoke_mobile_token(jti):
+    """Revoke a mobile bearer token id (logout / refresh rotation)."""
+    if jti:
+        _execute(
+            "INSERT OR IGNORE INTO mobile_revoked_tokens (jti) VALUES (?)",
+            (str(jti),),
+        )
+
+
+def is_mobile_token_revoked(jti):
+    """Return True when a mobile bearer token id has been revoked."""
+    if not jti:
+        return True
+    row = _fetchone(
+        "SELECT 1 FROM mobile_revoked_tokens WHERE jti = ?", (str(jti),)
+    )
+    return row is not None
+
+
+def register_device(user_id, token, platform=""):
+    """Register an FCM device token for a user. Returns the new id."""
+    return _insert(
+        "INSERT INTO devices (user_id, token, platform) VALUES (?, ?, ?)",
+        (user_id, token, platform),
+    )
+
+
+def list_devices(user_id):
+    """Return all registered device tokens for a user."""
+    return _fetchall(
+        "SELECT * FROM devices WHERE user_id = ? ORDER BY id", (user_id,)
+    )
 
 
 if __name__ == "__main__":

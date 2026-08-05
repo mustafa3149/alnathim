@@ -8,9 +8,38 @@ Reads configuration from environment variables (.env file).
 
 import os
 import secrets
+import sys
 from dotenv import load_dotenv
 
 # Load .env if present (local development; Render uses real env vars)
+
+# PyInstaller onefile EXE: the bundled .env is extracted to sys._MEIPASS, a
+# temp folder that a bare load_dotenv() never searches (it walks the CWD and
+# the caller file's directory). Without RELAY_URL the desktop EXE silently
+# stops forwarding registrations/logins to the cloud admin — accounts stay
+# stuck in the local DB while the admin watches an empty request queue on the
+# Render website. Load the bundled copy (and any .env placed next to the EXE)
+# explicitly. override=False keeps real env vars (Render) authoritative.
+
+
+def _load_env_file(path):
+    """Load a .env file when present without overriding existing env vars.
+
+    Args:
+        path: absolute path to a .env file (may not exist).
+
+    Returns:
+        None.
+    """
+    if path and os.path.isfile(path):
+        load_dotenv(path, override=False)
+
+
+if getattr(sys, "frozen", False):
+    _load_env_file(os.path.join(getattr(sys, "_MEIPASS", ""), ".env"))
+    _load_env_file(os.path.join(os.path.dirname(os.path.abspath(sys.executable)), ".env"))
+
+
 load_dotenv()
 
 
@@ -111,6 +140,12 @@ RELAY_URL = _clean(os.getenv("RELAY_URL"), "")
 # on the cloud (Render) and the local EXE so a key issued on the website can
 # be validated by the desktop app. Falls back to SECRET_KEY when unset.
 ACTIVATION_KEY_SECRET = _clean(os.getenv("ACTIVATION_KEY_SECRET"), SECRET_KEY)
+
+# ── Mobile API (Phase 2: native Android app) ────────────────
+# HMAC-signed bearer tokens for /api/mobile/v1 (native app).
+# Access-token TTL in hours; refresh-token TTL in days.
+AUTH_TOKEN_TTL_HOURS = float(os.getenv("AUTH_TOKEN_TTL_HOURS", "24") or 24)
+AUTH_REFRESH_TTL_DAYS = float(os.getenv("AUTH_REFRESH_TTL_DAYS", "30") or 30)
 
 # ── Security Hardening (Phase 14.5) ────────────────────────
 # Failed-login lockout: after MAX_FAILED_LOGINS wrong attempts the account

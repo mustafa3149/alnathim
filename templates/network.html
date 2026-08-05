@@ -71,6 +71,7 @@
           <div class="text-[11px] text-faint font-tajawal mt-0.5" dir="ltr" style="text-align:right;">{{ l.ip or '—' }}{% if l.location %} · {{ l.location }}{% endif %}</div>
         </div>
         <div class="flex gap-1.5 shrink-0">
+          <button onclick="probeLink(this)" class="btn btn-sm native-only" style="display:none;">فحص مباشر</button>
           <button onclick="editLink(this)" class="btn btn-sm">تعديل</button>
           <button onclick="deleteLink(this)" class="btn btn-sm btn-danger">حذف</button>
         </div>
@@ -164,6 +165,23 @@
 {% endblock %}
 {% block extra_scripts %}
 <script>
+// ── Native bridge (AlNathimNative): phone-side probes when running in the app ──
+// Only used inside the Android WebView. In a normal browser the whole page
+// falls back to the server (/api/network/ping, /api/network/signal).
+var NATIVE = (typeof window.AlNathimNative !== 'undefined' && window.AlNathimNative !== null);
+var _cbSeq = 0;
+var _cbs = {};
+window.onNativeResult = function(callbackId, json){
+  var cb = _cbs[callbackId];
+  if(cb){ delete _cbs[callbackId]; cb(json || {}); }
+};
+function nativeCall(method, payload, cb){
+  var id = 'cb' + (++_cbSeq);
+  _cbs[id] = cb;
+  try { window.AlNathimNative[method](payload.ip||'', payload.username||'', payload.password||'', payload.community||'', id); }
+  catch(e){ delete _cbs[id]; if(cb) cb({ok:false, error:'الفحص المحلي غير متاح'}); }
+}
+
 function setPingHost(host){ document.getElementById('pingHost').value = host; }
 function showNetTab(tab){
   ['ping','sectors','snmp'].forEach(t=>{
@@ -182,36 +200,70 @@ async function doPing(){
   if(!host){ showToast('يرجى ادخال عنوان', 'error'); return; }
   var btn = document.getElementById('pingBtn'); btn.textContent = '⏳ جاري الفحص...'; btn.disabled = true;
   var box = document.getElementById('pingResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري الفحص ('+count+' حزم)...</div>';
-  try{
-    var r = await fetch('/api/network/ping', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host:host, count:count})});
-    var d = await r.json();
-    if(d.ok){
+  function render(d){
+    if(d && d.ok){
       var c = d.loss_percent > 20 ? 'var(--dot-expired)' : (d.loss_percent > 0 ? 'var(--muted)' : 'var(--dot-active)');
       box.innerHTML = '<div class="card card-pad"><div class="grid grid-cols-2 gap-2">'
-        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">متوسط</div><div class="font-extrabold text-lg" style="color:'+c+';">'+(d.avg_ms!==null?d.avg_ms+' ms':'—')+'</div></div>'
-        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أقل</div><div class="font-extrabold text-lg text-main">'+(d.min_ms!==null?d.min_ms+' ms':'—')+'</div></div>'
-        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أعلى</div><div class="font-extrabold text-lg text-main">'+(d.max_ms!==null?d.max_ms+' ms':'—')+'</div></div>'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">متوسط</div><div class="font-extrabold text-lg" style="color:'+c+';">'+(d.avg_ms!==null&&d.avg_ms!==undefined?d.avg_ms+' ms':'—')+'</div></div>'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أقل</div><div class="font-extrabold text-lg text-main">'+(d.min_ms!==null&&d.min_ms!==undefined?d.min_ms+' ms':'—')+'</div></div>'
+        + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">أعلى</div><div class="font-extrabold text-lg text-main">'+(d.max_ms!==null&&d.max_ms!==undefined?d.max_ms+' ms':'—')+'</div></div>'
         + '<div class="rounded-xl surface-2 p-3 text-center" style="border:1px solid var(--border);"><div class="text-[10px] text-muted font-tajawal">فقدان</div><div class="font-extrabold text-lg" style="color:'+c+';">'+d.loss_percent+'%</div></div>'
-        + '</div><div class="text-center text-[11px] text-faint font-tajawal mt-3">أرسل '+d.sent+' · استلم '+d.received+' · خسارة '+d.loss_percent+'% · زمن '+d.elapsed_sec+' ث</div></div>';
-    } else { box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);font-weight:600;">'+(d.error||'فشل')+'</div>'; }
-  } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
-  btn.textContent = 'فحص'; btn.disabled = false;
+        + '</div><div class="text-center text-[11px] text-faint font-tajawal mt-3">أرسل '+d.sent+' · استلم '+d.received+' · خسارة '+d.loss_percent+'% · زمن '+(d.elapsed_sec!==undefined?d.elapsed_sec+' ث':'—')+'</div>'
+        + (d.is_tcp_probe ? '<div class="text-center text-[11px] text-muted font-tajawal mt-1" style="color:var(--dot-active);">فحص مباشر من الهاتف</div>' : '')
+        + '</div>';
+    } else { box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);font-weight:600;">'+(d&&d.error||'فشل')+'</div>'; }
+    btn.textContent = 'فحص'; btn.disabled = false;
+  }
+  if(NATIVE){
+    // فحص ICMP مباشرة من الهاتف عبر الجسر المحلي (لا يمر على السيرفر)
+    nativeCall('pingHost', {ip: host}, render);
+  } else {
+    try{
+      var r = await fetch('/api/network/ping', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host:host, count:count})});
+      var d = await r.json();
+      render(d);
+    } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; btn.textContent = 'فحص'; btn.disabled = false; }
+  }
 }
 async function checkSignal(){
   var ip = document.getElementById('signalIp').value.trim();
   var type = document.getElementById('signalType').value;
   if(!ip){ showToast('يرجى ادخال عنوان IP', 'error'); return; }
   var box = document.getElementById('signalResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري القراءة...</div>';
-  try{
-    var r = await fetch('/api/network/signal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:ip, device_type:type, community:document.getElementById('signalCommunity').value.trim()||'public'})});
-    var d = await r.json();
-    if(d.status === 'good'){
+  function render(d){
+    if(d && (d.status === 'good' || d.snmp_ok)){
       var h = '<div class="card card-pad text-center"><div class="font-bold mb-2" style="color:var(--dot-active);">الجهاز متصل</div><div class="flex justify-center gap-6 text-sm">';
-      if(d.type === 'optical') h += '<div>RX: <strong class="text-main">'+(d.rx_dbm||'—')+' dBm</strong></div><div>TX: <strong class="text-main">'+(d.tx_dbm||'—')+' dBm</strong></div>';
-      else h += '<div>الإشارة: <strong class="text-main">'+(d.signal_dbm||'—')+' dBm</strong></div><div>CCQ: <strong class="text-main">'+(d.ccq||'—')+'%</strong></div>';
-      h += '</div></div>'; box.innerHTML = h;
-    } else { box.innerHTML = '<div class="card card-pad text-center font-semibold" style="color:var(--dot-expired);">'+(d.status==='error'?(d.error||'فشل'):'الجهاز غير متصل / مهلة انتهت')+'</div>'; }
-  } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
+      var shown = false;
+      if(d.type === 'optical'){ h += '<div>RX: <strong class="text-main">'+(d.rx_dbm||'—')+' dBm</strong></div><div>TX: <strong class="text-main">'+(d.tx_dbm||'—')+' dBm</strong></div>'; shown = true; }
+      if(d.signal_dbm!==null && d.signal_dbm!==undefined){ h += '<div>الإشارة: <strong class="text-main">'+(d.signal_dbm||'—')+' dBm</strong></div>'; shown = true; }
+      if(d.ccq!==null && d.ccq!==undefined){ h += '<div>CCQ: <strong class="text-main">'+(d.ccq||'—')+'%</strong></div>'; shown = true; }
+      h += '</div>' + (d.is_native ? '<div class="text-center text-[11px] text-muted font-tajawal mt-2" style="color:var(--dot-active);">فحص مباشر من الهاتف</div>' : '') + '</div>';
+      box.innerHTML = shown ? h : '<div class="card card-pad text-center font-semibold" style="color:var(--dot-expired);">لا توجد قراءة SNMP — تحقق من الـ Community</div>';
+    } else {
+      var msg = 'الجهاز غير متصل / مهلة انتهت';
+      if(d && d.error){ msg = d.error; }
+      box.innerHTML = '<div class="card card-pad text-center font-semibold" style="color:var(--dot-expired);">'+msg+'</div>';
+    }
+  }
+  if(NATIVE){
+    // SNMP مباشرة من الهاتف عبر الجسر المحلي
+    nativeCall('probeSector', {ip: ip, community: document.getElementById('signalCommunity').value.trim()||'public'}, function(d){
+      if(d && d.ok && d.reachable && d.snmp_ok){
+        d.is_native = true;
+        render(d);
+      } else if(d && d.ok && d.reachable){
+        render({status:'error', error: 'الجهاز متصل لكن لا توجد قراءة SNMP'});
+      } else {
+        render({status:'error', error: (d&&d.error)||'الجهاز غير متصل / مهلة انتهت'});
+      }
+    });
+  } else {
+    try{
+      var r = await fetch('/api/network/signal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:ip, device_type:type, community:document.getElementById('signalCommunity').value.trim()||'public'})});
+      var d = await r.json();
+      render(d);
+    } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
+  }
 }
 function openLinkModal(){
   document.getElementById('linkEditId').value = '';
@@ -265,21 +317,59 @@ async function syncAll(){
     var r = await fetch('/api/network/sync', {method:'POST', headers:{'Content-Type':'application/json'}});
     var j = await r.json();
     if(j.ok){
-      if(j.total_secrets > 0){ showToast('تم سحب '+j.total_secrets+' مشترك من الميكروتيك ✔'); }
+      if(j.cloud_mode){ showToast(j.message || 'يتم السحب على جهاز البرج', ''); }
+      else if(j.total_secrets > 0){ showToast('تم سحب '+j.total_secrets+' مشترك من الميكروتيك ✔'); }
       else if(j.errors && j.errors.length){ showToast('تعذر السحب: '+j.errors[0], 'error'); }
       else { showToast('لا يوجد مشتركين — تأكد من اعدادات الميكروتيك'); }
     } else { showToast(j.error || 'فشل السحب', 'error'); }
   } catch(e){ showToast('خطأ في الاتصال', 'error'); }
   if(btn){ btn.disabled = false; btn.textContent = 'سحب المشتركين'; }
 }
-function deleteLink(btn){
+function probeLink(btn){
   var row = btn.closest('[data-id]');
-  showConfirm('حذف الجهاز "' + row.dataset.name + '"؟', async function(){
-    var r = await fetch('/api/network/links/delete/' + row.dataset.id, {method:'POST'});
-    var j = await r.json();
-    if(j.ok){ showToast('تم الحذف'); setTimeout(()=>location.reload(), 400); }
-    else { showToast(j.error || 'خطأ', 'error'); }
+  var ip = (row.dataset.ip || '').trim();
+  if(!ip){ showToast('لا يوجد عنوان IP لهذا الجهاز', 'error'); return; }
+  var panel = row.querySelector('.probe-panel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.className = 'probe-panel mt-2 rounded-xl p-3 text-[12px] font-tajawal';
+    panel.style.cssText = 'border:1px solid var(--border);background:var(--surface);';
+    var info = row.querySelector('.min-w-0');
+    if(info){ info.appendChild(panel); } else { row.appendChild(panel); }
+  }
+  panel.innerHTML = '<div class="text-center text-muted py-2">جاري الفحص المباشر من الهاتف...</div>';
+  nativeCall('probeSector', {ip: ip, username: row.dataset.username||'', password: row.dataset.password||'', community: row.dataset.community||'public'}, function(d){
+    if(!d || !d.ok){ panel.innerHTML = '<span style="color:var(--dot-expired);font-weight:600;">'+(d&&d.error||'فشل الفحص')+'</span>'; return; }
+    var h = '<div class="flex flex-wrap gap-2 items-center">';
+    h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:'+(d.reachable?'var(--dot-active)':'var(--dot-expired)')+';">'+(d.reachable?'متصل':'غير متصل')+'</span>';
+    if(d.reachable){
+      if(d.open_ports && d.open_ports.length){
+        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">منافذ: '+d.open_ports.join('، ')+'</span>';
+      }
+      if(d.latency_ms && d.latency_ms !== -1){
+        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">'+Math.round(d.latency_ms)+' ms</span>';
+      }
+      if(d.ppp_active !== null && d.ppp_active !== undefined){
+        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--dot-active);">مشتركين نشطين: '+d.ppp_active+'</span>';
+      }
+      if(d.signal_dbm !== null && d.signal_dbm !== undefined){
+        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">إشارة: '+d.signal_dbm+' dBm</span>';
+      }
+      if(d.ccq !== null && d.ccq !== undefined){
+        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">CCQ: '+d.ccq+'%</span>';
+      }
+      if(d.routeros_ok === false){
+        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--dot-expired);">RouterOS: '+String(d.routeros_error||'فشل').slice(0,45)+'</span>';
+      }
+    }
+    h += '</div>';
+    panel.innerHTML = h;
   });
+}
+// إظهار زر الفحص المباشر فقط داخل تطبيق الأندرويد (WebView)
+if(NATIVE){
+  var nb = document.querySelectorAll('.native-only');
+  for(var i=0;i<nb.length;i++){ nb[i].style.display=''; }
 }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') document.getElementById('linkModal').style.display='none'; });
 </script>

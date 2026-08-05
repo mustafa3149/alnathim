@@ -16,6 +16,11 @@ log = logging.getLogger(__name__)
 # Host validation: IP v4/v6 or hostname (letters, digits, dots, dashes, colon, underscore).
 HOST_RE = re.compile(r"^[A-Za-z0-9.\-_:]+$")
 
+# On Windows the desktop app is a windowed (GUI) EXE, so spawning the console
+# `ping` binary without this flag flashes a black command window. Suppress it.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
+
+
 # Windows: "Reply from 8.8.8.8: bytes=32 time=12ms TTL=116"
 # Linux:   "64 bytes from 8.8.8.8: icmp_seq=1 ttl=116 time=12.3 ms"
 _TIME_RE = re.compile(r"time[=<]\s*([\d.]+)\s*ms", re.IGNORECASE)
@@ -193,6 +198,7 @@ def ping_host(host, count=4, timeout=15):
             text=True,
             timeout=timeout,
             shell=False,
+            creationflags=_NO_WINDOW,
         )
         elapsed = round(time.monotonic() - start, 2)
         result = _parse_output(proc.stdout or proc.stderr or "")
