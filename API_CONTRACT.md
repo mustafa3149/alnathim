@@ -49,6 +49,7 @@ token user's id (project rule 8.1 — Arabic user-facing messages).
 |---|---|---|---|
 | POST | `/auth/login` | — | `{username, password}` → `{token, refresh_token, expires_in, user}` |
 | POST | `/auth/refresh` | — | `{refresh_token}` → rotated token pair |
+| GET | `/auth/me` | access | Current user payload — used to restore a saved session |
 | POST | `/auth/logout` | access | Revokes access + refresh (if passed in body) |
 
 ---
@@ -81,6 +82,7 @@ All require `Bearer` access token; `admin` marks admin-only.
 | GET | `/invoices?customer_id&month&year&search` | login | Invoice list |
 | GET | `/invoices/{id}` | login | Invoice + extras + payments |
 | GET | `/payments/current-invoice/{customer_id}` | login | Current month's invoice (or `null`) |
+| GET | `/payments?limit&search&method` | login | Recent payments (with `customer_name`) |
 | POST | `/payments` | login | Record payment on invoice (clamps to remaining) |
 | PUT | `/payments/{id}` | admin | Edit payment (recalculates invoice paid/is_paid) |
 | DELETE | `/payments/{id}` | admin | Delete payment (recalculates invoice) |

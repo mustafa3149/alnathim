@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>الناظم — الفواتير</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-enter">
+  <div class="topbar">
+    <h1>الفواتير</h1>
+    <div class="topbar-actions">
+      <button onclick="logout()" title="خروج">⏻</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-title">الفواتير</div>
+    <div class="page-sub">فواتير الشهر والمبالغ</div>
+
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <div class="field" style="flex:1;margin-bottom:0;">
+        <label>الشهر</label>
+        <select id="monthSel" class="input" onchange="loadInvoices()">
+          <option value="1">كانون الثاني</option>
+          <option value="2">شباط</option>
+          <option value="3">آذار</option>
+          <option value="4">نيسان</option>
+          <option value="5">أيار</option>
+          <option value="6">حزيران</option>
+          <option value="7">تموز</option>
+          <option value="8">آب</option>
+          <option value="9">أيلول</option>
+          <option value="10">تشرين الأول</option>
+          <option value="11">تشرين الثاني</option>
+          <option value="12">كانون الأول</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1;margin-bottom:0;">
+        <label>السنة</label>
+        <input type="number" id="yearSel" class="input" onchange="loadInvoices()">
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+      <div class="kpi" style="flex:1;padding:10px;"><div class="k-label">المحصل</div><div class="k-value" id="sumCollected" style="font-size:15px;color:var(--active);">—</div></div>
+      <div class="kpi" style="flex:1;padding:10px;"><div class="k-label">المتبقي</div><div class="k-value" id="sumRemaining" style="font-size:15px;color:var(--expired);">—</div></div>
+    </div>
+
+    <div id="billingList" style="margin-top:14px;">
+      <div class="spinner">جاري التحميل...</div>
+    </div>
+  </div>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav">
+    <a href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span>الرئيسية</span>
+    </a>
+    <a href="customers.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <span>العملاء</span>
+    </a>
+    <a href="billing.html" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span>الفواتير</span>
+    </a>
+    <a href="debts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      <span>الديون</span>
+    </a>
+    <a href="more.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+      <span>المزيد</span>
+    </a>
+  </nav>
+
+  <script src="js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+
+    const now = new Date();
+    document.getElementById('monthSel').value = String(now.getMonth() + 1);
+    document.getElementById('yearSel').value = String(now.getFullYear());
+
+    async function loadInvoices() {
+      const month = document.getElementById('monthSel').value;
+      const year = document.getElementById('yearSel').value;
+      const box = document.getElementById('billingList');
+      box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
+      const d = await api('/invoices?month=' + month + '&year=' + year);
+      if (!d.ok) {
+        box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
+        return;
+      }
+      const items = d.data.items || [];
+      let collected = 0, remaining = 0;
+      items.forEach(inv => {
+        collected += inv.paid_amount || 0;
+        remaining += (inv.total_amount || 0) - (inv.paid_amount || 0);
+      });
+      document.getElementById('sumCollected').textContent = formatDinar(collected);
+      document.getElementById('sumRemaining').textContent = formatDinar(remaining);
+
+      if (!items.length) {
+        box.innerHTML = '<div class="empty"><div class="big">🧾</div>لا توجد فواتير لهذا الشهر</div>';
+        return;
+      }
+      box.innerHTML = '<div class="list-card">' + items.map(inv => {
+        const rem = (inv.total_amount || 0) - (inv.paid_amount || 0);
+        return '<a class="row" href="customer-detail.html?id=' + inv.customer_id + '">' +
+          '<div class="row-main">' +
+            '<div class="row-title">' + esc(inv.customer_name || 'زبون #' + inv.customer_id) + '</div>' +
+            '<div class="row-sub">' + esc(inv.package_name || '') + ' · ' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + '</div>' +
+          '</div>' +
+          '<div class="row-end" style="text-align:left;">' +
+            '<div style="font-weight:800;">' + formatDinar(inv.total_amount || 0) + '</div>' +
+            (rem > 0
+              ? '<div style="font-size:11px;font-weight:800;color:var(--expired);">متبقي ' + formatDinar(rem) + '</div>'
+              : '<div style="font-size:11px;font-weight:800;color:var(--active);">مدفوعة ✓</div>') +
+          '</div>' +
+          '<span class="menu-arrow">‹</span>' +
+        '</a>';
+      }).join('') + '</div>';
+    }
+
+    loadInvoices();
+  </script>
+</body>
+</html>

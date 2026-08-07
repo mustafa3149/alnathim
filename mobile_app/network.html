@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>الناظم — الشبكة</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-enter">
+  <div class="topbar">
+    <h1>الشبكة</h1>
+    <div class="topbar-actions">
+      <button onclick="logout()" title="خروج">⏻</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-title">أدوات الشبكة</div>
+    <div class="page-sub">تشخيص من الهاتف مباشرة</div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabPingBtn" onclick="switchTab('ping')">Ping</button>
+      <button class="tab-btn" id="tabSigBtn" onclick="switchTab('signal')">لوحة الإشارة</button>
+    </div>
+
+    <!-- Ping tab -->
+    <div id="pingTab">
+      <div class="card card-pad" style="margin-top:14px;">
+        <div style="font-size:15px;font-weight:700;">تشخيص الاتصال</div>
+
+        <div class="field" style="margin-top:12px;">
+          <label>العنوان (IP أو اسم نطاق)</label>
+          <input type="text" id="pingHost" class="input" dir="ltr" placeholder="google.com أو 192.168.1.1" onkeydown="if(event.key==='Enter')doPing()">
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <button onclick="setHost('google.com')" class="btn btn-sm">Google</button>
+          <button onclick="setHost('youtube.com')" class="btn btn-sm">YouTube</button>
+          <button onclick="setHost('facebook.com')" class="btn btn-sm">Facebook</button>
+          <button onclick="setHost('1.1.1.1')" class="btn btn-sm">1.1.1.1</button>
+        </div>
+
+        <button class="btn-primary" id="pingBtn" onclick="doPing()">فحص مباشر من الهاتف</button>
+        <div id="pingResult" class="hidden" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <!-- Signal board tab -->
+    <div id="signalTab" class="hidden">
+      <div style="margin-top:14px;">
+        <div class="page-sub" id="signalUpdated"></div>
+        <div id="signalList" style="margin-top:10px;">
+          <div class="spinner">جاري التحميل...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span>الرئيسية</span>
+    </a>
+    <a href="customers.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <span>العملاء</span>
+    </a>
+    <a href="billing.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span>الفواتير</span>
+    </a>
+    <a href="debts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      <span>الديون</span>
+    </a>
+    <a href="more.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+      <span>المزيد</span>
+    </a>
+  </nav>
+
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+
+    const NATIVE = (typeof window.AlNathimNative !== 'undefined' && window.AlNathimNative !== null);
+    let _cbSeq = 0;
+    const _cbs = {};
+    window.onNativeResult = function(callbackId, json) {
+      const cb = _cbs[callbackId];
+      if (cb) { delete _cbs[callbackId]; cb(json || {}); }
+    };
+
+    function switchTab(tab) {
+      document.getElementById('pingTab').classList.toggle('hidden', tab !== 'ping');
+      document.getElementById('signalTab').classList.toggle('hidden', tab !== 'signal');
+      document.getElementById('tabPingBtn').classList.toggle('active', tab === 'ping');
+      document.getElementById('tabSigBtn').classList.toggle('active', tab === 'signal');
+      if (tab === 'signal') loadSignalBoard();
+    }
+
+    // ── Ping ──
+    function setHost(h) { document.getElementById('pingHost').value = h; }
+
+    function doPing() {
+      const host = document.getElementById('pingHost').value.trim();
+      if (!host) { showToast('يرجى إدخال عنوان', 'error'); return; }
+      const btn = document.getElementById('pingBtn');
+      const box = document.getElementById('pingResult');
+      box.classList.remove('hidden');
+      box.innerHTML = '<div class="spinner">جاري الفحص...</div>';
+      btn.textContent = '⏳ جاري الفحص...';
+      btn.disabled = true;
+
+      function render(d) {
+        btn.textContent = 'فحص مباشر من الهاتف';
+        btn.disabled = false;
+        if (d && d.ok) {
+          const lossColor = d.loss_percent > 20 ? 'var(--expired)' : (d.loss_percent > 0 ? 'var(--muted)' : 'var(--active)');
+          box.innerHTML =
+            '<div class="card card-pad">' +
+              '<div class="metric-grid">' +
+                '<div class="metric"><div class="m-label">متوسط</div><div class="m-value">' + (d.avg_ms !== null && d.avg_ms !== undefined ? d.avg_ms + ' ms' : '—') + '</div></div>' +
+                '<div class="metric"><div class="m-label">أقل</div><div class="m-value">' + (d.min_ms !== null && d.min_ms !== undefined ? d.min_ms + ' ms' : '—') + '</div></div>' +
+                '<div class="metric"><div class="m-label">أعلى</div><div class="m-value">' + (d.max_ms !== null && d.max_ms !== undefined ? d.max_ms + ' ms' : '—') + '</div></div>' +
+                '<div class="metric"><div class="m-label">فقدان</div><div class="m-value" style="color:' + lossColor + ';">' + d.loss_percent + '%</div></div>' +
+              '</div>' +
+              '<div style="text-align:center;font-size:11px;color:var(--faint);margin-top:10px;">أرسل ' + d.sent + ' · استلم ' + d.received + (d.elapsed_sec !== undefined ? ' · زمن ' + d.elapsed_sec + ' ث' : '') + '</div>' +
+              (d.is_tcp_probe ? '<div style="text-align:center;font-size:11px;color:var(--active);margin-top:4px;">فحص TCP من الهاتف</div>' : '') +
+            '</div>';
+        } else {
+          box.innerHTML = '<div class="card card-pad" style="color:var(--expired);font-weight:700;text-align:center;">' + esc((d && d.error) || 'فشل الفحص') + '</div>';
+        }
+      }
+
+      // Native ICMP from the phone (works only inside the app)
+      if (NATIVE) {
+        const id = 'cb' + (++_cbSeq);
+        _cbs[id] = render;
+        try {
+          window.AlNathimNative.pingHost(host, id);
+          return;
+        } catch (e) {}
+      }
+
+      // Fallback: server-side ping
+      api('/network/ping', {host: host, count: 4}).then(d => render(d.ok ? d.data : null));
+    }
+
+    // ── Signal board ──
+    function signalQuality(dbm) {
+      const n = parseFloat(dbm);
+      if (isNaN(n)) return 'mid';
+      if (n >= -60) return 'ok';
+      if (n >= -75) return 'mid';
+      return 'bad';
+    }
+    function loadSignalBoard() {
+      const box = document.getElementById('signalList');
+      box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
+      api('/signal-board').then(d => {
+        if (!d.ok) {
+          box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
+          return;
+        }
+        const items = d.data.items || [];
+        const updated = d.data.last_update || '';
+        document.getElementById('signalUpdated').textContent = updated ? 'آخر تحديث: ' + esc(updated) : '';
+        if (!items.length) {
+          box.innerHTML = '<div class="empty"><div class="big">📡</div>لا توجد إشارات مسجلة — شغّل الماسح الضوئي على البرج أولاً</div>';
+          return;
+        }
+        box.innerHTML = '<div class="list-card">' + items.map(s => {
+          const q = signalQuality(s.signal_dbm);
+          const qBadge = '<span class="badge badge-' + q + '">' + esc(s.signal_dbm || '—') + ' dBm</span>';
+          return '<div class="row">' +
+            '<div class="row-main">' +
+              '<div class="row-title">' + esc(s.name) + '</div>' +
+              '<div class="row-sub" dir="ltr" style="text-align:right;">' + esc(s.ip) +
+                (s.ccq !== undefined && s.ccq !== null && s.ccq !== '' ? ' · CCQ ' + esc(s.ccq) + '%' : '') +
+                (s.rx_dbm !== undefined && s.rx_dbm !== null && s.rx_dbm !== '' ? ' · RX ' + esc(s.rx_dbm) : '') +
+                (s.tx_dbm !== undefined && s.tx_dbm !== null && s.tx_dbm !== '' ? ' · TX ' + esc(s.tx_dbm) : '') +
+              '</div>' +
+              '<div style="font-size:10px;color:var(--faint);margin-top:2px;">' + (s.type === 'optical' ? 'كيبل ضوئي' : 'وايرلس') + ' · ' + esc(s.status || '') + '</div>' +
+            '</div>' +
+            '<div class="row-end">' + qBadge + '</div>' +
+          '</div>';
+        }).join('') + '</div>';
+      });
+    }
+  </script>
+</body>
+</html>

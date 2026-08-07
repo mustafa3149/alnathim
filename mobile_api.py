@@ -244,9 +244,15 @@ def _invoice_payload(inv):
     """Serialize an invoice row (with remaining/is_paid computed)."""
     total = _to_int(inv["total_amount"])
     paid = min(_to_int(inv["paid_amount"]), total)
+    customer_name = ""
+    try:
+        customer_name = inv["customer_name"] or ""
+    except (KeyError, IndexError, TypeError):
+        pass
     return {
         "id": inv["id"],
         "customer_id": inv["customer_id"],
+        "customer_name": customer_name,
         "month": inv["month"],
         "year": inv["year"],
         "package_name": inv["package_name"] or "",
@@ -429,6 +435,18 @@ def mobile_refresh():
         "expires_in": int(AUTH_TOKEN_TTL_HOURS * 3600),
         "user": _user_payload(user),
     })
+
+
+@mobile_bp.route("/auth/me")
+@mobile_login_required
+def mobile_me():
+    """GET /auth/me → current user payload (used by the app to restore a session).
+
+    Lets the mobile app verify a saved access token and fetch the current
+    user without re-sending credentials — the same role as /dashboard/summary
+    but lighter (no DB aggregates).
+    """
+    return _ok(_user_payload(g.mobile_user))
 
 
 @mobile_bp.route("/auth/logout", methods=["POST"])
@@ -922,6 +940,25 @@ def mobile_payment_create():
         "payment_id": payment_id,
         "invoice": _invoice_payload(db.get_invoice(invoice_id)),
     })
+
+
+@mobile_bp.route("/payments")
+@mobile_login_required
+def mobile_payments_list():
+    """GET /payments?limit&search — recent payments (with customer names)."""
+    limit = min(200, max(1, _to_int(request.args.get("limit"), 50) or 50))
+    search = request.args.get("search", "").strip()
+    method = request.args.get("method", "").strip()
+    rows = db.list_recent_payments(search=search, method=method, limit=limit)
+    items = []
+    for p in rows:
+        payload = _payment_payload(p)
+        try:
+            payload["customer_name"] = p["customer_name"] or ""
+        except (KeyError, IndexError, TypeError):
+            payload["customer_name"] = ""
+        items.append(payload)
+    return _ok({"items": items})
 
 
 @mobile_bp.route("/payments/<int:payment_id>", methods=["PUT"])

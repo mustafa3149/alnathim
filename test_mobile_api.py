@@ -324,6 +324,59 @@ def test_report():
         db._execute("DELETE FROM users WHERE username = ?", (uname,))
 
 
+def test_auth_me():
+    """GET /auth/me returns the current user from the token (session restore)."""
+    uname = MARKER + "me"
+    db.create_user(uname, "secret123", "admin", full_name="مختبر /auth/me")
+    try:
+        client = app.test_client()
+        data, _ = login(client, uname, "secret123")
+        token = data["data"]["token"]
+        body, status = authorized_get(client, token, "/api/mobile/v1/auth/me")
+        assert_true(status == 200 and body["ok"] is True, "/auth/me → 200")
+        u = body["data"]
+        assert_true(u["username"] == uname and u["role"] == "admin",
+                    "/auth/me returns the current user")
+        assert_true("full_name" in u and "access_expires" in u,
+                    "/auth/me payload has user fields")
+        bad, bstatus = authorized_get(client, "bogus-token", "/api/mobile/v1/auth/me")
+        assert_true(bstatus == 401, f"/auth/me without token → 401 (got {bstatus})")
+    finally:
+        db._execute("DELETE FROM users WHERE username = ?", (uname,))
+
+
+def test_payments_list():
+    """GET /payments returns recent payments with customer_name."""
+    uname = MARKER + "paylist"
+    name = MARKER + "زبون مدفوعات"
+    db.create_user(uname, "secret123", "admin")
+    try:
+        client = app.test_client()
+        data, _ = login(client, uname, "secret123")
+        token = data["data"]["token"]
+
+        body, status = authorized_post(client, token, "/api/mobile/v1/customers", {
+            "name": name, "phone": "07701112233",
+            "package_name": "باقة", "package_price": 50000,
+            "duration_months": 1, "previous_debt": 0,
+        })
+        assert_true(status == 200, "customer created for payments test")
+        cid = body["data"]["customer_id"]
+
+        out, st = authorized_post(client, token, f"/api/mobile/v1/quick-pay/{cid}",
+                                  {"amount": 50000, "payment_method": "نقدي"})
+        assert_true(st == 200, "quick-pay succeeds for payments test")
+
+        plist, pstatus = authorized_get(client, token, "/api/mobile/v1/payments?limit=50")
+        assert_true(pstatus == 200 and plist["ok"] is True, "GET /payments → 200")
+        items = plist["data"]["items"]
+        assert_true(isinstance(items, list) and len(items) >= 1, "payments items list")
+        assert_true("customer_name" in items[0], "payment payload has customer_name")
+        assert_true(items[0]["customer_name"] == name, "customer_name matches")
+    finally:
+        db._execute("DELETE FROM users WHERE username = ?", (uname,))
+
+
 # ── Runner ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -334,6 +387,8 @@ if __name__ == "__main__":
     test_login_suspended()
     test_token_required()
     test_logout_revokes()
+    test_auth_me()
+    test_payments_list()
     test_rbac_agent_blocked()
     test_dashboard_summary()
     test_customer_create_quickpay_renew()

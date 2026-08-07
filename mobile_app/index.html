@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>الناظم — دخول</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-body page-enter">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="assets/icon.svg" alt="الناظم">
+      <h1>الناظم</h1>
+      <p>نظام إدارة شبكات الإنترنت</p>
+    </div>
+    <div id="errorBox" class="alert hidden"></div>
+
+    <div id="loginForm">
+      <div class="field">
+        <label>اسم المستخدم</label>
+        <input type="text" id="username" placeholder="admin" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="field">
+        <label>كلمة المرور</label>
+        <input type="password" id="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn-primary" id="loginBtn" onclick="doLogin()">دخول</button>
+      <div class="server-hint">
+        <label>عنوان السيرفر</label>
+        <input type="text" id="serverBase" placeholder="https://alnathim.onrender.com" dir="ltr" style="text-align:right;">
+      </div>
+    </div>
+
+    <div id="restoreBox" class="hidden" style="text-align:center;padding:12px 0;color:var(--muted);font-size:13px;">
+      <div class="spinner" style="padding:8px 0;">جاري استعادة الجلسة...</div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    // Load last server + check for a saved session
+    const savedServer = localStorage.getItem('alnathim_server') || 'https://alnathim.onrender.com';
+    document.getElementById('serverBase').value = savedServer;
+    API_BASE = savedServer + '/api/mobile/v1';
+
+    const savedToken = localStorage.getItem('alnathim_token');
+    if (savedToken) {
+      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('restoreBox').classList.remove('hidden');
+      // /auth/me now exists on the backend — verify the saved session
+      api('/auth/me').then(d => {
+        if (d.ok && d.data) {
+          localStorage.setItem('alnathim_user', JSON.stringify(d.data));
+          window.location.replace('dashboard.html');
+        } else {
+          localStorage.removeItem('alnathim_token');
+          localStorage.removeItem('alnathim_user');
+          document.getElementById('loginForm').classList.remove('hidden');
+          document.getElementById('restoreBox').classList.add('hidden');
+        }
+      }).catch(() => {
+        localStorage.removeItem('alnathim_token');
+        document.getElementById('loginForm').classList.remove('hidden');
+        document.getElementById('restoreBox').classList.add('hidden');
+      });
+    }
+
+    async function doLogin() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const server = document.getElementById('serverBase').value.trim().replace(/\/+$/, '');
+      if (!username || !password) return showError('أدخل اسم المستخدم وكلمة المرور');
+      if (!server) return showError('أدخل عنوان السيرفر');
+
+      localStorage.setItem('alnathim_server', server);
+      refreshApiBase();
+      const btn = document.getElementById('loginBtn');
+      btn.textContent = '⏳ جاري الدخول...'; btn.disabled = true;
+
+      try {
+        const r = await fetch(API_BASE + '/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password})
+        });
+        const d = await r.json().catch(() => null);
+        if (d && d.ok && d.data && d.data.token) {
+          localStorage.setItem('alnathim_token', d.data.token);
+          localStorage.setItem('alnathim_user', JSON.stringify(d.data.user || {}));
+          window.location.replace('dashboard.html');
+        } else {
+          showError((d && d.error && d.error.message_ar) || 'فشل الدخول');
+          btn.textContent = 'دخول'; btn.disabled = false;
+        }
+      } catch (e) {
+        showError('تعذر الاتصال بالسيرفر — تحقق من العنوان والإنترنت');
+        btn.textContent = 'دخول'; btn.disabled = false;
+      }
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.classList.remove('hidden');
+      setTimeout(() => box.classList.add('hidden'), 6000);
+    }
+  </script>
+</body>
+</html>

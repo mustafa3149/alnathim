@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>الناظم — المشترك</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-enter">
+  <div class="topbar">
+    <button style="background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;" onclick="history.back()">→</button>
+    <h1 id="detailTitle">المشترك</h1>
+    <div class="topbar-actions">
+      <button onclick="logout()" title="خروج">⏻</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="mainBox">
+      <div class="spinner">جاري التحميل...</div>
+    </div>
+  </div>
+
+  <!-- Quick-pay sheet -->
+  <div class="sheet-overlay" id="paySheet" onclick="if(event.target===this)closeSheet('paySheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('paySheet')">✕</button>
+      <div class="sheet-title">تسديد فاتورة الشهر</div>
+      <div id="payInvoiceBox" style="margin-bottom:12px;"></div>
+      <div class="seg" id="amountSeg">
+        <button data-v="25000" onclick="pickAmount(this,25000)">٢٥٬٠٠٠</button>
+        <button data-v="50000" onclick="pickAmount(this,50000)">٥٠٬٠٠٠</button>
+        <button data-v="75000" onclick="pickAmount(this,75000)">٧٥٬٠٠٠</button>
+        <button data-v="0" onclick="pickAmount(this,0)">الباقي</button>
+      </div>
+      <input type="number" id="payAmount" class="amount-box" value="" placeholder="المبلغ (د.ع)" inputmode="numeric">
+      <div class="field">
+        <label>طريقة الدفع</label>
+        <select id="payMethod" class="input">
+          <option value="نقدي">نقدي</option>
+          <option value="تحويل">تحويل</option>
+          <option value="بطاقة">بطاقة</option>
+          <option value="غير ذلك">غير ذلك</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="payBtn" onclick="submitPay()">تأكيد الدفع</button>
+    </div>
+  </div>
+
+  <!-- Renew sheet -->
+  <div class="sheet-overlay" id="renewSheet" onclick="if(event.target===this)closeSheet('renewSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('renewSheet')">✕</button>
+      <div class="sheet-title">تجديد الاشتراك</div>
+      <div class="field"><label>عدد الأشهر</label><input type="number" id="renewMonths" class="input" value="1" min="1" inputmode="numeric"></div>
+      <button class="btn-primary" id="renewBtn" onclick="submitRenew()">تأكيد التجديد</button>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+
+    const cid = new URLSearchParams(location.search).get('id');
+    let cust = null;
+    let currentInvoice = null;
+
+    function load() {
+      const cached = cacheGet('customer_' + cid);
+      if (cached) render(cached);
+      api('/customers/' + cid).then(d => {
+        if (d.ok && d.data && d.data.customer) {
+          cacheSet('customer_' + cid, d.data.customer);
+          render(d.data.customer);
+        } else {
+          document.getElementById('mainBox').innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
+        }
+      });
+    }
+
+    function render(c) {
+      cust = c;
+      document.getElementById('detailTitle').textContent = c.name || 'المشترك';
+      const st = customerState(c);
+      const waPhone = (c.whatsapp_phone || c.phone || '').replace(/[^0-9]/g, '');
+
+      let html = '';
+      html += '<div class="card card-pad" style="display:flex;align-items:center;gap:12px;margin-top:14px;">' +
+        stateDot(st) +
+        '<div style="flex:1;">' +
+          '<div style="font-size:17px;font-weight:800;">' + esc(c.name || '—') + '</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + esc(c.package_name || '') + ' · ' + stateText(st) + '</div>' +
+        '</div>' +
+        (waPhone ? '<a href="https://wa.me/' + waPhone + '" class="btn btn-sm" style="text-decoration:none;">واتساب</a>' : '') +
+      '</div>';
+
+      html += '<div class="section-label">فاتورة الشهر الحالي</div>';
+      html += '<div id="invBox" class="card card-pad" style="margin-top:8px;"><div class="spinner">جاري التحميل...</div></div>';
+
+      html += '<div class="section-label">البيانات</div>';
+      html += '<div class="detail-card">';
+      const rows = [
+        ['الهاتف', c.phone], ['هاتف ٢', c.phone2], ['الباقة', c.package_name],
+        ['سعر الباقة', c.package_price ? formatDinar(c.package_price) : ''],
+        ['المنطقة', c.region], ['العنوان', c.address],
+        ['اسم المستخدم', c.username], ['كلمة المرور', c.password],
+        ['IP', c.ip_address], ['نوع الجهاز', c.device_type],
+        ['تاريخ الاشتراك', c.subscription_date], ['تاريخ التجديد', c.renewal_date],
+        ['دين سابق', c.previous_debt ? formatDinar(c.previous_debt) : '']
+      ];
+      rows.forEach(r => {
+        if (r[1] !== undefined && r[1] !== null && String(r[1]).trim() !== '') {
+          html += '<div class="detail-row"><span class="d-label">' + r[0] + '</span><span class="d-value">' + esc(r[1]) + '</span></div>';
+        }
+      });
+      html += '</div>';
+
+      html += '<div class="section-label">السجل</div>';
+      html += '<div id="historyBox"><div class="spinner">جاري التحميل...</div></div>';
+
+      document.getElementById('mainBox').innerHTML = html;
+      loadInvoice(c);
+      loadHistory(c);
+    }
+    function loadInvoice(c) {
+      api('/payments/current-invoice/' + c.id).then(d => {
+        const box = document.getElementById('invBox');
+        if (!box) return;
+        if (!d.ok || !d.data || !d.data.invoice) {
+          box.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:6px 0;">لا توجد فاتورة لهذا الشهر</div>' +
+            '<button class="btn-primary" style="margin-top:12px;" onclick="openPaySheet()">إنشاء وتسديد</button>';
+          currentInvoice = null;
+          return;
+        }
+        const inv = d.data.invoice;
+        currentInvoice = inv;
+        const remaining = (inv.total_amount || 0) - (inv.paid_amount || 0);
+        box.innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<div><div style="font-size:12px;color:var(--muted);">' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + ' · ' + esc(inv.package_name || '') + '</div>' +
+            '<div style="font-size:18px;font-weight:800;margin-top:2px;">' + formatDinar(inv.total_amount || 0) + '</div></div>' +
+            '<div style="text-align:left;"><div class="badge ' + (remaining <= 0 ? 'badge-ok' : 'badge-bad') + '">' + (remaining <= 0 ? 'مدفوعة ✓' : 'متبقي') + '</div>' +
+            (remaining > 0 ? '<div style="font-size:13px;font-weight:800;color:var(--expired);margin-top:4px;">' + formatDinar(remaining) + '</div>' : '') + '</div>' +
+          '</div>' +
+          (remaining > 0
+            ? '<button class="btn-primary" style="margin-top:14px;" onclick="openPaySheet()">تسديد (' + formatDinar(remaining) + ')</button>'
+            : '<div style="text-align:center;color:var(--active);font-size:13px;font-weight:700;margin-top:12px;">مكتملة ✓</div>') +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">' +
+            '<button class="btn" onclick="openRenewSheet()">تجديد</button>' +
+            '<button class="btn" onclick="toggleCustomer()">' + (c.is_active ? 'إيقاف' : 'تفعيل') + '</button>' +
+          '</div>';
+      });
+    }
+
+    function loadHistory(c) {
+      api('/customers/' + c.id + '/history').then(d => {
+        const box = document.getElementById('historyBox');
+        if (!box) return;
+        if (!d.ok) { box.innerHTML = '<div class="empty">تعذر تحميل السجل</div>'; return; }
+        const invs = d.data.invoices || [];
+        const pays = d.data.payments || [];
+        let h = '';
+        if (pays.length) {
+          h += '<div class="section-label" style="margin:8px 0;">الدفعات</div><div class="list-card">';
+          h += pays.map(p =>
+            '<div class="row"><div class="row-main"><div class="row-title">' + esc(p.payment_date || '') + ' · ' + esc(p.payment_method || '') + '</div></div>' +
+            '<div class="row-end" style="font-weight:800;color:var(--active);">' + formatDinar(p.amount || 0) + '</div></div>'
+          ).join('');
+          h += '</div>';
+        }
+        if (invs.length) {
+          h += '<div class="section-label" style="margin:8px 0;">الفواتير</div><div class="list-card">';
+          h += invs.map(inv =>
+            '<div class="row"><div class="row-main"><div class="row-title">' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + ' · ' + esc(inv.package_name || '') + '</div>' +
+            '<div class="row-sub">' + (inv.is_paid ? 'مدفوعة ✓' : 'متبقي ' + formatDinar((inv.total_amount || 0) - (inv.paid_amount || 0))) + '</div></div>' +
+            '<div class="row-end" style="font-weight:700;">' + formatDinar(inv.total_amount || 0) + '</div></div>'
+          ).join('');
+          h += '</div>';
+        }
+        if (!h) h = '<div class="empty">لا يوجد سجل بعد</div>';
+        box.innerHTML = h;
+      });
+    }
+    // ── Quick pay ──
+    function openPaySheet() {
+      if (currentInvoice && currentInvoice.paid_amount > 0) {
+        document.getElementById('payInvoiceBox').innerHTML =
+          '<div style="font-size:13px;color:var(--muted);">مدفوع حتى الآن: <b style="color:var(--active);">' + formatDinar(currentInvoice.paid_amount) + '</b></div>';
+      } else {
+        document.getElementById('payInvoiceBox').innerHTML = '';
+      }
+      document.getElementById('payAmount').value = '';
+      document.querySelectorAll('#amountSeg button').forEach(b => b.classList.remove('active'));
+      openSheet('paySheet');
+    }
+    function pickAmount(btn, v) {
+      document.querySelectorAll('#amountSeg button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (v > 0) document.getElementById('payAmount').value = v;
+      else document.getElementById('payAmount').value = '';
+    }
+    async function submitPay() {
+      const amountRaw = document.getElementById('payAmount').value.trim();
+      const amount = amountRaw === '' ? 0 : parseInt(amountRaw) || 0;
+      const btn = document.getElementById('payBtn');
+      btn.textContent = '⏳ جاري الدفع...'; btn.disabled = true;
+      const d = await api('/quick-pay/' + cid, {
+        amount: amount,
+        payment_method: document.getElementById('payMethod').value
+      });
+      btn.textContent = 'تأكيد الدفع'; btn.disabled = false;
+      if (d.ok) {
+        closeSheet('paySheet');
+        showToast('تم استلام ' + formatDinar(d.data.amount) + ' ✓');
+        load();
+      } else {
+        showToast((d.error && d.error.message_ar) || 'فشل الدفع', 'error');
+      }
+    }
+
+    // ── Renew ──
+    function openRenewSheet() {
+      document.getElementById('renewMonths').value = '1';
+      openSheet('renewSheet');
+    }
+    async function submitRenew() {
+      const months = Math.max(1, parseInt(document.getElementById('renewMonths').value) || 1);
+      const btn = document.getElementById('renewBtn');
+      btn.textContent = '⏳ جاري التجديد...'; btn.disabled = true;
+      const d = await api('/customers/' + cid + '/renew', {months: months});
+      btn.textContent = 'تأكيد التجديد'; btn.disabled = false;
+      if (d.ok) {
+        closeSheet('renewSheet');
+        showToast('تم التجديد ' + toArabicNum(months) + ' شهر ✓');
+        load();
+      } else {
+        showToast((d.error && d.error.message_ar) || 'فشل التجديد', 'error');
+      }
+    }
+
+    // ── Toggle active ──
+    async function toggleCustomer() {
+      if (!confirm('تأكيد تغيير حالة المشترك؟')) return;
+      const d = await api('/customers/' + cid + '/toggle', {});
+      if (d.ok) { showToast('تم التغيير ✓'); load(); }
+      else showToast((d.error && d.error.message_ar) || 'فشل التغيير', 'error');
+    }
+
+    if (!cid) {
+      document.getElementById('mainBox').innerHTML = '<div class="empty">معرف المشترك غير موجود</div>';
+    } else {
+      load();
+    }
+  </script>
+</body>
+</html>
