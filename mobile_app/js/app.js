@@ -123,6 +123,23 @@ async function warmupCache() {
   }));
 }
 
+// ── Silent background load (Blood-style: never block the page) ──
+// Renders cached data instantly (if any), then refreshes quietly from the
+// server. No spinner, no waiting — if there's nothing new, nothing happens.
+async function silentLoad(key, path, renderFn) {
+  const cached = cacheGet(key);
+  if (cached) {
+    try { renderFn(cached, true); } catch (e) {}
+  }
+  try {
+    const d = await api(path);
+    if (d.ok && d.data !== undefined) {
+      cacheSet(key, d.data);
+      try { renderFn(d.data, false); } catch (e) {}
+    }
+  } catch (e) {} // server offline → keep what we have, do nothing
+}
+
 // ── Load-from-cache-first helper ──────────────────────────────
 async function loadCached(key, path, renderFn, onError) {
   const cached = cacheGet(key);

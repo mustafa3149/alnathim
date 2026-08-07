@@ -16,9 +16,7 @@
   </div>
 
   <div class="container">
-    <div id="mainBox">
-      <div class="spinner">جاري التحميل...</div>
-    </div>
+    <div id="mainBox"></div>
   </div>
 
   <!-- Quick-pay sheet -->
@@ -74,9 +72,8 @@
         if (d.ok && d.data && d.data.customer) {
           cacheSet('customer_' + cid, d.data.customer);
           render(d.data.customer);
-        } else {
-          document.getElementById('mainBox').innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
         }
+        // server offline → keep cached profile, do nothing visible
       });
     }
 
@@ -97,7 +94,7 @@
       '</div>';
 
       html += '<div class="section-label">فاتورة الشهر الحالي</div>';
-      html += '<div id="invBox" class="card card-pad" style="margin-top:8px;"><div class="spinner">جاري التحميل...</div></div>';
+      html += '<div id="invBox" class="card card-pad" style="margin-top:8px;"></div>';
 
       html += '<div class="section-label">البيانات</div>';
       html += '<div class="detail-card">';
@@ -118,7 +115,7 @@
       html += '</div>';
 
       html += '<div class="section-label">السجل</div>';
-      html += '<div id="historyBox"><div class="spinner">جاري التحميل...</div></div>';
+      html += '<div id="historyBox"></div>';
 
       document.getElementById('mainBox').innerHTML = html;
       loadInvoice(c);
@@ -158,7 +155,7 @@
       api('/customers/' + c.id + '/history').then(d => {
         const box = document.getElementById('historyBox');
         if (!box) return;
-        if (!d.ok) { box.innerHTML = '<div class="empty">تعذر تحميل السجل</div>'; return; }
+        if (!d.ok) return; // silent — keep nothing / cached
         const invs = d.data.invoices || [];
         const pays = d.data.payments || [];
         let h = '';

@@ -47,9 +47,7 @@
       <div class="kpi" style="flex:1;padding:10px;"><div class="k-label">المتبقي</div><div class="k-value" id="sumRemaining" style="font-size:15px;color:var(--expired);">—</div></div>
     </div>
 
-    <div id="billingList" style="margin-top:14px;">
-      <div class="spinner">جاري التحميل...</div>
-    </div>
+    <div id="billingList" style="margin-top:14px;"></div>
   </div>
 
   <!-- Bottom nav -->
@@ -121,20 +119,15 @@
         }).join('') + '</div>';
       }
 
-      // Cache-first (Blood-style): show instantly, refresh in background.
+      // Cache-first (Blood-style): show instantly, refresh silently.
       const cached = cacheGet(cacheKey);
-      if (cached) {
-        render(cached);
-      } else {
-        box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
-      }
+      if (cached) render(cached);
       const d = await api('/invoices?month=' + month + '&year=' + year);
       if (d.ok) {
         cacheSet(cacheKey, d.data);
         render(d.data);
-      } else if (!cached) {
-        box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
       }
+      // server offline → keep what we have, nothing visible happens
     }
 
     loadInvoices();

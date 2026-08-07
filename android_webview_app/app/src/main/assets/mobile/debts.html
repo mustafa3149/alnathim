@@ -19,9 +19,7 @@
     <div class="page-title">الديون</div>
     <div class="page-sub">المشتركين عليهم ديون</div>
 
-    <div id="debtList" style="margin-top:14px;">
-      <div class="spinner">جاري التحميل...</div>
-    </div>
+    <div id="debtList" style="margin-top:14px;"></div>
   </div>
 
   <!-- Bottom nav -->
@@ -84,10 +82,9 @@
       }).join('');
     }
 
-    loadCached('debts', '/debts', renderDebts, (err) => {
-      document.getElementById('debtList').innerHTML = '<div class="empty">' + esc(err) + '</div>';
-      showToast(err, 'error');
-    });
+    // Silent background refresh — the page opens instantly, debts fill in
+    // quietly; if nothing is new, nothing changes.
+    silentLoad('debts', '/debts', renderDebts);
   </script>
 </body>
 </html>

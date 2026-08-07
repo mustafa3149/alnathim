@@ -30,9 +30,7 @@
       <button class="chip" data-s="debt" onclick="setStatus(this,'debt')">مدين</button>
     </div>
 
-    <div id="customerList" style="margin-top:14px;">
-      <div class="spinner">جاري التحميل...</div>
-    </div>
+    <div id="customerList" style="margin-top:14px;"></div>
   </div>
 
   <!-- Floating add button -->
@@ -151,9 +149,8 @@
         }
         allCustomers = items;
         renderFiltered();
-      } else if (!cached) {
-        document.getElementById('customerList').innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
       }
+      // server offline → keep the cached list, do nothing visible
     }
 
     async function addCustomer() {

@@ -49,9 +49,7 @@
     <div id="signalTab" class="hidden">
       <div style="margin-top:14px;">
         <div class="page-sub" id="signalUpdated"></div>
-        <div id="signalList" style="margin-top:10px;">
-          <div class="spinner">جاري التحميل...</div>
-        </div>
+        <div id="signalList" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>
@@ -155,37 +153,42 @@
       if (n >= -75) return 'mid';
       return 'bad';
     }
+    function renderSignal(data) {
+      const box = document.getElementById('signalList');
+      const items = (data && data.items) || [];
+      const updated = (data && data.last_update) || '';
+      document.getElementById('signalUpdated').textContent = updated ? 'آخر تحديث: ' + esc(updated) : '';
+      if (!items.length) {
+        box.innerHTML = '<div class="empty"><div class="big">📡</div>لا توجد إشارات مسجلة — شغّل الماسح الضوئي على البرج أولاً</div>';
+        return;
+      }
+      box.innerHTML = '<div class="list-card">' + items.map(s => {
+        const q = signalQuality(s.signal_dbm);
+        const qBadge = '<span class="badge badge-' + q + '">' + esc(s.signal_dbm || '—') + ' dBm</span>';
+        return '<div class="row">' +
+          '<div class="row-main">' +
+            '<div class="row-title">' + esc(s.name) + '</div>' +
+            '<div class="row-sub" dir="ltr" style="text-align:right;">' + esc(s.ip) +
+              (s.ccq !== undefined && s.ccq !== null && s.ccq !== '' ? ' · CCQ ' + esc(s.ccq) + '%' : '') +
+              (s.rx_dbm !== undefined && s.rx_dbm !== null && s.rx_dbm !== '' ? ' · RX ' + esc(s.rx_dbm) : '') +
+              (s.tx_dbm !== undefined && s.tx_dbm !== null && s.tx_dbm !== '' ? ' · TX ' + esc(s.tx_dbm) : '') +
+            '</div>' +
+            '<div style="font-size:10px;color:var(--faint);margin-top:2px;">' + (s.type === 'optical' ? 'كيبل ضوئي' : 'وايرلس') + ' · ' + esc(s.status || '') + '</div>' +
+          '</div>' +
+          '<div class="row-end">' + qBadge + '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
     function loadSignalBoard() {
       const box = document.getElementById('signalList');
-      box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
+      const cached = cacheGet('signal');
+      if (cached) renderSignal(cached);
       api('/signal-board').then(d => {
-        if (!d.ok) {
-          box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
-          return;
+        if (d.ok) {
+          cacheSet('signal', d.data);
+          renderSignal(d.data);
         }
-        const items = d.data.items || [];
-        const updated = d.data.last_update || '';
-        document.getElementById('signalUpdated').textContent = updated ? 'آخر تحديث: ' + esc(updated) : '';
-        if (!items.length) {
-          box.innerHTML = '<div class="empty"><div class="big">📡</div>لا توجد إشارات مسجلة — شغّل الماسح الضوئي على البرج أولاً</div>';
-          return;
-        }
-        box.innerHTML = '<div class="list-card">' + items.map(s => {
-          const q = signalQuality(s.signal_dbm);
-          const qBadge = '<span class="badge badge-' + q + '">' + esc(s.signal_dbm || '—') + ' dBm</span>';
-          return '<div class="row">' +
-            '<div class="row-main">' +
-              '<div class="row-title">' + esc(s.name) + '</div>' +
-              '<div class="row-sub" dir="ltr" style="text-align:right;">' + esc(s.ip) +
-                (s.ccq !== undefined && s.ccq !== null && s.ccq !== '' ? ' · CCQ ' + esc(s.ccq) + '%' : '') +
-                (s.rx_dbm !== undefined && s.rx_dbm !== null && s.rx_dbm !== '' ? ' · RX ' + esc(s.rx_dbm) : '') +
-                (s.tx_dbm !== undefined && s.tx_dbm !== null && s.tx_dbm !== '' ? ' · TX ' + esc(s.tx_dbm) : '') +
-              '</div>' +
-              '<div style="font-size:10px;color:var(--faint);margin-top:2px;">' + (s.type === 'optical' ? 'كيبل ضوئي' : 'وايرلس') + ' · ' + esc(s.status || '') + '</div>' +
-            '</div>' +
-            '<div class="row-end">' + qBadge + '</div>' +
-          '</div>';
-        }).join('') + '</div>';
+        // server offline → keep cached signals, nothing visible happens
       });
     }
   </script>

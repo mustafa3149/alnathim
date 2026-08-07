@@ -40,15 +40,11 @@
 
     <!-- Expiring this week -->
     <div class="section-label" id="expLabel">المنتهيون هذا الأسبوع</div>
-    <div id="expiringBox">
-      <div class="spinner">جاري التحميل...</div>
-    </div>
+    <div id="expiringBox"></div>
 
     <!-- Recent payments -->
     <div class="section-label">آخر المدفوعات</div>
-    <div id="payBox">
-      <div class="spinner">جاري التحميل...</div>
-    </div>
+    <div id="payBox"></div>
   </div>
 
   <!-- Bottom nav -->
@@ -120,11 +116,8 @@
       }
     }
 
-    loadCached('dashboard', '/dashboard/summary', renderSummary, (err) => {
-      document.getElementById('expiringBox').innerHTML = '<div class="empty">' + esc(err) + '</div>';
-      document.getElementById('payBox').innerHTML = '';
-      showToast(err, 'error');
-    });
+    // Silent background refresh: page is already open, data fills in quietly.
+    silentLoad('dashboard', '/dashboard/summary', renderSummary);
 
     // Blood-style speed: keep the server warm and seed the cache so every
     // page opens instantly from local storage on first navigation.
