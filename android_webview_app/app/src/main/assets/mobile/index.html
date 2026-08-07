@@ -193,17 +193,17 @@
       btn.textContent = '⏳ جاري الدخول...'; btn.disabled = true;
 
       try {
-        const r = await fetch(API_BASE + '/auth/login', {
+        const r = await fetchWithRetry(API_BASE + '/auth/login', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({username, password})
-        });
+        }, 3, 2500);
         const d = await r.json().catch(() => null);
         btn.textContent = 'دخول'; btn.disabled = false;
         handleLoginResult(d, username, password);
       } catch (e) {
         btn.textContent = 'دخول'; btn.disabled = false;
-        showError('تعذر الاتصال بالسيرفر — تحقق من العنوان والإنترنت');
+        showError('تعذر الاتصال بالسيرفر — تأكد من الإنترنت ثم أعد المحاولة');
       }
     }
 
@@ -250,11 +250,11 @@
     async function pollStatus() {
       pollCount++;
       try {
-        const r = await fetch(API_BASE + '/auth/check-status', {
+        const r = await fetchWithRetry(API_BASE + '/auth/check-status', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({username: pendingUser, password: pendingPass})
-        });
+        }, 2, 2500);
         const d = await r.json().catch(() => null);
         const state = d && d.data && d.data.state;
         if (state === 'approved') {

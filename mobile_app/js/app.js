@@ -46,6 +46,24 @@ function cacheSet(key, data) {
   } catch (e) {}
 }
 
+// ── Retry helper (handles Render free-tier cold starts) ─────
+// The first request after a long idle wakes the server (~30-60s);
+// a transient failure on wake-up is retried automatically.
+async function fetchWithRetry(url, opts, attempts, delayMs) {
+  attempts = attempts || 3;
+  delayMs = delayMs || 2500;
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, opts);
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
 // ── API call with token + error envelope ──────────────────────
 // api(path)                 → GET
 // api(path, body)           → POST (body = object)
