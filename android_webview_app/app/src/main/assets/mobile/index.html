@@ -15,6 +15,7 @@
     </div>
     <div id="errorBox" class="alert hidden"></div>
 
+    <!-- Login form -->
     <div id="loginForm">
       <div class="field">
         <label>اسم المستخدم</label>
@@ -29,42 +30,74 @@
         <label>عنوان السيرفر</label>
         <input type="text" id="serverBase" placeholder="https://alnathim.onrender.com" dir="ltr" style="text-align:right;">
       </div>
+      <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px;">
+        ليس لديك حساب؟
+        <a href="#" onclick="openSheet('regSheet');return false;" style="color:var(--active);font-weight:700;">إنشاء حساب</a>
+      </p>
     </div>
 
+    <!-- Waiting for approval card (EXE-style auto-login) -->
+    <div id="waitingCard" class="hidden" style="text-align:center;padding:10px 4px;">
+      <div style="font-size:42px;margin-bottom:10px;">⏳</div>
+      <div id="waitingMsg" style="font-size:14px;font-weight:800;line-height:1.7;">بانتظار موافقة المدير<br>سيتم الدخول تلقائياً فور الموافقة</div>
+      <div id="waitingSub" style="font-size:11px;color:var(--muted);margin-top:6px;">الحالة تُحدَّث تلقائياً</div>
+      <button class="btn" style="margin-top:16px;" onclick="cancelWaiting()">إلغاء والعودة</button>
+    </div>
+
+    <!-- Session restore -->
     <div id="restoreBox" class="hidden" style="text-align:center;padding:12px 0;color:var(--muted);font-size:13px;">
       <div class="spinner" style="padding:8px 0;">جاري استعادة الجلسة...</div>
     </div>
   </div>
 
-  <script src="js/app.js"></script>
+  <!-- Register sheet -->
+  <div class="sheet-overlay" id="regSheet" onclick="if(event.target===this)closeSheet('regSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('regSheet')">✕</button>
+      <div class="sheet-title">إنشاء حساب جديد</div>
+      <div class="field"><label>الاسم الكامل *</label><input type="text" id="rName" class="input" placeholder="الاسم الثلاثي"></div>
+      <div class="field"><label>اسم المستخدم *</label><input type="text" id="rUsername" class="input" placeholder="اسم دخول فريد"></div>
+      <div class="field"><label>كلمة المرور * (٦ أحرف على الأقل)</label><input type="password" id="rPassword" class="input" placeholder="••••••"></div>
+      <div class="field"><label>رقم الهاتف</label><input type="text" id="rPhone" class="input" dir="ltr" placeholder="07xxxxxxxxx"></div>
+      <div class="field"><label>رمز الدعوة (اختياري — يفعّل الحساب فوراً)</label><input type="text" id="rInvite" class="input" dir="ltr"></div>
+      <button class="btn-primary" id="regBtn" onclick="doRegister()">إنشاء الحساب</button>
+    </div>
+  </div>
+
   <script>
-    // Load last server + check for a saved session
     const savedServer = localStorage.getItem('alnathim_server') || 'https://alnathim.onrender.com';
     document.getElementById('serverBase').value = savedServer;
-    API_BASE = savedServer + '/api/mobile/v1';
+    refreshApiBase();
 
+    let pollTimer = null;
+    let pollCount = 0;
+    let pendingUser = '';
+    let pendingPass = '';
+
+    // ── Session restore ──
     const savedToken = localStorage.getItem('alnathim_token');
     if (savedToken) {
       document.getElementById('loginForm').classList.add('hidden');
       document.getElementById('restoreBox').classList.remove('hidden');
-      // /auth/me now exists on the backend — verify the saved session
       api('/auth/me').then(d => {
         if (d.ok && d.data) {
           localStorage.setItem('alnathim_user', JSON.stringify(d.data));
           window.location.replace('dashboard.html');
         } else {
-          localStorage.removeItem('alnathim_token');
-          localStorage.removeItem('alnathim_user');
-          document.getElementById('loginForm').classList.remove('hidden');
-          document.getElementById('restoreBox').classList.add('hidden');
+          clearSession();
         }
-      }).catch(() => {
-        localStorage.removeItem('alnathim_token');
-        document.getElementById('loginForm').classList.remove('hidden');
-        document.getElementById('restoreBox').classList.add('hidden');
-      });
+      }).catch(() => clearSession());
     }
 
+    function clearSession() {
+      localStorage.removeItem('alnathim_token');
+      localStorage.removeItem('alnathim_user');
+      document.getElementById('loginForm').classList.remove('hidden');
+      document.getElementById('restoreBox').classList.add('hidden');
+    }
+
+    // ── Login ──
     async function doLogin() {
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
@@ -84,17 +117,112 @@
           body: JSON.stringify({username, password})
         });
         const d = await r.json().catch(() => null);
-        if (d && d.ok && d.data && d.data.token) {
+        btn.textContent = 'دخول'; btn.disabled = false;
+        handleLoginResult(d, username, password);
+      } catch (e) {
+        btn.textContent = 'دخول'; btn.disabled = false;
+        showError('تعذر الاتصال بالسيرفر — تحقق من العنوان والإنترنت');
+      }
+    }
+
+    function handleLoginResult(d, username, password) {
+      if (d && d.ok && d.data && d.data.token) {
+        localStorage.setItem('alnathim_token', d.data.token);
+        localStorage.setItem('alnathim_user', JSON.stringify(d.data.user || {}));
+        window.location.replace('dashboard.html');
+        return;
+      }
+      const code = d && d.error && d.error.code;
+      const msg = (d && d.error && d.error.message_ar) || 'فشل الدخول';
+      if (code === 'pending') {
+        // EXE-style: wait for admin approval, auto-login when approved
+        pendingUser = username; pendingPass = password;
+        showWaiting('بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة');
+        startPolling();
+      } else {
+        showError(msg);
+      }
+    }
+
+    // ── Pending-approval polling (same as the EXE launcher) ──
+    function showWaiting(msg) {
+      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('waitingCard').classList.remove('hidden');
+      document.getElementById('waitingMsg').innerHTML = msg.replace(/\n/g, '<br>');
+    }
+    function cancelWaiting() {
+      stopPolling();
+      document.getElementById('waitingCard').classList.add('hidden');
+      document.getElementById('loginForm').classList.remove('hidden');
+    }
+    function startPolling() {
+      stopPolling();
+      pollCount = 0;
+      pollTimer = setInterval(pollStatus, 10000);
+    }
+    function stopPolling() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+    async function pollStatus() {
+      pollCount++;
+      try {
+        const r = await fetch(API_BASE + '/auth/check-status', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username: pendingUser, password: pendingPass})
+        });
+        const d = await r.json().catch(() => null);
+        const state = d && d.data && d.data.state;
+        if (state === 'approved') {
+          stopPolling();
           localStorage.setItem('alnathim_token', d.data.token);
           localStorage.setItem('alnathim_user', JSON.stringify(d.data.user || {}));
-          window.location.replace('dashboard.html');
-        } else {
-          showError((d && d.error && d.error.message_ar) || 'فشل الدخول');
-          btn.textContent = 'دخول'; btn.disabled = false;
+          document.getElementById('waitingMsg').textContent = '✅ تمت الموافقة — جاري الدخول';
+          setTimeout(() => window.location.replace('dashboard.html'), 600);
+        } else if (state === 'pending') {
+          document.getElementById('waitingMsg').textContent =
+            'بانتظار موافقة المدير — سيتم الدخول تلقائياً (' + Math.round(pollCount * 10) + ' ثانية)';
+        } else if (state === 'suspended' || state === 'expired' || state === 'invalid') {
+          stopPolling();
+          cancelWaiting();
+          showError((d.data && d.data.error) || 'تعذر الدخول');
+        } else if (state === 'busy') {
+          document.getElementById('waitingMsg').textContent = 'طلبات كثيرة — إعادة المحاولة تلقائياً...';
         }
       } catch (e) {
-        showError('تعذر الاتصال بالسيرفر — تحقق من العنوان والإنترنت');
-        btn.textContent = 'دخول'; btn.disabled = false;
+        document.getElementById('waitingMsg').textContent = 'تعذر الاتصال بالخادم — جارٍ إعادة المحاولة...';
+      }
+    }
+
+    // ── Register (mirrors the EXE register flow) ──
+    async function doRegister() {
+      const full_name = document.getElementById('rName').value.trim();
+      const username = document.getElementById('rUsername').value.trim();
+      const password = document.getElementById('rPassword').value;
+      const phone = document.getElementById('rPhone').value.trim();
+      const invite_code = document.getElementById('rInvite').value.trim();
+      if (!full_name || !username || !password) { showToast('أكمل الاسم واسم المستخدم وكلمة المرور', 'error'); return; }
+      if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
+      const btn = document.getElementById('regBtn');
+      btn.textContent = '⏳ جاري إنشاء الحساب...'; btn.disabled = true;
+      const d = await api('/auth/register', {full_name, username, password, phone, invite_code});
+      btn.textContent = 'إنشاء الحساب'; btn.disabled = false;
+      if (d.ok && d.data) {
+        closeSheet('regSheet');
+        if (d.data.auto_approved) {
+          showToast('✅ تم تفعيل الحساب — سجل دخولك الآن');
+          document.getElementById('username').value = username;
+          document.getElementById('password').focus();
+        } else {
+          // EXE-style: wait for admin approval and auto-login
+          document.getElementById('username').value = username;
+          document.getElementById('password').value = password;
+          pendingUser = username; pendingPass = password;
+          showWaiting('تم إرسال طلبك — بانتظار موافقة المدير\nسيتم الدخول تلقائياً فور الموافقة');
+          startPolling();
+        }
+      } else {
+        showToast((d.error && d.error.message_ar) || 'فشل إنشاء الحساب', 'error');
       }
     }
 

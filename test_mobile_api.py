@@ -377,6 +377,52 @@ def test_payments_list():
         db._execute("DELETE FROM users WHERE username = ?", (uname,))
 
 
+def test_check_status_flow():
+    """EXE-style pending-approval polling: pending → approved → auto-login."""
+    uname = MARKER + "waiting"
+    db.create_registration(full_name="مختبر الانتظار", username=uname,
+                           password="secret123", phone="", invite_code="")
+    try:
+        client = app.test_client()
+
+        # 1) Fresh account is pending → check-status says pending (no token).
+        resp = client.post("/api/mobile/v1/auth/check-status",
+                           json={"username": uname, "password": "secret123"})
+        data, status = resp.get_json(), resp.status_code
+        assert_true(status == 200, f"check-status → 200 (got {status})")
+        assert_true(data["ok"] is True, "check-status ok=True")
+        assert_true(data["data"]["state"] == "pending",
+                    f"fresh account state == pending (got {data['data'].get('state')})")
+
+        # 2) Admin approves (simulate the Admin Center action).
+        user = db.get_user_by_username(uname)
+        db.set_user_status(user["id"], "active")
+
+        # 3) Next poll → approved with a fresh token pair.
+        resp = client.post("/api/mobile/v1/auth/check-status",
+                           json={"username": uname, "password": "secret123"})
+        data = resp.get_json()
+        assert_true(data["data"]["state"] == "approved",
+                    f"after approval state == approved (got {data['data'].get('state')})")
+        token = data["data"]["token"]
+        assert_true(token and data["data"]["refresh_token"], "approved issues tokens")
+        assert_true(data["data"]["user"]["username"] == uname, "approved returns user")
+
+        # 4) That token unlocks the rest of the API.
+        me, me_status = authorized_get(client, token, "/api/mobile/v1/auth/me")
+        assert_true(me_status == 200 and me["data"]["username"] == uname,
+                    "token works on /auth/me")
+
+        # 5) Wrong password during polling → invalid (no lockout side effects).
+        resp = client.post("/api/mobile/v1/auth/check-status",
+                           json={"username": uname, "password": "wrong"})
+        bdata = resp.get_json()
+        assert_true(bdata["data"]["state"] == "invalid",
+                    "wrong password → state invalid")
+    finally:
+        db._execute("DELETE FROM users WHERE username = ?", (uname,))
+
+
 # ── Runner ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -389,6 +435,7 @@ if __name__ == "__main__":
     test_logout_revokes()
     test_auth_me()
     test_payments_list()
+    test_check_status_flow()
     test_rbac_agent_blocked()
     test_dashboard_summary()
     test_customer_create_quickpay_renew()

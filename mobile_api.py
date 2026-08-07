@@ -449,6 +449,74 @@ def mobile_me():
     return _ok(_user_payload(g.mobile_user))
 
 
+# Generous poll budget for the pending-approval auto-login (mirrors the EXE's
+# machine budget). The app polls while a registration is pending — the strict
+# human /auth/login limiter (10 tries/5min) would lock the phone out before the
+# admin approves, exactly the bug the desktop launcher used to have.
+_MACHINE_RATE_ATTEMPTS = 120
+_MACHINE_RATE_WINDOW_SECONDS = 5 * 60
+_machine_rate_attempts = defaultdict(deque)
+
+
+def _machine_rate_limited():
+    """Return True when the caller exceeded its generous poll budget."""
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    now = time()
+    window = _machine_rate_attempts[ip]
+    while window and now - window[0] > _MACHINE_RATE_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= _MACHINE_RATE_ATTEMPTS:
+        return True
+    window.append(now)
+    return False
+
+
+@mobile_bp.route("/auth/check-status", methods=["POST"])
+def mobile_check_status():
+    """POST /auth/check-status — pending-approval polling (EXE-style).
+
+    Body: {username, password}. Uses the generous poll budget so the app can
+    wait on 'بانتظار موافقة المدير' and auto-login the moment the admin
+    approves — exactly like the desktop launcher's /api/remote/login.
+
+    Returns {ok, data: {state, error?, token?, refresh_token?, expires_in?, user?}}
+    where state ∈ approved | pending | suspended | expired | invalid | busy.
+    """
+    if _machine_rate_limited():
+        return _ok({"state": "busy", "error": "محاولات كثيرة — حاول بعد قليل"})
+
+    data = request.get_json() or {}
+    username = str(data.get("username", "")).strip()
+    password = data.get("password", "")
+    if not username or not password:
+        return _ok({"state": "invalid", "error": "أدخل اسم المستخدم وكلمة المرور"})
+
+    user = db.get_user_by_username(username)
+    if user is None:
+        check_password_hash(_DUMMY_HASH, password)
+        return _ok({"state": "invalid", "error": "بيانات الدخول غير صحيحة"})
+    if not db.verify_password(user, password):
+        return _ok({"state": "invalid", "error": "بيانات الدخول غير صحيحة"})
+
+    status = str(user["status"] or "active")
+    if status == "suspended":
+        return _ok({"state": "suspended", "error": "الحساب موقوف — راجع المدير"})
+    if status == "pending":
+        return _ok({"state": "pending", "error": "بانتظار موافقة المدير"})
+    if not db.is_user_active(user):
+        return _ok({"state": "expired", "error": "انتهت صلاحية الدخول — راجع المدير"})
+
+    access = _issue_token(user["id"], AUTH_TOKEN_TTL_HOURS, "access")
+    refresh = _issue_token(user["id"], AUTH_REFRESH_TTL_DAYS * 24, "refresh")
+    return _ok({
+        "state": "approved",
+        "token": access,
+        "refresh_token": refresh,
+        "expires_in": int(AUTH_TOKEN_TTL_HOURS * 3600),
+        "user": _user_payload(user),
+    })
+
+
 @mobile_bp.route("/auth/logout", methods=["POST"])
 @mobile_login_required
 def mobile_logout():

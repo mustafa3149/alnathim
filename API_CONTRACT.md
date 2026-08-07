@@ -50,6 +50,7 @@ token user's id (project rule 8.1 — Arabic user-facing messages).
 | POST | `/auth/login` | — | `{username, password}` → `{token, refresh_token, expires_in, user}` |
 | POST | `/auth/refresh` | — | `{refresh_token}` → rotated token pair |
 | GET | `/auth/me` | access | Current user payload — used to restore a saved session |
+| POST | `/auth/check-status` | — | EXE-style approval poll: `{username, password}` → `{state: approved\|pending\|suspended\|expired\|invalid\|busy, token?, user?}`. Uses the generous machine poll budget so the app can wait on "بانتظار موافقة المدير" and auto-login when approved |
 | POST | `/auth/logout` | access | Revokes access + refresh (if passed in body) |
 
 ---
