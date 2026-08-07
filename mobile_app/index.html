@@ -2,66 +2,147 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>الناظم — دخول</title>
   <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="auth-body page-enter">
-  <div class="auth-card">
-    <div class="auth-logo">
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       EXE-STYLE LOGIN — rebuilt from 0 to match the desktop
+       launcher (templates/login.html): slate dark card,
+       indigo→purple gradient button, blurred backdrop.
+       ═══════════════════════════════════════════════════════ */
+    .exe-login { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px 18px; }
+    .exe-wrap { width:100%; max-width:380px; }
+
+    .exe-logo { text-align:center; margin-bottom:28px; }
+    .exe-logo img { width:64px; height:64px; border-radius:16px; box-shadow:0 10px 30px rgba(99,102,241,.25); }
+    .exe-logo h1 { font-size:24px; font-weight:800; margin-top:10px; color:var(--text); }
+    .exe-logo p { font-size:13px; color:var(--muted); margin-top:3px; font-family:'Tajawal','Cairo',sans-serif; }
+
+    .exe-card {
+      background:rgba(30,41,59,.72);
+      border:1px solid rgba(51,65,85,.6);
+      border-radius:16px;
+      backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+      padding:24px;
+      box-shadow:0 25px 60px rgba(0,0,0,.5);
+      margin-bottom:16px;
+    }
+    .exe-label { font-size:12px; font-weight:600; color:#94a3b8; display:block; margin-bottom:6px; }
+    .exe-input {
+      width:100%; padding:13px 16px; font-size:14px; font-family:inherit;
+      background:#0f172a; border:1px solid #334155; color:#f8fafc;
+      border-radius:12px; outline:none; transition:all .15s ease;
+    }
+    .exe-input::placeholder { color:#475569; }
+    .exe-input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.25); }
+    .exe-space { margin-bottom:16px; }
+
+    .exe-btn {
+      width:100%; padding:14px; font-size:15px; font-weight:800; font-family:inherit; color:#fff;
+      border:none; border-radius:12px; cursor:pointer;
+      background:linear-gradient(90deg,#6366f1,#a855f7);
+      box-shadow:0 10px 30px rgba(99,102,241,.35);
+      transition:all .15s ease;
+    }
+    .exe-btn:active { transform:scale(.97); opacity:.9; }
+
+    .exe-hint { text-align:center; font-size:12px; color:var(--muted); margin-top:10px; display:none; }
+    .exe-link { text-align:center; font-size:13px; color:var(--muted); margin-top:14px; }
+    .exe-link a { color:#22c55e; font-weight:700; text-decoration:none; }
+
+    .exe-error {
+      background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.4);
+      color:#fca5a5; padding:11px 14px; border-radius:12px;
+      font-size:12px; font-weight:600; margin-bottom:14px; display:none;
+    }
+
+    /* Waiting card — exact EXE look with spinning icon */
+    .exe-waiting { text-align:center; padding:8px 4px; }
+    .exe-spinner {
+      width:56px; height:56px; margin:0 auto 16px; border-radius:9999px;
+      background:rgba(99,102,241,.2);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .exe-spinner svg { width:28px; height:28px; color:#a5b4fc; animation:exe-spin 1s linear infinite; }
+    @keyframes exe-spin { to { transform:rotate(360deg); } }
+    .exe-waiting-title { font-size:14px; font-weight:800; color:var(--text); line-height:1.8; }
+    .exe-waiting-sub { font-size:11px; color:var(--muted); margin-top:6px; }
+    .exe-waiting-cancel {
+      width:100%; margin-top:18px; padding:11px; font-size:13px; font-weight:700; font-family:inherit;
+      background:rgba(30,41,59,.8); border:1px solid #334155; color:#94a3b8;
+      border-radius:12px; cursor:pointer;
+    }
+  </style>
+<body class="exe-login page-enter">
+  <div class="exe-wrap">
+
+    <div class="exe-logo">
       <img src="assets/icon.svg" alt="الناظم">
       <h1>الناظم</h1>
-      <p>نظام إدارة شبكات الإنترنت</p>
-    </div>
-    <div id="errorBox" class="alert hidden"></div>
-
-    <!-- Login form -->
-    <div id="loginForm">
-      <div class="field">
-        <label>اسم المستخدم</label>
-        <input type="text" id="username" placeholder="admin" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
-      </div>
-      <div class="field">
-        <label>كلمة المرور</label>
-        <input type="password" id="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-      </div>
-      <button class="btn-primary" id="loginBtn" onclick="doLogin()">دخول</button>
-      <div class="server-hint">
-        <label>عنوان السيرفر</label>
-        <input type="text" id="serverBase" placeholder="https://alnathim.onrender.com" dir="ltr" style="text-align:right;">
-      </div>
-      <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px;">
-        ليس لديك حساب؟
-        <a href="#" onclick="openSheet('regSheet');return false;" style="color:var(--active);font-weight:700;">إنشاء حساب</a>
-      </p>
+      <p>نظام إدارة أبراج الإنترنت</p>
     </div>
 
-    <!-- Waiting for approval card (EXE-style auto-login) -->
-    <div id="waitingCard" class="hidden" style="text-align:center;padding:10px 4px;">
-      <div style="font-size:42px;margin-bottom:10px;">⏳</div>
-      <div id="waitingMsg" style="font-size:14px;font-weight:800;line-height:1.7;">بانتظار موافقة المدير<br>سيتم الدخول تلقائياً فور الموافقة</div>
-      <div id="waitingSub" style="font-size:11px;color:var(--muted);margin-top:6px;">الحالة تُحدَّث تلقائياً</div>
-      <button class="btn" style="margin-top:16px;" onclick="cancelWaiting()">إلغاء والعودة</button>
+    <div id="errorBox" class="exe-error"></div>
+
+    <!-- ── Login card (EXE design) ── -->
+    <div id="loginCard" class="exe-card">
+      <div class="exe-space">
+        <label class="exe-label">اسم المستخدم</label>
+        <input type="text" id="username" dir="ltr" placeholder="اسم المستخدم" class="exe-input" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="exe-space">
+        <label class="exe-label">كلمة المرور</label>
+        <input type="password" id="password" dir="ltr" placeholder="••••••••" class="exe-input" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="exe-btn" id="loginBtn" onclick="doLogin()">دخول</button>
+      <p id="loginHint" class="exe-hint">أدخل كلمة المرور ثم اضغط دخول — سننتظر موافقة المدير تلقائياً</p>
+      <p class="exe-link">ليس لديك حساب؟ <a href="#" onclick="openSheet('regSheet');return false;">إنشاء حساب</a></p>
     </div>
 
-    <!-- Session restore -->
+    <!-- ── Waiting card (pending approval — EXE style) ── -->
+    <div id="waitingCard" class="exe-card hidden exe-waiting">
+      <div class="exe-spinner">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/>
+          <path d="M12 2a10 10 0 019.9 8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div id="waitingMsg" class="exe-waiting-title">بانتظار موافقة المدير<br>سيتم الدخول تلقائياً فور الموافقة</div>
+      <div id="waitingSub" class="exe-waiting-sub">الحالة تُحدَّث تلقائياً — يمكنك المتابعة فور الموافقة</div>
+      <button class="exe-waiting-cancel" onclick="cancelWaiting()">إلغاء والعودة</button>
+    </div>
+
+    <!-- ── Session restore ── -->
     <div id="restoreBox" class="hidden" style="text-align:center;padding:12px 0;color:var(--muted);font-size:13px;">
       <div class="spinner" style="padding:8px 0;">جاري استعادة الجلسة...</div>
     </div>
+
+    <!-- ── Server address (small footer) ── -->
+    <div style="text-align:center;margin-top:14px;">
+      <input type="text" id="serverBase" placeholder="https://alnathim.onrender.com" dir="ltr"
+             style="width:100%;max-width:280px;background:rgba(15,23,42,.5);border:1px solid #1e293b;color:var(--muted);border-radius:10px;padding:8px 12px;font-size:11px;text-align:right;outline:none;">
+    </div>
   </div>
 
-  <!-- Register sheet -->
+  <!-- ── Register sheet (mirrors EXE register card) ── -->
   <div class="sheet-overlay" id="regSheet" onclick="if(event.target===this)closeSheet('regSheet')">
-    <div class="sheet">
-      <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('regSheet')">✕</button>
-      <div class="sheet-title">إنشاء حساب جديد</div>
-      <div class="field"><label>الاسم الكامل *</label><input type="text" id="rName" class="input" placeholder="الاسم الثلاثي"></div>
-      <div class="field"><label>اسم المستخدم *</label><input type="text" id="rUsername" class="input" placeholder="اسم دخول فريد"></div>
-      <div class="field"><label>كلمة المرور * (٦ أحرف على الأقل)</label><input type="password" id="rPassword" class="input" placeholder="••••••"></div>
-      <div class="field"><label>رقم الهاتف</label><input type="text" id="rPhone" class="input" dir="ltr" placeholder="07xxxxxxxxx"></div>
-      <div class="field"><label>رمز الدعوة (اختياري — يفعّل الحساب فوراً)</label><input type="text" id="rInvite" class="input" dir="ltr"></div>
-      <button class="btn-primary" id="regBtn" onclick="doRegister()">إنشاء الحساب</button>
+    <div class="sheet" style="background:#0f172a;border-color:#1e293b;">
+      <div class="sheet-grab" style="background:#334155;"></div>
+      <button class="sheet-close" style="background:#1e293b;color:#94a3b8;" onclick="closeSheet('regSheet')">✕</button>
+      <div class="sheet-title" style="color:#f8fafc;">إنشاء حساب جديد</div>
+      <div class="exe-space"><label class="exe-label">الاسم الكامل</label><input type="text" id="rName" class="exe-input" placeholder="مثال: أبو أحمد"></div>
+      <div class="exe-space"><label class="exe-label">اسم المستخدم</label><input type="text" id="rUsername" class="exe-input" dir="ltr" placeholder="example_user"></div>
+      <div class="exe-space"><label class="exe-label">رقم الهاتف (اختياري)</label><input type="text" id="rPhone" class="exe-input" dir="ltr" placeholder="07xxxxxxxxx"></div>
+      <div class="exe-space"><label class="exe-label">كلمة المرور</label><input type="password" id="rPassword" class="exe-input" dir="ltr" placeholder="••••••••"></div>
+      <div class="exe-space">
+        <label class="exe-label">رمز الدخول (إن وجد)</label>
+        <input type="text" id="rInvite" class="exe-input" dir="ltr" placeholder="XXXXXXXX">
+        <div style="font-size:11px;color:#94a3b8;margin-top:6px;">إن كان لديك رمز دخول من المدير أدخله ليتم تفعيل حسابك فوراً، وإلا سيُرسل طلبك للموافقة.</div>
+      </div>
+      <button class="exe-btn" id="regBtn" onclick="doRegister()">إنشاء الحساب</button>
+      <p class="exe-link">لديك حساب؟ <a href="#" onclick="closeSheet('regSheet');return false;" style="color:#6366f1;">تسجيل الدخول</a></p>
     </div>
   </div>
 
@@ -78,7 +159,7 @@
     // ── Session restore ──
     const savedToken = localStorage.getItem('alnathim_token');
     if (savedToken) {
-      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('loginCard').classList.add('hidden');
       document.getElementById('restoreBox').classList.remove('hidden');
       api('/auth/me').then(d => {
         if (d.ok && d.data) {
@@ -93,7 +174,7 @@
     function clearSession() {
       localStorage.removeItem('alnathim_token');
       localStorage.removeItem('alnathim_user');
-      document.getElementById('loginForm').classList.remove('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
       document.getElementById('restoreBox').classList.add('hidden');
     }
 
@@ -136,6 +217,7 @@
       const msg = (d && d.error && d.error.message_ar) || 'فشل الدخول';
       if (code === 'pending') {
         // EXE-style: wait for admin approval, auto-login when approved
+        document.getElementById('loginHint').style.display = 'block';
         pendingUser = username; pendingPass = password;
         showWaiting('بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة');
         startPolling();
@@ -144,16 +226,17 @@
       }
     }
 
-    // ── Pending-approval polling (same as the EXE launcher) ──
+    // ── Waiting + polling (same as the EXE launcher) ──
     function showWaiting(msg) {
-      document.getElementById('loginForm').classList.add('hidden');
+      document.getElementById('loginCard').classList.add('hidden');
+      document.getElementById('restoreBox').classList.add('hidden');
       document.getElementById('waitingCard').classList.remove('hidden');
       document.getElementById('waitingMsg').innerHTML = msg.replace(/\n/g, '<br>');
     }
     function cancelWaiting() {
       stopPolling();
       document.getElementById('waitingCard').classList.add('hidden');
-      document.getElementById('loginForm').classList.remove('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
     }
     function startPolling() {
       stopPolling();
@@ -194,14 +277,14 @@
       }
     }
 
-    // ── Register (mirrors the EXE register flow) ──
+    // ── Register (mirrors the EXE register card) ──
     async function doRegister() {
       const full_name = document.getElementById('rName').value.trim();
       const username = document.getElementById('rUsername').value.trim();
       const password = document.getElementById('rPassword').value;
       const phone = document.getElementById('rPhone').value.trim();
       const invite_code = document.getElementById('rInvite').value.trim();
-      if (!full_name || !username || !password) { showToast('أكمل الاسم واسم المستخدم وكلمة المرور', 'error'); return; }
+      if (!full_name || !username || !password) { showToast('جميع الحقول المطلوبة فارغة', 'error'); return; }
       if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
       const btn = document.getElementById('regBtn');
       btn.textContent = '⏳ جاري إنشاء الحساب...'; btn.disabled = true;
@@ -229,8 +312,8 @@
     function showError(msg) {
       const box = document.getElementById('errorBox');
       box.textContent = msg;
-      box.classList.remove('hidden');
-      setTimeout(() => box.classList.add('hidden'), 6000);
+      box.style.display = 'block';
+      setTimeout(() => { box.style.display = 'none'; }, 6000);
     }
   </script>
 </body>
