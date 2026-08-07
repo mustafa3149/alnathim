@@ -63,8 +63,8 @@ async function api(path, body, method) {
     if (d === null) {
       return {ok: false, error: {code: 'bad_response', message_ar: 'استجابة غير متوقعة من السيرفر (' + r.status + ')'}};
     }
-    if (!d.ok && d.error && d.error.code === 'auth_invalid') {
-      // Token expired — back to login
+    if (!d.ok && d.error && (d.error.code === 'auth_invalid' || d.error.code === 'unauthorized')) {
+      // Token expired/revoked — back to login
       localStorage.removeItem('alnathim_token');
       if (!window.location.pathname.endsWith('index.html') && !window.location.pathname.endsWith('/')) {
         window.location.href = 'index.html';

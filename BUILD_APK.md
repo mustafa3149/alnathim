@@ -74,10 +74,39 @@ Prerequisites: **JDK 17** and the **Android SDK** (or just install Android Studi
 
 ## What the app already handles (no code changes needed)
 
-- **Login session, dashboard, customers, invoices, payments, admin center** — all rendered inside the WebView.
+- **Login session, dashboard, customers, invoices, payments, debts, report, network tools** — all rendered inside the WebView from the **bundled** `mobile_app/` UI (Blood-style: local-first, server APIs refresh data).
+- **Session restore** — the login page verifies the saved token via `GET /api/mobile/v1/auth/me` (added to the backend so the app no longer bounces back to login).
 - **WhatsApp deep links** (wa.me / api.whatsapp.com) → open the real WhatsApp app.
 - **`window.open()` popups** (print receipts, print invoices) → shown inside the WebView.
 - **`alert()` / `confirm()` JS dialogs** (delete confirmations) → native Android dialogs.
 - **Back button** → navigates WebView history; on first page → moves app to background.
+- **Fullscreen, no borders** — the system status/navigation bars are hidden (immersive mode), so the app fills the whole screen with **no black bar at the top or bottom**. Safe-area insets keep content clear of notches, gesture bars, and the on-screen keyboard.
 - **RTL Arabic layout**, dark/light theme sync, and **Android 11+ package visibility** for WhatsApp.
 - **Cleartext traffic disabled** — HTTPS only (matches your Render deployment).
+
+## Syncing a UI change into the APK
+
+The bundled web UI lives in two places that must stay in sync:
+
+```
+mobile_app/            ← source of truth (edit here)
+android_webview_app/app/src/main/assets/mobile/  ← what goes into the APK
+```
+
+After editing `mobile_app/`, re-sync and rebuild:
+
+```bat
+xcopy /E /I /Y mobile_app android_webview_app\app\src\main\assets\mobile
+cd android_webview_app
+gradlew.bat assembleDebug
+```
+
+## Backend (needed for the app to work)
+
+The app talks to `https://alnathim.onrender.com/api/mobile/v1` (Flask). If you
+change `mobile_api.py`, run the contract tests and deploy (push to `main` →
+Render auto-deploys):
+
+```bat
+set PYTHONIOENCODING=utf-8 && py test_mobile_api.py   (63 assertions)
+```
