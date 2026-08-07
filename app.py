@@ -126,7 +126,25 @@ def security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "same-origin")
+    # CORS for the local Android app (appassets:// origin) — the app's
+    # bundled HTML calls the mobile JSON API cross-origin.
+    if request.path.startswith("/api/mobile/v1/"):
+        response.headers.setdefault("Access-Control-Allow-Origin", "*")
+        response.headers.setdefault("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization")
     return response
+
+
+@app.before_request
+def cors_preflight():
+    """Answer OPTIONS preflight for the mobile API (app→server fetch)."""
+    if request.method == "OPTIONS" and request.path.startswith("/api/mobile/v1/"):
+        resp = app.make_default_options_response()
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return resp
+    return None
 
 
 # ──────────────────────────────────────────────
