@@ -125,6 +125,11 @@
       document.getElementById('payBox').innerHTML = '';
       showToast(err, 'error');
     });
+
+    // Blood-style speed: keep the server warm and seed the cache so every
+    // page opens instantly from local storage on first navigation.
+    startKeepAlive();
+    warmupCache();
   </script>
 </body>
 </html>

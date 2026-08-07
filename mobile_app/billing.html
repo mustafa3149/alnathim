@@ -88,41 +88,53 @@
       const month = document.getElementById('monthSel').value;
       const year = document.getElementById('yearSel').value;
       const box = document.getElementById('billingList');
-      box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
-      const d = await api('/invoices?month=' + month + '&year=' + year);
-      if (!d.ok) {
-        box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
-        return;
-      }
-      const items = d.data.items || [];
-      let collected = 0, remaining = 0;
-      items.forEach(inv => {
-        collected += inv.paid_amount || 0;
-        remaining += (inv.total_amount || 0) - (inv.paid_amount || 0);
-      });
-      document.getElementById('sumCollected').textContent = formatDinar(collected);
-      document.getElementById('sumRemaining').textContent = formatDinar(remaining);
+      const cacheKey = 'invoices_' + month + '_' + year;
 
-      if (!items.length) {
-        box.innerHTML = '<div class="empty"><div class="big">🧾</div>لا توجد فواتير لهذا الشهر</div>';
-        return;
+      function render(data) {
+        const items = (data && data.items) || [];
+        let collected = 0, remaining = 0;
+        items.forEach(inv => {
+          collected += inv.paid_amount || 0;
+          remaining += (inv.total_amount || 0) - (inv.paid_amount || 0);
+        });
+        document.getElementById('sumCollected').textContent = formatDinar(collected);
+        document.getElementById('sumRemaining').textContent = formatDinar(remaining);
+        if (!items.length) {
+          box.innerHTML = '<div class="empty"><div class="big">🧾</div>لا توجد فواتير لهذا الشهر</div>';
+          return;
+        }
+        box.innerHTML = '<div class="list-card">' + items.map(inv => {
+          const rem = (inv.total_amount || 0) - (inv.paid_amount || 0);
+          return '<a class="row" href="customer-detail.html?id=' + inv.customer_id + '">' +
+            '<div class="row-main">' +
+              '<div class="row-title">' + esc(inv.customer_name || 'زبون #' + inv.customer_id) + '</div>' +
+              '<div class="row-sub">' + esc(inv.package_name || '') + ' · ' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + '</div>' +
+            '</div>' +
+            '<div class="row-end" style="text-align:left;">' +
+              '<div style="font-weight:800;">' + formatDinar(inv.total_amount || 0) + '</div>' +
+              (rem > 0
+                ? '<div style="font-size:11px;font-weight:800;color:var(--expired);">متبقي ' + formatDinar(rem) + '</div>'
+                : '<div style="font-size:11px;font-weight:800;color:var(--active);">مدفوعة ✓</div>') +
+            '</div>' +
+            '<span class="menu-arrow">‹</span>' +
+          '</a>';
+        }).join('') + '</div>';
       }
-      box.innerHTML = '<div class="list-card">' + items.map(inv => {
-        const rem = (inv.total_amount || 0) - (inv.paid_amount || 0);
-        return '<a class="row" href="customer-detail.html?id=' + inv.customer_id + '">' +
-          '<div class="row-main">' +
-            '<div class="row-title">' + esc(inv.customer_name || 'زبون #' + inv.customer_id) + '</div>' +
-            '<div class="row-sub">' + esc(inv.package_name || '') + ' · ' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + '</div>' +
-          '</div>' +
-          '<div class="row-end" style="text-align:left;">' +
-            '<div style="font-weight:800;">' + formatDinar(inv.total_amount || 0) + '</div>' +
-            (rem > 0
-              ? '<div style="font-size:11px;font-weight:800;color:var(--expired);">متبقي ' + formatDinar(rem) + '</div>'
-              : '<div style="font-size:11px;font-weight:800;color:var(--active);">مدفوعة ✓</div>') +
-          '</div>' +
-          '<span class="menu-arrow">‹</span>' +
-        '</a>';
-      }).join('') + '</div>';
+
+      // Cache-first (Blood-style): show instantly, refresh in background.
+      const cached = cacheGet(cacheKey);
+      if (cached) {
+        render(cached);
+      } else {
+        box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
+      }
+      const d = await api('/invoices?month=' + month + '&year=' + year);
+      if (d.ok) {
+        cacheSet(cacheKey, d.data);
+        render(d.data);
+      } else if (!cached) {
+        box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
+      }
     }
 
     loadInvoices();

@@ -146,13 +146,9 @@
 
     function loadPayments() {
       const box = document.getElementById('paymentsBox');
-      box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
-      api('/payments?limit=30').then(d => {
-        if (!d.ok) {
-          box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
-          return;
-        }
-        const items = d.data.items || [];
+
+      function render(data) {
+        const items = (data && data.items) || [];
         if (!items.length) {
           box.innerHTML = '<div class="empty"><div class="big">💳</div>لا مدفوعات بعد</div>';
           return;
@@ -165,6 +161,19 @@
             '</div>' +
             '<div class="row-end" style="font-weight:800;color:var(--active);">' + formatDinar(p.amount || 0) + '</div>' +
           '</div>').join('') + '</div>';
+      }
+
+      // Cache-first (Blood-style): show instantly, refresh in background.
+      const cached = cacheGet('payments');
+      if (cached) render(cached);
+      else box.innerHTML = '<div class="spinner">جاري التحميل...</div>';
+      api('/payments?limit=30').then(d => {
+        if (d.ok) {
+          cacheSet('payments', d.data);
+          render(d.data);
+        } else if (!cached) {
+          box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'تعذر التحميل') + '</div>';
+        }
       });
     }
 

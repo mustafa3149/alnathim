@@ -94,6 +94,35 @@ async function api(path, body, method) {
   }
 }
 
+// ── Keep the server warm (Render free sleeps after ~15 min idle) ──
+// While the app is open, ping a cheap endpoint every 10 minutes so page
+// navigation never hits a 30-60s cold start.
+function startKeepAlive() {
+  if (window._keepAliveTimer) return;
+  window._keepAliveTimer = setInterval(() => {
+    try {
+      fetch(API_BASE + '/auth/me', {headers: getAuthHeaders()}).catch(() => {});
+    } catch (e) {}
+  }, 10 * 60 * 1000);
+}
+
+// ── Seed the local cache right after login ──
+// Fetches the key datasets in parallel so every page opens instantly from
+// cache on first navigation (Blood-style: render local, refresh in bg).
+async function warmupCache() {
+  const tasks = [
+    ['dashboard', '/dashboard/summary'],
+    ['customers', '/customers'],
+    ['debts', '/debts']
+  ];
+  await Promise.all(tasks.map(async ([key, path]) => {
+    try {
+      const d = await api(path);
+      if (d.ok && d.data !== undefined) cacheSet(key, d.data);
+    } catch (e) {}
+  }));
+}
+
 // ── Load-from-cache-first helper ──────────────────────────────
 async function loadCached(key, path, renderFn, onError) {
   const cached = cacheGet(key);

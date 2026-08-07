@@ -157,26 +157,13 @@
     let pendingUser = '';
     let pendingPass = '';
 
-    // ── Session restore ──
+    // ── Session restore — INSTANT (Blood-style) ──
+    // Go straight to the dashboard: pages render cached data immediately and
+    // refresh in the background. If the token is invalid, api() clears it and
+    // bounces back here automatically (no infinite loop).
     const savedToken = localStorage.getItem('alnathim_token');
     if (savedToken) {
-      document.getElementById('loginCard').classList.add('hidden');
-      document.getElementById('restoreBox').classList.remove('hidden');
-      api('/auth/me').then(d => {
-        if (d.ok && d.data) {
-          localStorage.setItem('alnathim_user', JSON.stringify(d.data));
-          window.location.replace('dashboard.html');
-        } else {
-          clearSession();
-        }
-      }).catch(() => clearSession());
-    }
-
-    function clearSession() {
-      localStorage.removeItem('alnathim_token');
-      localStorage.removeItem('alnathim_user');
-      document.getElementById('loginCard').classList.remove('hidden');
-      document.getElementById('restoreBox').classList.add('hidden');
+      window.location.replace('dashboard.html');
     }
 
     // ── Login ──
