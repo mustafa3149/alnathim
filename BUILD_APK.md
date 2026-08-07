@@ -76,6 +76,7 @@ Prerequisites: **JDK 17** and the **Android SDK** (or just install Android Studi
 
 - **Login session, dashboard, customers, invoices, payments, debts, report, network tools** — all rendered inside the WebView from the **bundled** `mobile_app/` UI (Blood-style: local-first, server APIs refresh data).
 - **Session restore** — the login page verifies the saved token via `GET /api/mobile/v1/auth/me` (added to the backend so the app no longer bounces back to login).
+- **EXE-style login** — login/registration behave exactly like the desktop launcher: a pending account shows "بانتظار موافقة المدير" and the app polls `POST /api/mobile/v1/auth/check-status` every 10 seconds (generous machine poll budget, not the human login limiter), then **auto-logs-in the moment the admin approves**. Registering with an invite code activates the account instantly.
 - **WhatsApp deep links** (wa.me / api.whatsapp.com) → open the real WhatsApp app.
 - **`window.open()` popups** (print receipts, print invoices) → shown inside the WebView.
 - **`alert()` / `confirm()` JS dialogs** (delete confirmations) → native Android dialogs.
