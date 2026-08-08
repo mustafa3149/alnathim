@@ -322,6 +322,7 @@ def login():
     session["user_id"] = user["id"]
     session["user_role"] = user["role"]
     session["user_name"] = user["full_name"] or user["username"]
+    session["account_id"] = user["account_id"]
     db.log_action(
         user_id=user["id"],
         username=user["full_name"] or user["username"],

@@ -180,11 +180,11 @@ def mobile_login_required(fn):
         if user is None:
             return _err("unauthorized", "جلسة غير صالحة — سجل الدخول مرة أخرى", 401)
         g.mobile_user = user
-        db.set_current_owner(user["id"], user["role"])
+        db.set_current_account(user["account_id"], user["id"], user["role"])
         try:
             return fn(*args, **kwargs)
         finally:
-            db.set_current_owner(None)
+            db.set_current_account(None, None, "admin")
     return wrapper
 
 
@@ -198,11 +198,11 @@ def mobile_admin_required(fn):
         if user["role"] != "admin":
             return _err("forbidden", "هذه العملية تتطلب صلاحيات المدير", 403)
         g.mobile_user = user
-        db.set_current_owner(user["id"], user["role"])
+        db.set_current_account(user["account_id"], user["id"], user["role"])
         try:
             return fn(*args, **kwargs)
         finally:
-            db.set_current_owner(None)
+            db.set_current_account(None, None, "admin")
     return wrapper
 
 
@@ -210,6 +210,10 @@ def mobile_admin_required(fn):
 
 def _user_payload(user):
     """Serialize a users row for the mobile app."""
+    account_name = ""
+    if user["account_id"]:
+        acct = db.get_account(user["account_id"])
+        account_name = acct["name"] if acct else ""
     return {
         "id": user["id"],
         "username": user["username"],
@@ -218,6 +222,8 @@ def _user_payload(user):
         "phone": user["phone"] or "",
         "status": user["status"] or "active",
         "access_expires": user["access_expires"],
+        "account_id": user["account_id"],
+        "account_name": account_name,
     }
 
 
@@ -335,10 +341,15 @@ def mobile_login():
         return _err("rate_limited", "محاولات كثيرة — حاول بعد قليل", 429)
 
     data = request.get_json() or {}
+    account_id = data.get("account_id")
     username = str(data.get("username", "")).strip()
     password = data.get("password", "")
-    if not username or not password:
-        return _err("invalid_input", "أدخل اسم المستخدم وكلمة المرور", 400)
+    if not account_id or not username or not password:
+        return _err("invalid_input", "اختر الشركة وأدخل اسم المستخدم وكلمة المرور", 400)
+    try:
+        account_id = int(account_id)
+    except (ValueError, TypeError):
+        return _err("invalid_input", "الشركة غير صحيحة", 400)
 
     user = db.get_user_by_username(username)
 
@@ -348,6 +359,16 @@ def mobile_login():
         password_ok = False
     else:
         password_ok = db.verify_password(user, password)
+
+    # The user must belong to the chosen company.
+    if password_ok and int(user["account_id"] or 0) != account_id:
+        password_ok = False
+
+    # Company status gate.
+    if password_ok:
+        account = db.get_account(account_id)
+        if not account or str(account["status"] or "active") == "suspended":
+            return _err("suspended", "هذه الشركة موقوفة — راجع إدارة النظام", 403)
 
     # Failed-login lockout (mirrors auth.py).
     if not password_ok:
@@ -397,7 +418,66 @@ def mobile_login():
     })
 
 
-@mobile_bp.route("/auth/register", methods=["POST"])
+@mobile_bp.route("/auth/accounts")
+def mobile_accounts_list():
+    """GET /auth/accounts — active companies for the login picker."""
+    return _ok({
+        "items": [{"id": a["id"], "name": a["name"]} for a in db.list_active_accounts()]
+    })
+
+
+@mobile_bp.route("/auth/accounts/<int:account_id>/users")
+def mobile_account_users(account_id):
+    """GET /auth/accounts/{id}/users — usernames of a company (login picker)."""
+    account = db.get_account(account_id)
+    if not account or str(account["status"] or "active") == "suspended":
+        return _err("not_found", "الشركة غير موجودة", 404)
+    rows = db.list_account_users(account_id)
+    return _ok({"items": [
+        {"username": r["username"], "full_name": r["full_name"]} for r in rows
+    ]})
+
+
+@mobile_bp.route("/auth/register-company", methods=["POST"])
+def mobile_register_company():
+    """POST /auth/register-company — create a company + its first admin.
+
+    Body: {company_name, full_name, username, password, phone?}
+    The first registrant of a company becomes its manager (admin).
+    """
+    try:
+        data = request.get_json() or {}
+    except Exception:
+        data = {}
+    company_name = str(data.get("company_name", "")).strip()
+    full_name = str(data.get("full_name", "")).strip()
+    username = str(data.get("username", "")).strip()
+    password = data.get("password", "")
+    phone = str(data.get("phone", "")).strip()
+
+    if not company_name or not full_name or not username or not password:
+        return _err("invalid_input", "جميع الحقول المطلوبة فارغة", 400)
+    if len(password) < 6:
+        return _err("invalid_input", "كلمة المرور يجب أن تكون ٦ أحرف على الأقل", 400)
+    if db.get_account_by_name(company_name):
+        return _err("duplicate", "هذه الشركة مسجلة مسبقاً", 409)
+    try:
+        result = db.register_company(
+            company_name, full_name, username, password, phone=phone
+        )
+    except sqlite3.IntegrityError:
+        return _err("user_exists", "اسم المستخدم موجود مسبقاً", 409)
+
+    db.log_action(
+        user_id=result["user_id"],
+        username=full_name,
+        action="إنشاء شركة",
+        details=f"تم تسجيل الشركة {company_name} وأول مدير لها ({username})",
+    )
+    return _ok({
+        "account_id": result["account_id"],
+        "message_ar": f"تم إنشاء شركة {company_name} — سجل دخولك الآن",
+    })
 def mobile_register():
     """POST /auth/register → create an account (mirrors register.html).
 

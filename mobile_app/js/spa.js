@@ -332,7 +332,8 @@ function loadDebts() {
 function loadMore() {
   const u = getUser();
   if (u) document.getElementById('topLabel').textContent =
-    u.role === 'admin' ? 'مدير' : (u.full_name || u.username || '');
+    (u.account_name ? u.account_name + ' · ' : '') +
+    (u.role === 'admin' ? 'مدير' : (u.full_name || u.username || ''));
   const isAdmin = !!(u && u.role === 'admin');
   document.querySelectorAll('#view-more .admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
 
@@ -684,10 +685,11 @@ async function pollStatus() {
   }
 }
 async function doLogin() {
-  const username = document.getElementById('username').value.trim();
+  const accountId = document.getElementById('accountId').value;
+  const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   const server = document.getElementById('serverBase').value.trim().replace(/\/+$/, '');
-  if (!username || !password) return showError('أدخل اسم المستخدم وكلمة المرور');
+  if (!accountId || !username || !password) return showError('اختر الشركة والمستخدم وأدخل كلمة المرور');
   if (!server) return showError('أدخل عنوان السيرفر');
   localStorage.setItem('alnathim_server', server);
   refreshApiBase();
@@ -697,7 +699,7 @@ async function doLogin() {
     const r = await fetchWithRetry(API_BASE + '/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username, password})
+      body: JSON.stringify({account_id: parseInt(accountId, 10), username, password})
     }, 3, 2500);
     const d = await r.json().catch(() => null);
     btn.textContent = 'دخول'; btn.disabled = false;
@@ -706,6 +708,48 @@ async function doLogin() {
     btn.textContent = 'دخول'; btn.disabled = false;
     showError('تعذر الاتصال بالسيرفر — تأكد من الإنترنت ثم أعد المحاولة');
   }
+}
+function openRegSheet() {
+  document.getElementById('rCompany').value = '';
+  document.getElementById('rName').value = '';
+  document.getElementById('rUsername').value = '';
+  document.getElementById('rPhone').value = '';
+  document.getElementById('rPassword').value = '';
+  openSheet('regSheet');
+}
+function loadAccounts() {
+  const sel = document.getElementById('accountId');
+  if (!sel) return;
+  fetchWithRetry(API_BASE + '/auth/accounts', {}, 2, 2500)
+    .then(r => r.json().catch(() => null))
+    .then(d => {
+      const items = (d && d.data && d.data.items) || [];
+      if (!items.length) {
+        sel.innerHTML = '<option value="">لا توجد شركات بعد — سجّل شركتك</option>';
+        return;
+      }
+      sel.innerHTML = '<option value="">اختر الشركة...</option>' + items.map(a =>
+        '<option value="' + a.id + '">' + esc(a.name) + '</option>').join('');
+    })
+    .catch(() => {
+      sel.innerHTML = '<option value="">تعذر تحميل الشركات</option>';
+    });
+}
+function onAccountChange() {
+  const accountId = document.getElementById('accountId').value;
+  const sel = document.getElementById('username');
+  if (!accountId) { sel.innerHTML = '<option value="">اختر الشركة أولاً...</option>'; return; }
+  sel.innerHTML = '<option value="">جارِ التحميل...</option>';
+  fetchWithRetry(API_BASE + '/auth/accounts/' + accountId + '/users', {}, 2, 2500)
+    .then(r => r.json().catch(() => null))
+    .then(d => {
+      const items = (d && d.data && d.data.items) || [];
+      sel.innerHTML = '<option value="">اختر المستخدم...</option>' + items.map(u =>
+        '<option value="' + esc(u.username) + '">' + esc(u.full_name || u.username) + ' (' + esc(u.username) + ')</option>').join('');
+    })
+    .catch(() => {
+      sel.innerHTML = '<option value="">تعذر تحميل المستخدمين</option>';
+    });
 }
 function handleLoginResult(d, username, password) {
   if (d && d.ok && d.data && d.data.token) {
@@ -717,7 +761,8 @@ function handleLoginResult(d, username, password) {
   const code = d && d.error && d.error.code;
   const msg = (d && d.error && d.error.message_ar) || 'فشل الدخول';
   if (code === 'pending') {
-    document.getElementById('loginHint').style.display = 'block';
+    const hint = document.getElementById('loginHint');
+    if (hint) hint.style.display = 'block';
     pendingUser = username; pendingPass = password;
     showWaiting('بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة');
     startPolling();
@@ -726,32 +771,34 @@ function handleLoginResult(d, username, password) {
   }
 }
 async function doRegister() {
+  const company_name = document.getElementById('rCompany').value.trim();
   const full_name = document.getElementById('rName').value.trim();
   const username = document.getElementById('rUsername').value.trim();
   const password = document.getElementById('rPassword').value;
   const phone = document.getElementById('rPhone').value.trim();
-  const invite_code = document.getElementById('rInvite').value.trim();
-  if (!full_name || !username || !password) { showToast('جميع الحقول المطلوبة فارغة', 'error'); return; }
+  if (!company_name || !full_name || !username || !password) { showToast('جميع الحقول المطلوبة فارغة', 'error'); return; }
   if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
   const btn = document.getElementById('regBtn');
-  btn.textContent = '⏳ جاري إنشاء الحساب...'; btn.disabled = true;
-  const d = await api('/auth/register', {full_name, username, password, phone, invite_code});
-  btn.textContent = 'إنشاء الحساب'; btn.disabled = false;
+  btn.textContent = '⏳ جاري إنشاء الشركة...'; btn.disabled = true;
+  const d = await api('/auth/register-company', {company_name, full_name, username, password, phone});
+  btn.textContent = 'إنشاء الشركة'; btn.disabled = false;
   if (d.ok && d.data) {
     closeSheet('regSheet');
-    if (d.data.auto_approved) {
-      showToast('✅ تم تفعيل الحساب — سجل دخولك الآن');
-      document.getElementById('username').value = username;
-      document.getElementById('password').focus();
-    } else {
-      document.getElementById('username').value = username;
-      document.getElementById('password').value = password;
-      pendingUser = username; pendingPass = password;
-      showWaiting('تم إرسال طلبك — بانتظار موافقة المدير\nسيتم الدخول تلقائياً فور الموافقة');
-      startPolling();
-    }
+    showToast('✅ ' + (d.data.message_ar || 'تم إنشاء الشركة — سجل دخولك الآن'));
+    // Pre-select the new company + user so login is one step away.
+    loadAccounts();
+    const accSel = document.getElementById('accountId');
+    setTimeout(() => {
+      accSel.value = String(d.data.account_id);
+      onAccountChange();
+      setTimeout(() => {
+        const uSel = document.getElementById('username');
+        uSel.value = username;
+        document.getElementById('password').focus();
+      }, 400);
+    }, 400);
   } else {
-    showToast((d.error && d.error.message_ar) || 'فشل إنشاء الحساب', 'error');
+    showToast((d.error && d.error.message_ar) || 'فشل إنشاء الشركة', 'error');
   }
 }
 
@@ -766,6 +813,7 @@ async function logout() {
   document.getElementById('loginView').classList.remove('hidden');
   document.getElementById('loginCard').classList.remove('hidden');
   document.getElementById('waitingCard').classList.add('hidden');
+  loadAccounts();
   document.getElementById('username').value = '';
   document.getElementById('password').value = '';
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -796,6 +844,7 @@ if (localStorage.getItem('alnathim_token')) {
   enterApp();
 } else {
   document.getElementById('loginView').classList.remove('hidden');
+  loadAccounts();
 }
 // ── REMINDERS ──────────────────────────────────────────────
 function loadReminders() {

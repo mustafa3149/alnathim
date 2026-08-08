@@ -138,3 +138,34 @@ The backend now supports **total per-account isolation**: every account
 - `generator_info` remains shared (single row).
 - The web UI (app.py) still works as before (no session owner → sees all;
   web payments have empty collector until web parity is wired).
+
+
+## 7. Multi-account (companies) model — NEW architecture
+
+The system is now **multi-tenant**: each ISP company registers its own
+account and everything inside it is fully isolated from every other company.
+
+### How it works
+- **Self-registration**: from the login screen, a company creates its account
+  (`POST /auth/register-company`). The first registrant becomes its admin.
+- **Login flow**: pick the company → pick the user → password.
+  (`GET /auth/accounts`, `GET /auth/accounts/{id}/users`).
+- **Isolation**: `account_id` on every business table + a request-scoped
+  account context. Company A can never see Company B's customers, packages,
+  cabinets, payments, invoices or reports.
+- **Inside a company**: customers/packages/cabinets are shared between its
+  admin and workers; payments are attributed to the collector (workers see
+  their own, the admin sees all); editing/deleting is admin-only.
+- **Existing data** is preserved: the migration creates the default account
+  and reassigns all current users/rows to it.
+
+### Web (EXE/Desktop)
+- The web login stores `account_id` in the session and `app.py` scopes every
+  web request to it (new `before_request` hook), so the website is isolated
+  per company too.
+
+### ⚠️ Deploy steps
+1. Push `database.py`, `mobile_api.py`, `app.py`, `auth.py` to Render.
+2. On restart, `init_db()` runs `_ensure_account_columns()` automatically
+   (creates `accounts`, adds `account_id`, assigns existing data — no loss).
+3. Rebuild the APK (the login screen now has the company picker).

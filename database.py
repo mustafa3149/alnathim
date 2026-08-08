@@ -123,40 +123,77 @@ def _insert(sql, params=()):
 
 
 
-# ── Per-account isolation (each account sees only its own data) ──
+# ── Per-account isolation (each account/company sees only its own data) ──
 
 _owner_ctx = threading.local()
 
 
-def set_current_owner(user_id, role="admin"):
-    """Scope DB queries in this request to the calling account.
+def set_current_account(account_id, user_id=None, role="admin"):
+    """Scope DB queries in this request to one account (company).
 
-    role controls visibility:
-      - 'admin' (master account) sees everything (no filtering).
-      - any other role (e.g. 'agent') sees only its own rows through
-        _owner_filter().
-    Passing user_id=None clears the scope (no filtering — web/offline mode).
+    account_id: the company id (the isolation boundary).
+    user_id: the logged-in user (used for payment attribution / own-only).
+    role: 'admin' (account manager) or 'agent' (worker).
+    Passing account_id=None clears the scope (no filtering — web/offline mode).
     """
-    _owner_ctx.owner_id = user_id
+    _owner_ctx.account_id = account_id
+    _owner_ctx.user_id = user_id
     _owner_ctx.role = role
 
 
+def set_current_owner(user_id, role="admin"):
+    """Backward-compatible alias: resolves a user id to its account scope."""
+    acct = None
+    if user_id is not None:
+        row = _fetchone("SELECT account_id FROM users WHERE id = ?", (user_id,))
+        if row:
+            acct = row["account_id"]
+    set_current_account(acct, user_id, role)
+
+
 def current_owner():
-    """Return the request-scoped owner id (None = no isolation)."""
-    return getattr(_owner_ctx, "owner_id", None)
+    """Return the request-scoped user id (None = no isolation)."""
+    return getattr(_owner_ctx, "user_id", None)
 
 
-def _owner_filter(col="owner_id"):
-    """Return (sql_where, params) scoping a query to the current owner.
+def current_user_id():
+    """Alias of current_owner() — the logged-in user's id."""
+    return current_owner()
 
-    Admin (master) accounts and un-scoped callers see everything; other
-    roles (agents) see only rows where `col` equals their owner id.
+
+def current_account():
+    """Return the request-scoped account id (None = no filtering)."""
+    return getattr(_owner_ctx, "account_id", None)
+
+
+def current_role():
+    """Return the request-scoped role ('admin' default)."""
+    return getattr(_owner_ctx, "role", "admin")
+
+
+def _owner_filter(col="account_id"):
+    """Return (sql_where, params) scoping a query to the current account.
+
+    Every role sees its own account's data; the web (un-scoped) sees all.
     """
-    owner = current_owner()
-    role = getattr(_owner_ctx, "role", "admin")
-    if owner is None or role == "admin":
+    acct = current_account()
+    if acct is None:
         return "", ()
-    return col + " = ?", (owner,)
+    return col + " = ?", (acct,)
+
+
+def _payment_scope(col_account="account_id", col_collector="collected_by"):
+    """Scope a payment query: account-wide, but agents only see their own.
+
+    Admin (account manager) sees every payment of the account; workers see
+    only the payments they personally collected. Returns (sql_where, params).
+    """
+    where, params = _owner_filter(col_account)
+    if current_role() != "admin" and current_user_id() is not None:
+        extra = f"{col_collector} = ?"
+        where = (where + " AND " + extra) if where else extra
+        params = list(params) + [current_user_id()]
+    return where, params
 # ── Timestamps ──────────────────────────────────────────────
 
 def now_str():
@@ -172,6 +209,16 @@ def today_str():
 # ── Schema ──────────────────────────────────────────────────
 
 SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS accounts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL UNIQUE,
+    phone      TEXT DEFAULT '',
+    address    TEXT DEFAULT '',
+    status     TEXT NOT NULL DEFAULT 'active'
+               CHECK(status IN ('active','suspended')),
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT NOT NULL UNIQUE,
@@ -186,14 +233,16 @@ CREATE TABLE IF NOT EXISTS users (
     invite_uses    INTEGER NOT NULL DEFAULT 0,
     invite_max_uses INTEGER NOT NULL DEFAULT 0,
     failed_logins  INTEGER NOT NULL DEFAULT 0,
+    account_id     INTEGER DEFAULT NULL,
     created_at     TEXT DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS packages (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    name  TEXT NOT NULL UNIQUE,
-    speed TEXT DEFAULT '',
-    price INTEGER NOT NULL DEFAULT 0
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL UNIQUE,
+    speed      TEXT DEFAULT '',
+    price      INTEGER NOT NULL DEFAULT 0,
+    account_id INTEGER DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -217,6 +266,7 @@ CREATE TABLE IF NOT EXISTS customers (
     renewal_date       TEXT,
     previous_debt      INTEGER NOT NULL DEFAULT 0,
     notes              TEXT DEFAULT '',
+    account_id         INTEGER DEFAULT NULL,
     created_at         TEXT DEFAULT (datetime('now','localtime'))
 );
 
@@ -228,6 +278,7 @@ CREATE TABLE IF NOT EXISTS cabinets (
     region     TEXT DEFAULT '',
     notes      TEXT DEFAULT '',
     owner_id   INTEGER DEFAULT NULL,
+    account_id INTEGER DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now','localtime'))
 );
 
@@ -242,19 +293,23 @@ CREATE TABLE IF NOT EXISTS invoices (
     paid_amount   INTEGER DEFAULT 0,
     is_paid       INTEGER NOT NULL DEFAULT 0,
     previous_debt INTEGER DEFAULT 0,
+    account_id    INTEGER DEFAULT NULL,
     created_at    TEXT DEFAULT (datetime('now','localtime')),
     UNIQUE(customer_id, month, year)
 );
 
 CREATE TABLE IF NOT EXISTS payments (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id     INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-    customer_id    INTEGER REFERENCES customers(id),
-    amount         INTEGER NOT NULL,
-    payment_date   TEXT NOT NULL,
-    payment_method TEXT DEFAULT 'نقدي',
-    notes          TEXT DEFAULT '',
-    created_at     TEXT DEFAULT (datetime('now','localtime'))
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id        INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    customer_id       INTEGER REFERENCES customers(id),
+    amount            INTEGER NOT NULL,
+    payment_date      TEXT NOT NULL,
+    payment_method    TEXT DEFAULT 'نقدي',
+    notes             TEXT DEFAULT '',
+    collected_by      INTEGER DEFAULT NULL,
+    collected_by_name TEXT DEFAULT '',
+    account_id        INTEGER DEFAULT NULL,
+    created_at        TEXT DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -265,6 +320,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     description    TEXT DEFAULT '',
     recipient_name TEXT DEFAULT '',
     subscriber_id  INTEGER REFERENCES customers(id),
+    account_id     INTEGER DEFAULT NULL,
     created_at     TEXT DEFAULT (datetime('now','localtime'))
 );
 
@@ -280,6 +336,7 @@ CREATE TABLE IF NOT EXISTS maintenance_tickets (
     customer_id       INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     issue_description TEXT NOT NULL,
     status            TEXT NOT NULL DEFAULT 'pending',
+    account_id        INTEGER DEFAULT NULL,
     created_at        TEXT DEFAULT (datetime('now','localtime')),
     resolved_at       TEXT
 );
@@ -295,6 +352,7 @@ CREATE TABLE IF NOT EXISTS network_links (
     username   TEXT DEFAULT '',
     password   TEXT DEFAULT '',
     community  TEXT DEFAULT 'public',
+    account_id INTEGER DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now','localtime'))
 );
 
@@ -330,6 +388,7 @@ CREATE TABLE IF NOT EXISTS signal_cache (
     rx_dbm       TEXT,
     tx_dbm       TEXT,
     status       TEXT DEFAULT 'offline',
+    account_id   INTEGER DEFAULT NULL,
     last_updated TEXT DEFAULT ''
 );
 
@@ -723,6 +782,9 @@ def init_db():
     # FTTH FAT/Port + payment-collector migration
     _ensure_fat_columns()
 
+    # Multi-account (company) migration
+    _ensure_account_columns()
+
 
 # ── Seeds ───────────────────────────────────────────────────
 
@@ -805,6 +867,126 @@ def _ensure_fat_columns():
         db.commit()
     finally:
         db.close()
+
+
+def _ensure_account_columns():
+    """Add the multi-account (company) foundation in place, idempotent.
+
+    - adds account_id to users + business tables
+    - creates the default account and reassigns existing data to it so the
+      current single-company data is preserved as the first account.
+    """
+    tables = {
+        "users": "ALTER TABLE users ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "customers": "ALTER TABLE customers ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "invoices": "ALTER TABLE invoices ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "payments": "ALTER TABLE payments ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "expenses": "ALTER TABLE expenses ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "maintenance_tickets": "ALTER TABLE maintenance_tickets ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "packages": "ALTER TABLE packages ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "network_links": "ALTER TABLE network_links ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "signal_cache": "ALTER TABLE signal_cache ADD COLUMN account_id INTEGER DEFAULT NULL",
+        "cabinets": "ALTER TABLE cabinets ADD COLUMN account_id INTEGER DEFAULT NULL",
+    }
+    for table, ddl in tables.items():
+        cols = _table_cols(table)
+        if cols and "account_id" not in cols:
+            db = get_db()
+            try:
+                db.execute(ddl)
+                db.commit()
+            except sqlite3.OperationalError:
+                pass  # column may already exist in a concurrent boot
+            finally:
+                db.close()
+
+    db = get_db()
+    try:
+        # Default account: preserve existing single-company data.
+        row = db.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()
+        if (row["n"] or 0) == 0:
+            info = db.execute(
+                "SELECT company_name FROM generator_info WHERE id = 1"
+            ).fetchone()
+            name = (info["company_name"] if info and info["company_name"] else "").strip()
+            if not name:
+                name = "حسابي"
+            cur = db.execute(
+                "INSERT INTO accounts (name, status) VALUES (?, 'active')", (name,)
+            )
+            default_account_id = cur.lastrowid
+        else:
+            default_account_id = db.execute(
+                "SELECT id FROM accounts ORDER BY id LIMIT 1"
+            ).fetchone()["id"]
+
+        db.execute("UPDATE users SET account_id = ? WHERE account_id IS NULL", (default_account_id,))
+        for table in ("customers", "invoices", "payments", "expenses",
+                      "maintenance_tickets", "packages", "network_links",
+                      "signal_cache", "cabinets"):
+            cols = _table_cols(table)
+            if cols and "account_id" in cols:
+                db.execute(
+                    f"UPDATE {table} SET account_id = ? WHERE account_id IS NULL",
+                    (default_account_id,),
+                )
+        db.commit()
+    finally:
+        db.close()
+
+
+# ── Accounts (companies) ────────────────────────────────────
+
+def list_accounts():
+    """All accounts (company registry)."""
+    return _fetchall("SELECT * FROM accounts ORDER BY name")
+
+
+def list_active_accounts():
+    """Active accounts for the login picker."""
+    return _fetchall(
+        "SELECT id, name, phone FROM accounts WHERE status = 'active' ORDER BY name"
+    )
+
+
+def get_account(account_id):
+    """Return an account row by id, or None."""
+    return _fetchone("SELECT * FROM accounts WHERE id = ?", (account_id,))
+
+
+def get_account_by_name(name):
+    """Return an account by name (case-insensitive), or None."""
+    return _fetchone("SELECT * FROM accounts WHERE name = ? COLLATE NOCASE", (name,))
+
+
+def list_account_users(account_id):
+    """Active usernames of an account (used by the login picker)."""
+    return _fetchall(
+        "SELECT username, full_name FROM users "
+        "WHERE account_id = ? AND status = 'active' ORDER BY full_name",
+        (account_id,),
+    )
+
+
+def create_account(name, phone="", address=""):
+    """Create a company account. Returns the new id."""
+    return _insert(
+        "INSERT INTO accounts (name, phone, address, status) VALUES (?, ?, ?, 'active')",
+        (name, phone, address),
+    )
+
+
+def register_company(name, full_name, username, password, phone=""):
+    """Create a company + its first admin (first registrant becomes manager).
+
+    Returns {"account_id", "user_id", "account_name"}. Raises on duplicate.
+    """
+    account_id = create_account(name, phone=phone)
+    user_id = create_user(
+        username, password, role="admin",
+        full_name=full_name, phone=phone, account_id=account_id,
+    )
+    return {"account_id": account_id, "user_id": user_id, "account_name": name}
 
 def seed_default_packages():
     """Insert the standard ISP packages if the table is empty (idempotent)."""
@@ -902,12 +1084,17 @@ def get_user_by_id(user_id):
     return _fetchone("SELECT * FROM users WHERE id = ?", (user_id,))
 
 
-def create_user(username, password, role="agent", full_name="", phone=""):
-    """Create a new active user. Raises sqlite3.IntegrityError on duplicate username."""
+def create_user(username, password, role="agent", full_name="", phone="", account_id=None):
+    """Create a new active user. Raises sqlite3.IntegrityError on duplicate username.
+
+    account_id defaults to the current request account (None stays unassigned).
+    """
+    if account_id is None:
+        account_id = current_account()
     return _insert(
-        "INSERT INTO users (username, password_hash, role, full_name, phone, status) "
-        "VALUES (?, ?, ?, ?, ?, 'active')",
-        (username, generate_password_hash(password), role, full_name, phone),
+        "INSERT INTO users (username, password_hash, role, full_name, phone, status, account_id) "
+        "VALUES (?, ?, ?, ?, ?, 'active', ?)",
+        (username, generate_password_hash(password), role, full_name, phone, account_id),
     )
 
 
@@ -938,8 +1125,12 @@ def verify_password(user_row, password):
 
 
 def list_users():
-    """Return all users."""
-    return _fetchall("SELECT * FROM users ORDER BY id")
+    """Return this account's users (all when un-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM users"
+    if owner_where:
+        sql += " WHERE " + owner_where
+    return _fetchall(sql + " ORDER BY id", owner_params)
 
 
 def delete_user(user_id):
@@ -1297,25 +1488,38 @@ def update_generator_info(owner_name=None, phone=None, address=None, footer_note
 # ── Packages ────────────────────────────────────────────────
 
 def list_packages():
-    """Return all packages ordered by id (shared company data)."""
-    return _fetchall("SELECT id, name, speed, price FROM packages ORDER BY id")
+    """Return this account's packages ordered by id."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT id, name, speed, price FROM packages"
+    if owner_where:
+        sql += " WHERE " + owner_where
+    return _fetchall(sql + " ORDER BY id", owner_params)
 
 
 def get_package(package_id):
-    """Return a package row by id, or None."""
-    return _fetchone("SELECT * FROM packages WHERE id = ?", (package_id,))
+    """Return a package row by id, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM packages WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([package_id] + list(owner_params)))
 
 
 def get_package_by_name(name):
-    """Return a package row by name, or None."""
-    return _fetchone("SELECT * FROM packages WHERE name = ?", (name,))
+    """Return a package row by name, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM packages WHERE name = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([name] + list(owner_params)))
 
 
 def add_package(name, price, speed=""):
     """Insert a new package. Returns the new id."""
     return _insert(
-        "INSERT INTO packages (name, speed, price, owner_id) VALUES (?, ?, ?, ?)",
-        (name, speed, price, current_owner()),
+        "INSERT INTO packages (name, speed, price, owner_id, account_id) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (name, speed, price, current_owner(), current_account()),
     )
 
 
@@ -1335,7 +1539,7 @@ def update_package(package_id, name=None, price=None, speed=None):
     if not fields:
         return
     values.append(package_id)
-    owner_where, owner_params = _owner_filter("owner_id")
+    owner_where, owner_params = _owner_filter("account_id")
     sql = f"UPDATE packages SET {', '.join(fields)} WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -1343,8 +1547,8 @@ def update_package(package_id, name=None, price=None, speed=None):
 
 
 def delete_package(package_id):
-    """Delete a package by id (owner-scoped)."""
-    owner_where, owner_params = _owner_filter("owner_id")
+    """Delete a package by id (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
     sql = "DELETE FROM packages WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -1371,8 +1575,12 @@ def _customer_select():
 
 
 def list_customers():
-    """Return all customers with package + cabinet join (legacy aliases)."""
-    return _fetchall(_customer_select() + "ORDER BY c.created_at DESC, c.id DESC")
+    """Return this account's customers with package + cabinet join."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = _customer_select()
+    if owner_where:
+        sql += "WHERE " + owner_where + " "
+    return _fetchall(sql + "ORDER BY c.created_at DESC, c.id DESC", owner_params)
 
 
 def customers_changed_since(since):
@@ -1388,6 +1596,10 @@ def customers_changed_since(since):
     """
     sql = _customer_select() + "WHERE 1 = 1 "
     params = []
+    owner_where, owner_params = _owner_filter("c.account_id")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
     if since:
         sql += "AND (c.updated_at IS NULL OR c.updated_at > ?) "
         params.append(since)
@@ -1409,6 +1621,10 @@ def query_customers(search="", status="all", region="", debt=False,
     """
     sql = _customer_select() + "WHERE 1 = 1 "
     params = []
+    owner_where, owner_params = _owner_filter("c.account_id")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
     if search:
         like = f"%{search}%"
         sql += "AND (c.full_name LIKE ? OR c.phone LIKE ? OR c.phone2 LIKE ?) "
@@ -1441,24 +1657,36 @@ def query_customers(search="", status="all", region="", debt=False,
 
 
 def get_customer(customer_id):
-    """Return a customer with package + cabinet join, or None."""
-    return _fetchone(_customer_select() + "WHERE c.id = ?", (customer_id,))
+    """Return a customer with package + cabinet join, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = _customer_select() + "WHERE c.id = ? "
+    params = [customer_id]
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
+    return _fetchone(sql, tuple(params))
 
 
 def get_customer_by_name(name):
-    """Return a customer by exact full_name, or None."""
-    return _fetchone(_customer_select() + "WHERE c.full_name = ?", (name,))
+    """Return a customer by exact full_name, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = _customer_select() + "WHERE c.full_name = ? "
+    params = [name]
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
+    return _fetchone(sql, tuple(params))
 
 
 def search_customers(q, limit=50):
-    """Search customers by name / phone / mikrotik_username."""
+    """Search customers by name / phone / mikrotik_username (account-scoped)."""
     like = f"%{q}%"
-    return _fetchall(
-        _customer_select()
-        + "WHERE c.full_name LIKE ? OR c.phone LIKE ? OR c.mikrotik_username LIKE ? "
-        + "ORDER BY c.full_name LIMIT ?",
-        (like, like, like, limit),
-    )
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = _customer_select() + "WHERE (c.full_name LIKE ? OR c.phone LIKE ? OR c.mikrotik_username LIKE ?) "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    sql += "ORDER BY c.full_name LIMIT ?"
+    return _fetchall(sql, tuple([like, like, like] + list(owner_params) + [limit]))
 
 
 def add_customer(full_name, phone="", phone2="", whatsapp_phone="", address="",
@@ -1473,14 +1701,14 @@ def add_customer(full_name, phone="", phone2="", whatsapp_phone="", address="",
         "INSERT INTO customers (updated_at, full_name, phone, phone2, whatsapp_phone, address, "
         "region, package_id, mikrotik_username, mikrotik_password, nano_ip, "
         "device_type, subscription_date, renewal_date, status, is_active, "
-        "previous_debt, notes, owner_user_id, owner_id, fat_id, port_number) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "previous_debt, notes, owner_user_id, owner_id, fat_id, port_number, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             now_str(), full_name, phone, phone2, whatsapp_phone, address,
             region, package_id, mikrotik_username, mikrotik_password, nano_ip,
             device_type, subscription_date or now_str(), renewal_date, status,
             1 if status in ("active",) else 0, previous_debt or 0, notes,
-            owner_user_id, owner_id, fat_id, port_number,
+            owner_user_id, owner_id, fat_id, port_number, current_account(),
         ),
     )
 
@@ -1580,21 +1808,25 @@ def delete_customer(customer_id):
 
 
 def customer_regions():
-    """Distinct non-empty regions."""
-    rows = _fetchall(
-        "SELECT DISTINCT region FROM customers WHERE region IS NOT NULL AND region != '' ORDER BY region"
-    )
+    """Distinct non-empty regions (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT DISTINCT region FROM customers WHERE region IS NOT NULL AND region != '' "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    rows = _fetchall(sql + "ORDER BY region", owner_params)
     return [r["region"] for r in rows]
 
 
 def customer_stats():
-    """Basic counts: total / active / expired / suspended."""
+    """Basic counts for this account: total / active / expired / suspended."""
+    owner_where, owner_params = _owner_filter("account_id")
+    cw = (" AND " + owner_where) if owner_where else ""
     row = _fetchone(
         "SELECT COUNT(*) AS total, "
         "SUM(CASE WHEN is_active = 1 AND status = 'active' THEN 1 ELSE 0 END) AS active, "
         "SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired, "
         "SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) AS suspended "
-        "FROM customers"
+        "FROM customers WHERE 1 = 1" + cw
     )
     return {
         "total": row["total"] or 0,
@@ -1607,30 +1839,45 @@ def customer_stats():
 # ── FTTH Cabinets (FAT) ─────────────────────────────────────
 
 def list_cabinets():
-    """All cabinets with live occupancy (used/free ports), newest first."""
-    return _fetchall(
+    """This account's cabinets with live occupancy (used/free ports)."""
+    owner_where, owner_params = _owner_filter("cb.account_id")
+    used_where, used_params = _owner_filter("c.account_id")
+    sql = (
         "SELECT cb.*, "
-        "(SELECT COUNT(*) FROM customers c WHERE c.fat_id = cb.id) AS used_ports "
-        "FROM cabinets cb ORDER BY cb.fat_number"
+        "(SELECT COUNT(*) FROM customers c WHERE c.fat_id = cb.id"
+        + ((" AND " + used_where) if used_where else "") + ") AS used_ports "
+        "FROM cabinets cb"
     )
+    if owner_where:
+        sql += " WHERE " + owner_where
+    return _fetchall(sql + " ORDER BY cb.fat_number",
+                     tuple(list(used_params) + list(owner_params)))
 
 
 def get_cabinet(cabinet_id):
-    """Return a cabinet row by id, or None."""
-    return _fetchone("SELECT * FROM cabinets WHERE id = ?", (cabinet_id,))
+    """Return a cabinet row by id, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM cabinets WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([cabinet_id] + list(owner_params)))
 
 
 def get_cabinet_by_number(fat_number):
-    """Return a cabinet by its FAT number (case-insensitive), or None."""
-    return _fetchone("SELECT * FROM cabinets WHERE fat_number = ? COLLATE NOCASE", (fat_number,))
+    """Return a cabinet by its FAT number (case-insensitive), or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM cabinets WHERE fat_number = ? COLLATE NOCASE "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([fat_number] + list(owner_params)))
 
 
 def add_cabinet(fat_number, port_count=16, location="", region="", notes=""):
     """Insert a cabinet. Returns the new id."""
     return _insert(
-        "INSERT INTO cabinets (fat_number, port_count, location, region, notes, owner_id) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (fat_number, port_count, location, region, notes, current_owner()),
+        "INSERT INTO cabinets (fat_number, port_count, location, region, notes, owner_id, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (fat_number, port_count, location, region, notes, current_owner(), current_account()),
     )
 
 
@@ -1737,13 +1984,18 @@ def bulk_import_customers(rows):
             errors.append({"row": idx + 1, "reason": "الاسم فارغ"})
             continue
 
+        owner_where, owner_params = _owner_filter("account_id")
         existing = None
         if username:
-            existing = _fetchone(
-                "SELECT id FROM customers WHERE mikrotik_username = ? COLLATE NOCASE", (username,)
-            )
+            sql = "SELECT id FROM customers WHERE mikrotik_username = ? COLLATE NOCASE"
+            if owner_where:
+                sql += " AND " + owner_where
+            existing = _fetchone(sql, tuple([username] + list(owner_params)))
         if not existing:
-            existing = _fetchone("SELECT id FROM customers WHERE full_name = ? COLLATE NOCASE", (name,))
+            sql = "SELECT id FROM customers WHERE full_name = ? COLLATE NOCASE"
+            if owner_where:
+                sql += " AND " + owner_where
+            existing = _fetchone(sql, tuple([name] + list(owner_params)))
 
         fat_id, port_number = None, None
         fat_num = str(r.get("fat_number") or "").strip()
@@ -1790,44 +2042,56 @@ def bulk_import_customers(rows):
 # ── Payment collector report (who collected what) ────────────
 
 def report_by_collector(month, year):
-    """Per-staff payment totals for a month/year (accountability report)."""
-    return _fetchall(
+    """Per-staff payment totals for a month/year (account-scoped report)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = (
         "SELECT collected_by, collected_by_name, COUNT(*) AS payment_count, "
         "COALESCE(SUM(amount), 0) AS total "
         "FROM payments "
         "WHERE strftime('%m', payment_date) = ? AND strftime('%Y', payment_date) = ? "
-        "GROUP BY collected_by, collected_by_name "
-        "ORDER BY total DESC",
-        (f"{month:02d}", str(year)),
     )
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    sql += "GROUP BY collected_by, collected_by_name ORDER BY total DESC"
+    return _fetchall(sql, tuple([f"{month:02d}", str(year)] + list(owner_params)))
 
 
 # ── Invoices ────────────────────────────────────────────────
 
 def get_invoice(invoice_id):
-    """Return an invoice row by id, or None."""
-    return _fetchone("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+    """Return an invoice row by id, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM invoices WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([invoice_id] + list(owner_params)))
 
 
 def get_invoice_with_customer(invoice_id):
     """Invoice JOIN customer row for the print templates, or None."""
-    return _fetchone(_invoice_select() + "WHERE i.id = ?", (invoice_id,))
+    owner_where, owner_params = _owner_filter("i.account_id")
+    sql = _invoice_select() + "WHERE i.id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([invoice_id] + list(owner_params)))
 
 
 def get_customer_invoice(customer_id, month, year):
     """Return a specific month's invoice for a customer, or None."""
-    return _fetchone(
-        "SELECT * FROM invoices WHERE customer_id = ? AND month = ? AND year = ?",
-        (customer_id, month, year),
-    )
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM invoices WHERE customer_id = ? AND month = ? AND year = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([customer_id, month, year] + list(owner_params)))
 
 
 def list_customer_invoices(customer_id):
-    """All invoices for a customer, newest first."""
-    return _fetchall(
-        "SELECT * FROM invoices WHERE customer_id = ? ORDER BY year DESC, month DESC",
-        (customer_id,),
-    )
+    """All invoices for a customer, newest first (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM invoices WHERE customer_id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchall(sql + "ORDER BY year DESC, month DESC", tuple([customer_id] + list(owner_params)))
 
 
 def _invoice_select():
@@ -1849,6 +2113,10 @@ def list_invoices(month, year, search=""):
     """Invoices for a given month/year (optionally filtered by customer name)."""
     sql = _invoice_select() + "WHERE i.month = ? AND i.year = ? "
     params = [month, year]
+    owner_where, owner_params = _owner_filter("i.account_id")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
     if search:
         sql += "AND c.full_name LIKE ? "
         params.append(f"%{search}%")
@@ -1861,12 +2129,12 @@ def add_invoice(customer_id, month, year, package_name="", package_price=0,
     """Insert an invoice. Returns the new id."""
     return _insert(
         "INSERT INTO invoices (customer_id, month, year, package_name, package_price, "
-        "total_amount, paid_amount, is_paid, previous_debt, owner_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "total_amount, paid_amount, is_paid, previous_debt, owner_id, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             customer_id, month, year, package_name, package_price,
             total_amount, paid_amount, 1 if is_paid else 0, previous_debt,
-            current_owner(),
+            current_owner(), current_account(),
         ),
     )
 
@@ -1899,47 +2167,52 @@ def delete_invoice(invoice_id):
 
 
 def invoices_for_month(month, year):
-    """All invoices for a month/year (billing/generate/rollover)."""
-    return _fetchall(
-        "SELECT * FROM invoices WHERE month = ? AND year = ?",
-        (month, year),
-    )
+    """This account's invoices for a month/year (billing/generate/rollover)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM invoices WHERE month = ? AND year = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchall(sql, tuple([month, year] + list(owner_params)))
 
 
 def count_invoices(month, year):
-    """Count invoices for a month/year."""
-    row = _fetchone(
-        "SELECT COUNT(*) AS n FROM invoices WHERE month = ? AND year = ?",
-        (month, year),
-    )
+    """Count this account's invoices for a month/year."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT COUNT(*) AS n FROM invoices WHERE month = ? AND year = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    row = _fetchone(sql, tuple([month, year] + list(owner_params)))
     return row["n"] if row else 0
 
 
 def count_paid_invoices(month, year):
     """Count fully-paid invoices for a month/year."""
-    row = _fetchone(
-        "SELECT COUNT(*) AS n FROM invoices WHERE month = ? AND year = ? AND is_paid = 1",
-        (month, year),
-    )
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT COUNT(*) AS n FROM invoices WHERE month = ? AND year = ? AND is_paid = 1"
+    if owner_where:
+        sql += " AND " + owner_where
+    row = _fetchone(sql, tuple([month, year] + list(owner_params)))
     return row["n"] if row else 0
 
 
 def count_unpaid_invoices(month, year):
     """Count invoices for a month/year that are not fully paid."""
-    row = _fetchone(
-        "SELECT COUNT(*) AS n FROM invoices "
-        "WHERE month = ? AND year = ? AND (is_paid = 0 OR paid_amount < total_amount)",
-        (month, year),
-    )
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT COUNT(*) AS n FROM invoices "
+    sql += "WHERE month = ? AND year = ? AND (is_paid = 0 OR paid_amount < total_amount)"
+    if owner_where:
+        sql += " AND " + owner_where
+    row = _fetchone(sql, tuple([month, year] + list(owner_params)))
     return row["n"] if row else 0
 
 
 def sum_invoice_amounts(month, year, column="total_amount"):
     """Sum a numeric invoice column for a month/year."""
-    row = _fetchone(
-        f"SELECT COALESCE(SUM({column}), 0) AS s FROM invoices WHERE month = ? AND year = ?",
-        (month, year),
-    )
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = f"SELECT COALESCE(SUM({column}), 0) AS s FROM invoices WHERE month = ? AND year = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    row = _fetchone(sql, tuple([month, year] + list(owner_params)))
     return row["s"] or 0
 
 
@@ -1961,17 +2234,20 @@ def customer_unpaid_debt(customer_id, up_to_month=None, up_to_year=None):
 
 
 def total_unpaid_debt():
-    """Sum of all unpaid invoice amounts across the system."""
-    row = _fetchone(
-        "SELECT COALESCE(SUM(total_amount - paid_amount), 0) AS s "
-        "FROM invoices WHERE is_paid = 0"
-    )
+    """Sum of this account's unpaid invoice amounts."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT COALESCE(SUM(total_amount - paid_amount), 0) AS s "
+    sql += "FROM invoices WHERE is_paid = 0"
+    if owner_where:
+        sql += " AND " + owner_where
+    row = _fetchone(sql, owner_params)
     return row["s"] or 0
 
 
 def debts_summary():
-    """Per-customer unpaid totals for the debts page."""
-    return _fetchall(
+    """This account's per-customer unpaid totals for the debts page."""
+    owner_where, owner_params = _owner_filter("i.account_id")
+    sql = (
         "SELECT c.id AS id, c.full_name AS name, c.phone, c.region, "
         "p.name AS package_name, p.price AS package_price, "
         "SUM(i.total_amount - i.paid_amount) AS total_debt, "
@@ -1979,16 +2255,19 @@ def debts_summary():
         "FROM invoices i JOIN customers c ON c.id = i.customer_id "
         "LEFT JOIN packages p ON p.id = c.package_id "
         "WHERE i.is_paid = 0 "
-        "GROUP BY c.id HAVING SUM(i.total_amount - i.paid_amount) > 0 "
-        "ORDER BY SUM(i.total_amount - i.paid_amount) DESC"
     )
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    sql += "GROUP BY c.id HAVING SUM(i.total_amount - i.paid_amount) > 0 "
+    sql += "ORDER BY SUM(i.total_amount - i.paid_amount) DESC"
+    return _fetchall(sql, owner_params)
 
 
 # ── Payments ────────────────────────────────────────────────
 
 def get_payment(payment_id):
     """Return a payment row by id, or None (agent: own collections only)."""
-    owner_where, owner_params = _owner_filter("collected_by")
+    owner_where, owner_params = _payment_scope("account_id", "collected_by")
     sql = "SELECT * FROM payments WHERE id = ? "
     if owner_where:
         sql += "AND " + owner_where + " "
@@ -1997,7 +2276,7 @@ def get_payment(payment_id):
 
 def get_payment_details(payment_id):
     """Payment JOIN customer+package row for the receipt templates, or None."""
-    owner_where, owner_params = _owner_filter("pay.collected_by")
+    owner_where, owner_params = _payment_scope("pay.account_id", "pay.collected_by")
     sql = _payment_select() + "WHERE pay.id = ? "
     if owner_where:
         sql += "AND " + owner_where + " "
@@ -2006,7 +2285,7 @@ def get_payment_details(payment_id):
 
 def list_invoice_payments(invoice_id):
     """All payments for an invoice, newest first (agent: own only)."""
-    owner_where, owner_params = _owner_filter("collected_by")
+    owner_where, owner_params = _payment_scope("account_id", "collected_by")
     sql = "SELECT * FROM payments WHERE invoice_id = ? "
     if owner_where:
         sql += "AND " + owner_where + " "
@@ -2015,7 +2294,7 @@ def list_invoice_payments(invoice_id):
 
 def list_customer_payments(customer_id):
     """All payments for a customer, newest first (agent: own only)."""
-    owner_where, owner_params = _owner_filter("collected_by")
+    owner_where, owner_params = _payment_scope("account_id", "collected_by")
     sql = "SELECT * FROM payments WHERE customer_id = ? "
     if owner_where:
         sql += "AND " + owner_where + " "
@@ -2040,10 +2319,10 @@ def list_recent_payments(search="", method="", limit=200):
     """Recent payments, optionally filtered by customer name / method."""
     sql = _payment_select() + "WHERE 1 = 1 "
     params = []
-    owner_where, owner_params = _owner_filter("pay.collected_by")
+    owner_where, owner_params = _payment_scope("pay.account_id", "pay.collected_by")
     if owner_where:
         sql += "AND " + owner_where + " "
-        params.append(owner_params[0])
+        params += list(owner_params)
     if search:
         sql += "AND c.full_name LIKE ? "
         params.append(f"%{search}%")
@@ -2067,10 +2346,10 @@ def add_payment(invoice_id, customer_id, amount, payment_date, payment_method="�
         collected_by = current_owner()
     return _insert(
         "INSERT INTO payments (invoice_id, customer_id, amount, payment_date, payment_method, "
-        "notes, owner_id, collected_by, collected_by_name) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "notes, owner_id, collected_by, collected_by_name, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (invoice_id, customer_id, amount, payment_date, payment_method, notes,
-         current_owner(), collected_by, collected_by_name),
+         current_owner(), collected_by, collected_by_name, current_account()),
     )
 
 
@@ -2093,7 +2372,7 @@ def delete_payment(payment_id):
 
 def total_payments():
     """Sum of all payments (agent: own collections only)."""
-    owner_where, owner_params = _owner_filter("collected_by")
+    owner_where, owner_params = _payment_scope("account_id", "collected_by")
     sql = "SELECT COALESCE(SUM(amount), 0) AS s FROM payments"
     if owner_where:
         sql += " WHERE " + owner_where
@@ -2103,7 +2382,7 @@ def total_payments():
 
 def total_payments_today():
     """Sum of today's payments (agent: own collections only)."""
-    owner_where, owner_params = _owner_filter("collected_by")
+    owner_where, owner_params = _payment_scope("account_id", "collected_by")
     sql = "SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE payment_date = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2121,6 +2400,10 @@ def list_expenses(month, year, search="", category=""):
         "WHERE strftime('%m', e.expense_date) = ? AND strftime('%Y', e.expense_date) = ? "
     )
     params = [f"{month:02d}", str(year)]
+    owner_where, owner_params = _owner_filter("e.account_id")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
     if search:
         sql += "AND (e.description LIKE ? OR e.category LIKE ?) "
         params += [f"%{search}%", f"%{search}%"]
@@ -2134,9 +2417,9 @@ def list_expenses(month, year, search="", category=""):
 def add_expense(expense_date, category, amount, description="", recipient_name="", subscriber_id=None):
     """Insert an expense. Returns the new id."""
     return _insert(
-        "INSERT INTO expenses (expense_date, category, amount, description, recipient_name, subscriber_id, owner_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (expense_date, category, amount, description, recipient_name, subscriber_id, current_owner()),
+        "INSERT INTO expenses (expense_date, category, amount, description, recipient_name, subscriber_id, owner_id, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (expense_date, category, amount, description, recipient_name, subscriber_id, current_owner(), current_account()),
     )
 
 
@@ -2166,38 +2449,47 @@ def delete_expense(expense_id):
 
 
 def get_expense(expense_id):
-    """Return an expense row by id, or None."""
-    return _fetchone("SELECT * FROM expenses WHERE id = ?", (expense_id,))
+    """Return an expense row by id, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM expenses WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([expense_id] + list(owner_params)))
 
 
 def total_expenses(month, year):
     """Sum of expenses for a month/year."""
-    row = _fetchone(
-        "SELECT COALESCE(SUM(amount), 0) AS s FROM expenses "
-        "WHERE strftime('%m', expense_date) = ? AND strftime('%Y', expense_date) = ?",
-        (f"{month:02d}", str(year)),
-    )
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT COALESCE(SUM(amount), 0) AS s FROM expenses "
+    sql += "WHERE strftime('%m', expense_date) = ? AND strftime('%Y', expense_date) = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    row = _fetchone(sql, tuple([f"{month:02d}", str(year)] + list(owner_params)))
     return row["s"] or 0
 
 
 def expense_categories(month, year):
     """Per-category expense totals for a month/year."""
-    return _fetchall(
-        "SELECT category, SUM(amount) AS total FROM expenses "
-        "WHERE strftime('%m', expense_date) = ? AND strftime('%Y', expense_date) = ? "
-        "GROUP BY category ORDER BY SUM(amount) DESC",
-        (f"{month:02d}", str(year)),
-    )
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT category, SUM(amount) AS total FROM expenses "
+    sql += "WHERE strftime('%m', expense_date) = ? AND strftime('%Y', expense_date) = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    sql += "GROUP BY category ORDER BY SUM(amount) DESC"
+    return _fetchall(sql, tuple([f"{month:02d}", str(year)] + list(owner_params)))
 
 
 def list_active_customers():
-    """Active customers, ordered by name (name alias for dropdowns)."""
-    return _fetchall(
+    """This account's active customers (name alias for dropdowns)."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = (
         "SELECT c.*, c.full_name AS name, p.name AS package_name, p.price AS package_price "
         "FROM customers c LEFT JOIN packages p ON p.id = c.package_id "
         "WHERE c.is_active = 1 AND c.status = 'active' "
-        "ORDER BY c.full_name"
     )
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchall(sql + "ORDER BY c.full_name", owner_params)
 
 
 # ── Invoice extras ──────────────────────────────────────────
@@ -2248,6 +2540,10 @@ def list_tickets(status="all", search=""):
         "WHERE 1 = 1 "
     )
     params = []
+    owner_where, owner_params = _owner_filter("t.account_id")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
     if status == "pending":
         sql += "AND t.status = 'pending' "
     elif status == "resolved":
@@ -2262,15 +2558,19 @@ def list_tickets(status="all", search=""):
 def add_ticket(customer_id, issue_description):
     """Insert a maintenance ticket. Returns the new id."""
     return _insert(
-        "INSERT INTO maintenance_tickets (customer_id, issue_description, status, owner_id) "
-        "VALUES (?, ?, 'pending', ?)",
-        (customer_id, issue_description, current_owner()),
+        "INSERT INTO maintenance_tickets (customer_id, issue_description, status, owner_id, account_id) "
+        "VALUES (?, ?, 'pending', ?, ?)",
+        (customer_id, issue_description, current_owner(), current_account()),
     )
 
 
 def get_ticket(ticket_id):
-    """Return a ticket by id, or None."""
-    return _fetchone("SELECT * FROM maintenance_tickets WHERE id = ?", (ticket_id,))
+    """Return a ticket by id, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM maintenance_tickets WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([ticket_id] + list(owner_params)))
 
 
 def update_ticket(ticket_id, customer_id, issue_description):
@@ -2359,20 +2659,28 @@ def get_cached_signal(ip):
 
 
 def list_signal_cache():
-    """Return all cached signals."""
+    """Return all cached signals (global technical monitor board)."""
     return _fetchall("SELECT * FROM signal_cache ORDER BY ip")
 
 
 # ── Network Links (Phase 13) ────────────────────────────────
 
 def list_network_links():
-    """Return all network links (sectors/links), newest first."""
-    return _fetchall("SELECT * FROM network_links ORDER BY id DESC")
+    """Return this account's network links (sectors/links), newest first."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM network_links"
+    if owner_where:
+        sql += " WHERE " + owner_where
+    return _fetchall(sql + " ORDER BY id DESC", owner_params)
 
 
 def get_network_link(link_id):
-    """Return a network link row by id, or None."""
-    return _fetchone("SELECT * FROM network_links WHERE id = ?", (link_id,))
+    """Return a network link row by id, or None (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = "SELECT * FROM network_links WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([link_id] + list(owner_params)))
 
 
 def add_network_link(name, ip="", link_type="MikroTik", location="", notes="",
@@ -2391,9 +2699,9 @@ def add_network_link(name, ip="", link_type="MikroTik", location="", notes="",
     """
     return _insert(
         "INSERT INTO network_links (name, ip, link_type, location, notes, "
-        "username, password, community, owner_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, ip, link_type, location, notes, username, password, community, current_owner()),
+        "username, password, community, owner_id, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (name, ip, link_type, location, notes, username, password, community, current_owner(), current_account()),
     )
 
 
@@ -2440,23 +2748,29 @@ def delete_network_link(link_id):
 # ── Dashboard KPIs ──────────────────────────────────────────
 
 def dashboard_stats(month, year):
-    """Aggregate KPIs for the dashboard.
+    """Aggregate KPIs for the dashboard (scoped to the current account).
 
-    Company counts (customers / packages / invoices) are shared. Payment
-    sums are scoped to the caller: agents see their own collections,
-    admins see the whole company.
+    Counts are account-wide; payment sums are scoped so workers see their
+    own collections while the account manager sees everything.
     """
-    pay_where, pay_params = _owner_filter("collected_by")
-    pw = (" AND " + pay_where) if pay_where else ""
+    cw, cp = _owner_filter("account_id")
+    pw, pp = _owner_filter("account_id")
+    iw, ip = _owner_filter("account_id")
+    pay_where, pay_params = _payment_scope("account_id", "collected_by")
+    cw = (" AND " + cw) if cw else ""
+    pw = (" AND " + pw) if pw else ""
+    iw = (" AND " + iw) if iw else ""
+    payw = (" AND " + pay_where) if pay_where else ""
     row = _fetchone(
         "SELECT "
-        "(SELECT COUNT(*) FROM customers WHERE is_active = 1 AND status = 'active') AS active_customers, "
-        "(SELECT COUNT(*) FROM packages) AS total_packages, "
-        "(SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE month = ? AND year = ?) AS expected_income, "
+        "(SELECT COUNT(*) FROM customers WHERE is_active = 1 AND status = 'active'" + cw + ") AS active_customers, "
+        "(SELECT COUNT(*) FROM packages WHERE 1 = 1" + pw + ") AS total_packages, "
+        "(SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE month = ? AND year = ?" + iw + ") AS expected_income, "
         "(SELECT COALESCE(SUM(amount), 0) FROM payments "
-        " WHERE strftime('%m', payment_date) = ? AND strftime('%Y', payment_date) = ?" + pw + ") AS collected, "
-        "(SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM invoices WHERE is_paid = 0) AS total_debt",
-        tuple([month, year, f"{month:02d}", str(year)] + list(pay_params)),
+        " WHERE strftime('%m', payment_date) = ? AND strftime('%Y', payment_date) = ?" + payw + ") AS collected, "
+        "(SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM invoices WHERE is_paid = 0" + iw + ") AS total_debt",
+        tuple(list(cp) + list(pp) + [month, year] + list(ip)
+              + [f"{month:02d}", str(year)] + list(pay_params) + list(ip)),
     )
     return {
         "active_customers": row["active_customers"] or 0,
@@ -2468,20 +2782,23 @@ def dashboard_stats(month, year):
 
 
 def customers_expiring_between(start_dt, end_dt):
-    """All customers expiring in [start, end]."""
-    return _fetchall(
-        _customer_select()
-        + "WHERE c.is_active = 1 AND c.status = 'active' AND c.renewal_date IS NOT NULL "
-        + "AND c.renewal_date >= ? AND c.renewal_date <= ? ORDER BY c.renewal_date ASC",
-        (start_dt, end_dt),
-    )
+    """This account's customers expiring in [start, end]."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = (_customer_select()
+           + "WHERE c.is_active = 1 AND c.status = 'active' AND c.renewal_date IS NOT NULL ")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    sql += "AND c.renewal_date >= ? AND c.renewal_date <= ? ORDER BY c.renewal_date ASC"
+    return _fetchall(sql, tuple(list(owner_params) + [start_dt, end_dt]))
 
 
 def customers_with_debt_or_expired():
-    """All customers with unpaid debt OR whose renewal passed."""
-    rows = _fetchall(
-        _customer_select() + "WHERE c.is_active = 1 ORDER BY c.full_name"
-    )
+    """This account's customers with unpaid debt OR whose renewal passed."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = _customer_select() + "WHERE c.is_active = 1 "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    rows = _fetchall(sql + "ORDER BY c.full_name", owner_params)
     result = []
     for c in rows:
         debt = customer_unpaid_debt(c["id"])
@@ -2497,18 +2814,30 @@ def customers_with_debt_or_expired():
 # ── Export (Excel) helpers ──────────────────────────────────
 
 def export_customers():
-    """All customers with package join, ordered by name."""
-    return _fetchall(_customer_select() + "ORDER BY c.full_name")
+    """This account's customers with package join, ordered by name."""
+    owner_where, owner_params = _owner_filter("c.account_id")
+    sql = _customer_select()
+    if owner_where:
+        sql += "WHERE " + owner_where + " "
+    return _fetchall(sql + "ORDER BY c.full_name", owner_params)
 
 
 def export_invoices():
-    """All invoices joined with customer name."""
-    return _fetchall(_invoice_select() + "ORDER BY c.full_name, i.year, i.month")
+    """This account's invoices joined with customer name."""
+    owner_where, owner_params = _owner_filter("i.account_id")
+    sql = _invoice_select()
+    if owner_where:
+        sql += "WHERE " + owner_where + " "
+    return _fetchall(sql + "ORDER BY c.full_name, i.year, i.month", owner_params)
 
 
 def export_payments():
-    """All payments joined with customer name."""
-    return _fetchall(_payment_select() + "ORDER BY pay.payment_date DESC")
+    """This account's payments joined with customer name."""
+    owner_where, owner_params = _payment_scope("pay.account_id", "pay.collected_by")
+    sql = _payment_select()
+    if owner_where:
+        sql += "WHERE " + owner_where + " "
+    return _fetchall(sql + "ORDER BY pay.payment_date DESC", owner_params)
 
 
 

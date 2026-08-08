@@ -84,6 +84,22 @@ def get_csrf_token():
 
 
 @app.before_request
+def scope_db_to_session_account():
+    """Scope every web request to the logged-in user's account (multi-tenant).
+
+    The mobile JSON API sets its own scope inside the auth decorators, so it
+    is skipped here.
+    """
+    if request.path.startswith("/api/mobile/v1/"):
+        return None
+    uid = session.get("user_id")
+    acct = session.get("account_id")
+    role = session.get("user_role") or "admin"
+    db.set_current_account(acct if acct is not None else None, uid, role)
+    return None
+
+
+@app.before_request
 def block_path_traversal():
     """Global Path Traversal filter (security hardening).
 
