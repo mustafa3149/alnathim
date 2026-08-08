@@ -104,7 +104,8 @@
       <div class="exe-space"><label class="exe-label">اسم المستخدم *</label><input type="text" id="rUsername" class="exe-input" dir="ltr" placeholder="example_user"></div>
       <div class="exe-space"><label class="exe-label">رقم الهاتف (اختياري)</label><input type="text" id="rPhone" class="exe-input" dir="ltr" placeholder="07xxxxxxxxx"></div>
       <div class="exe-space"><label class="exe-label">كلمة المرور *</label><input type="password" id="rPassword" class="exe-input" dir="ltr" placeholder="••••••••"></div>
-      <button class="exe-btn" id="regBtn" onclick="doRegister()">إنشاء الشركة</button>
+      <div id="regError" class="exe-error" style="display:none;margin-bottom:12px;"></div>
+<button class="exe-btn" id="regBtn" onclick="doRegister()">إنشاء الشركة</button>
       <div style="font-size:11px;color:#94a3b8;margin-top:10px;">بعد التسجيل تبقى شركتك بانتظار موافقة المدير الرئيسي — لا يمكن الدخول قبلها.</div>
       <p class="exe-link">لديك شركة؟ <a href="#" onclick="closeSheet('regSheet');return false;" style="color:#6366f1;">تسجيل الدخول</a></p>
     </div>

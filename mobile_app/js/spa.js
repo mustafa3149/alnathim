@@ -224,7 +224,7 @@ async function addCustomer() {
     port_number: document.getElementById('cPort') ? (document.getElementById('cPort').value || null) : null
   };
   const btn = document.getElementById('addCustBtn');
-  btn.textContent = '⏳ جاري الحفظ...'; btn.disabled = true;
+  btn.textContent = 'جاري الحفظ...'; btn.disabled = true;
   const d = await api('/customers', body);
   btn.textContent = 'حفظ المشترك'; btn.disabled = false;
   if (d.ok) {
@@ -578,7 +578,7 @@ async function submitPay() {
   const amountRaw = document.getElementById('payAmount').value.trim();
   const amount = amountRaw === '' ? 0 : parseInt(amountRaw) || 0;
   const btn = document.getElementById('payBtn');
-  btn.textContent = '⏳ جاري الدفع...'; btn.disabled = true;
+  btn.textContent = 'جاري الدفع...'; btn.disabled = true;
   const d = await api('/quick-pay/' + currentCustomerId, {
     amount: amount,
     payment_method: document.getElementById('payMethod').value
@@ -607,7 +607,7 @@ async function submitRenew() {
   const newPkg = (opt && opt.value) ? opt.value : ((cust && cust.package_name) || '');
   const newPrice = (opt && opt.dataset.price) ? opt.dataset.price : ((cust && cust.package_price) || 0);
   const btn = document.getElementById('renewBtn');
-  btn.textContent = '⏳ جاري التجديد...'; btn.disabled = true;
+  btn.textContent = 'جاري التجديد...'; btn.disabled = true;
   if (newPkg && newPkg !== (cust && cust.package_name)) {
     const u = await api('/customers/' + currentCustomerId, { package_name: newPkg, package_price: newPrice }, 'PUT');
     if (!u.ok) {
@@ -705,7 +705,7 @@ async function doLogin() {
   localStorage.setItem('alnathim_server', server);
   refreshApiBase();
   const btn = document.getElementById('loginBtn');
-  btn.textContent = '⏳ جاري الدخول...'; btn.disabled = true;
+  btn.textContent = 'جاري الدخول...'; btn.disabled = true;
   try {
     const r = await fetchWithRetry(API_BASE + '/auth/login', {
       method: 'POST',
@@ -790,16 +790,20 @@ async function doRegister() {
   if (!company_name || !username || !password) { showToast('أدخل اسم الشركة والمستخدم وكلمة المرور', 'error'); return; }
   if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
   const btn = document.getElementById('regBtn');
-  btn.textContent = '⏳ جاري إنشاء الشركة...'; btn.disabled = true;
+  btn.textContent = 'جاري إنشاء الشركة...'; btn.disabled = true;
   const d = await api('/auth/register-company', {company_name, full_name: username, username, password, phone});
   btn.textContent = 'إنشاء الشركة'; btn.disabled = false;
   if (d.ok && d.data) {
+    const er = document.getElementById('regError'); if (er) { er.style.display = 'none'; }
     closeSheet('regSheet');
     document.getElementById('username').value = username;
     showToast('' + (d.data.message_ar || 'تم التسجيل'));
     document.getElementById('password').focus();
   } else {
-    showToast((d.error && d.error.message_ar) || 'فشل إنشاء الشركة', 'error');
+    const em = (d.error && d.error.message_ar) || 'فشل إنشاء الشركة — تحقق من عدم تكرار الاسم والمستخدم';
+    const er = document.getElementById('regError');
+    if (er) { er.textContent = em; er.style.display = 'block'; }
+    showToast(em, 'error');
   }
 }
 
@@ -1392,7 +1396,7 @@ function loadBackup() {}
 function doBackup() {
   const btn = document.getElementById('backupBtn');
   const box = document.getElementById('backupBox');
-  btn.disabled = true; btn.textContent = '⏳ جاري الإنشاء...';
+  btn.disabled = true; btn.textContent = 'جاري الإنشاء...';
   api('/backup', {}).then(d => {
     btn.disabled = false; btn.textContent = 'إنشاء نسخة احتياطية';
     if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">تم إنشاء النسخة: ' + esc(d.data.backup_path || '') + '</div>';
