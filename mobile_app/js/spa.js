@@ -1292,12 +1292,11 @@ function doBackup() {
 // ── NETWORK (signal board + links + ping) ──────────────────
 function loadNetwork() { showNetworkTab('signal'); }
 function showNetworkTab(tab) {
+  if (tab === 'links') tab = 'signal';
   document.querySelectorAll('#netTabs .chip').forEach(b => b.classList.toggle('active', b.dataset.ntab === tab));
   document.getElementById('netSignal').classList.toggle('hidden', tab !== 'signal');
-  document.getElementById('netLinks').classList.toggle('hidden', tab !== 'links');
   document.getElementById('netPing').classList.toggle('hidden', tab !== 'ping');
   if (tab === 'signal') loadSignalBoard();
-  if (tab === 'links') loadNetLinks();
 }
 function signalQuality(dbm) {
   const n = parseFloat(dbm);

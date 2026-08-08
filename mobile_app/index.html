@@ -228,7 +228,7 @@
           <a href="#" onclick="goTo('/view/tickets');return false;" class="menu-row"><span class="mi">🎫</span><div class="menu-text"><div class="menu-title">التذاكر</div><div class="menu-sub">طلبات الصيانة</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/reminders');return false;" class="menu-row"><span class="mi">⏰</span><div class="menu-text"><div class="menu-title">التذكيرات</div><div class="menu-sub">ديون ومنتهيون</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/cabinets');return false;" class="menu-row"><span class="mi">📟</span><div class="menu-text"><div class="menu-title">الكابينات (FAT)</div><div class="menu-sub">المنافذ الضوئية ومن يشغلها</div></div><span class="menu-arrow">‹</span></a>
-          <a href="#" onclick="goTo('/view/network');return false;" class="menu-row"><span class="mi">📡</span><div class="menu-text"><div class="menu-title">الشبكة</div><div class="menu-sub">الإشارة والأجهزة والفحص</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/network');return false;" class="menu-row"><span class="mi">📡</span><div class="menu-text"><div class="menu-title">الشبكة</div><div class="menu-sub">لوحة الإشارة وفحص الاتصال</div></div><span class="menu-arrow">‹</span></a>
         </div>
 
         <div class="section-label admin-only">إدارة المدير</div>
@@ -457,19 +457,14 @@
     <section id="view-network" class="view">
       <div class="container">
         <div class="page-title">الشبكة</div>
-        <div class="page-sub">الإشارة والأجهزة والفحص</div>
+        <div class="page-sub">لوحة الإشارة وفحص الاتصال</div>
         <div class="chips" style="margin-top:10px;" id="netTabs">
           <button class="chip active" data-ntab="signal" onclick="showNetworkTab('signal')">الإشارة</button>
-          <button class="chip" data-ntab="links" onclick="showNetworkTab('links')">الأجهزة</button>
           <button class="chip" data-ntab="ping" onclick="showNetworkTab('ping')">فحص</button>
         </div>
         <div id="netSignal">
           <div id="signalUpdated" style="font-size:11px;color:var(--muted);margin-top:10px;"></div>
           <div id="signalList" style="margin-top:8px;"></div>
-        </div>
-        <div id="netLinks" class="hidden">
-          <div id="linksList" style="margin-top:10px;"></div>
-          <button class="fab" onclick="openLinkSheet(null)">+</button>
         </div>
         <div id="netPing" class="hidden">
           <div class="field" style="margin-top:12px;"><label>عنوان IP</label>
