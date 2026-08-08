@@ -229,6 +229,7 @@ async function addCustomer() {
   btn.textContent = 'حفظ المشترك'; btn.disabled = false;
   if (d.ok) {
     closeSheet('addSheet');
+    cacheClear('customers'); cacheClear('debts'); cacheClear('dashboard');
     showToast('تمت إضافة المشترك ✓');
     ['cName','cPhone','cPackage','cAddress','cRegion','cNotes','cCabinet','cPort'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('cPrice').value = '25000';
@@ -714,7 +715,8 @@ async function doLogin() {
 }
 function openRegSheet() {
   document.getElementById('rCompany').value = '';
-  document.getElementById('rName').value = '';
+  const rn = document.getElementById('rName');
+  if (rn) rn.value = '';
   document.getElementById('rUsername').value = '';
   document.getElementById('rPhone').value = '';
   document.getElementById('rPassword').value = '';
@@ -775,15 +777,14 @@ function handleLoginResult(d, username, password) {
 }
 async function doRegister() {
   const company_name = document.getElementById('rCompany').value.trim();
-  const full_name = document.getElementById('rName').value.trim();
   const username = document.getElementById('rUsername').value.trim();
   const password = document.getElementById('rPassword').value;
   const phone = document.getElementById('rPhone').value.trim();
-  if (!company_name || !full_name || !username || !password) { showToast('جميع الحقول المطلوبة فارغة', 'error'); return; }
+  if (!company_name || !username || !password) { showToast('أدخل اسم الشركة والمستخدم وكلمة المرور', 'error'); return; }
   if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
   const btn = document.getElementById('regBtn');
   btn.textContent = '⏳ جاري إنشاء الشركة...'; btn.disabled = true;
-  const d = await api('/auth/register-company', {company_name, full_name, username, password, phone});
+  const d = await api('/auth/register-company', {company_name, full_name: username, username, password, phone});
   btn.textContent = 'إنشاء الشركة'; btn.disabled = false;
   if (d.ok && d.data) {
     closeSheet('regSheet');
@@ -846,6 +847,22 @@ async function logout() {
   document.getElementById('password').value = '';
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
 }
+
+// ── Android back button / gesture ──────────────────────────
+(function () {
+  if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.App) return;
+  window.Capacitor.Plugins.App.addListener('backButton', () => {
+    if (!document.getElementById('loginView').classList.contains('hidden')) {
+      window.Capacitor.Plugins.App.exitApp();
+      return;
+    }
+    const openSheetEl = document.querySelector('.sheet-overlay.open');
+    if (openSheetEl) { closeSheets(); return; }
+    const h = (location.hash || '').replace(/^#/, '');
+    if (h && h !== '/view/dashboard') { goBack(); return; }
+    window.Capacitor.Plugins.App.exitApp();
+  });
+})();
 
 // ── Boot ───────────────────────────────────────────────────
 document.querySelectorAll('.bottom-nav a[data-nav]').forEach(a => {
@@ -1652,7 +1669,12 @@ async function saveCustEdit() {
 async function deleteCustomer() {
   if (!confirm('حذف هذا المشترك نهائياً؟ لا يمكن التراجع.')) return;
   const d = await api('/customers/' + currentCustomerId, null, 'DELETE');
-  if (d.ok) { showToast('تم الحذف ✓'); goBack(); loadCustomers(); }
+  if (d.ok) {
+    cacheClear('customers'); cacheClear('debts'); cacheClear('dashboard');
+    showToast('تم حذف المشترك نهائياً');
+    goBack();
+    loadCustomers();
+  }
   else showToast((d.error && d.error.message_ar) || 'فشل الحذف', 'error');
 }
 

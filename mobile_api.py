@@ -530,6 +530,9 @@ def mobile_account_set_status(account_id):
     _audit("تغيير حالة شركة", "account", account_id,
            f"تم تحديث شركة {account['name']}")
     return _ok({"account_id": account_id, "approved": True})
+
+
+@mobile_bp.route("/auth/register", methods=["POST"])
 def mobile_register():
     """POST /auth/register → create an account (mirrors register.html).
 
@@ -685,6 +688,14 @@ def mobile_check_status():
         return _ok({"state": "pending", "error": "بانتظار موافقة المدير"})
     if not db.is_user_active(user):
         return _ok({"state": "expired", "error": "انتهت صلاحية الدخول — راجع المدير"})
+
+    # Multi-account gate: the user's company must be approved + active.
+    if user["account_id"]:
+        account = db.get_account(user["account_id"])
+        if account and (account["pending"] or 0) == 1:
+            return _ok({"state": "pending", "error": "شركتك بانتظار موافقة المدير الرئيسي"})
+        if account and str(account["status"] or "active") == "suspended":
+            return _ok({"state": "suspended", "error": "شركتك موقوفة — راجع إدارة النظام"})
 
     access = _issue_token(user["id"], AUTH_TOKEN_TTL_HOURS, "access")
     refresh = _issue_token(user["id"], AUTH_REFRESH_TTL_DAYS * 24, "refresh")

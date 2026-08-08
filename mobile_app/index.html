@@ -35,7 +35,7 @@
     /* SPA: instant section switching */
     .view{display:none}
     .view.active{display:block;animation:viewIn .18s ease}
-    @keyframes viewIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    @keyframes viewIn{from{opacity:0}to{opacity:1}}
     #loginView{min-height:100vh}
     .back-btn{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:4px;line-height:1}
     body:has(#appShell.hidden){padding-bottom:0}
@@ -48,7 +48,7 @@
     .menu-row .menu-sub{font-size:11px;color:var(--muted);margin-top:2px;}
     body{padding-bottom:calc(88px + env(safe-area-inset-bottom));}
     .bottom-nav{padding-bottom:env(safe-area-inset-bottom);}
-    .view.active{animation:viewIn .2s cubic-bezier(.22,1,.36,1);}
+    .view.active{animation:viewIn .18s ease;}
   </style>
 </head>
 <body class="page-enter">
@@ -98,10 +98,9 @@
   <div class="sheet-overlay" id="regSheet" onclick="if(event.target===this)closeSheet('regSheet')">
     <div class="sheet" style="background:#0f172a;border-color:#1e293b;">
       <div class="sheet-grab" style="background:#334155;"></div>
-      <button class="sheet-close" style="background:#1e293b;color:#94a3b8;" onclick="closeSheet('regSheet')">✕</button>
+      <button class="sheet-close" style="background:#1e293b;color:#94a3b8;" onclick="closeSheet('regSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" style="color:#f8fafc;">سجّل شركتك — حساب جديد</div>
       <div class="exe-space"><label class="exe-label">اسم الشركة *</label><input type="text" id="rCompany" class="exe-input" placeholder="مثال: شركة النور"></div>
-      <div class="exe-space"><label class="exe-label">اسمك الكامل *</label><input type="text" id="rName" class="exe-input" placeholder="مثال: أبو أحمد"></div>
       <div class="exe-space"><label class="exe-label">اسم المستخدم *</label><input type="text" id="rUsername" class="exe-input" dir="ltr" placeholder="example_user"></div>
       <div class="exe-space"><label class="exe-label">رقم الهاتف (اختياري)</label><input type="text" id="rPhone" class="exe-input" dir="ltr" placeholder="07xxxxxxxxx"></div>
       <div class="exe-space"><label class="exe-label">كلمة المرور *</label><input type="password" id="rPassword" class="exe-input" dir="ltr" placeholder="••••••••"></div>
@@ -117,7 +116,7 @@
       <button id="backBtn" class="back-btn hidden" onclick="goBack()">→</button>
       <h1 id="topTitle">الرئيسية</h1>
       <div class="topbar-actions">
-        <span id="topLabel" style="font-size:12px;color:var(--muted);font-weight:700;"></span>
+        <span id="topLabel" style="display:none;"></span>
         <button onclick="logout()" title="خروج">⏻</button>
       </div>
     </div>
@@ -256,7 +255,7 @@
     <div class="sheet-overlay" id="paySheet" onclick="if(event.target===this)closeSheet('paySheet')">
       <div class="sheet">
         <div class="sheet-grab"></div>
-        <button class="sheet-close" onclick="closeSheet('paySheet')">✕</button>
+        <button class="sheet-close" onclick="closeSheet('paySheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div class="sheet-title">تسديد فاتورة الشهر</div>
         <div id="payInvoiceBox" style="margin-bottom:12px;"></div>
         <div class="seg" id="amountSeg">
@@ -283,7 +282,7 @@
     <div class="sheet-overlay" id="renewSheet" onclick="if(event.target===this)closeSheet('renewSheet')">
       <div class="sheet">
         <div class="sheet-grab"></div>
-        <button class="sheet-close" onclick="closeSheet('renewSheet')">✕</button>
+        <button class="sheet-close" onclick="closeSheet('renewSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div class="sheet-title">تجديد الاشتراك</div>
         <div class="field"><label>الباقة</label><select id="renewPackage" class="input"></select></div>
       <div class="field"><label>عدد الأشهر</label><input type="number" id="renewMonths" class="input" value="1" min="1" inputmode="numeric"></div>
@@ -453,7 +452,7 @@
   <div class="sheet-overlay" id="addSheet" onclick="if(event.target===this)closeSheet('addSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('addSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('addSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">إضافة مشترك جديد</div>
       <div class="field"><label>الاسم *</label><input type="text" id="cName" class="input" placeholder="اسم المشترك"></div>
       <div class="field"><label>الهاتف</label><input type="text" id="cPhone" class="input" dir="ltr" placeholder="07xxxxxxxxx"></div>
@@ -472,6 +471,7 @@
 
   <div id="toast"></div>
 
+  <script src="js/capacitor-app.js"></script>
   <script src="js/app.js"></script>
   <script src="js/spa.js"></script>
 
@@ -479,7 +479,7 @@
   <div class="sheet-overlay" id="expenseSheet" onclick="if(event.target===this)closeSheet('expenseSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('expenseSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('expenseSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" id="exTitle">إضافة مصروف</div>
       <div class="field"><label>التصنيف</label><input type="text" id="exCategory" class="input" placeholder="مثال: كهرباء، وقود، صيانة"></div>
       <div class="field"><label>المبلغ (د.ع)</label><input type="number" id="exAmount" class="input" inputmode="numeric"></div>
@@ -494,7 +494,7 @@
   <div class="sheet-overlay" id="ticketSheet" onclick="if(event.target===this)closeSheet('ticketSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('ticketSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('ticketSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">طلب صيانة</div>
       <div class="field"><label>المشترك</label><select id="tkCustomer" class="input"></select></div>
       <div class="field"><label>وصف المشكلة</label><textarea id="tkIssue" class="input" rows="3" placeholder="اكتب المشكلة..."></textarea></div>
@@ -506,7 +506,7 @@
   <div class="sheet-overlay" id="packageSheet" onclick="if(event.target===this)closeSheet('packageSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('packageSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('packageSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" id="pkgTitle">إضافة باقة</div>
       <div class="field"><label>الاسم</label><input type="text" id="pkgName" class="input"></div>
       <div class="field"><label>السعر (د.ع)</label><input type="number" id="pkgPrice" class="input" inputmode="numeric"></div>
@@ -519,7 +519,7 @@
   <div class="sheet-overlay" id="teamSheet" onclick="if(event.target===this)closeSheet('teamSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('teamSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('teamSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" id="teamTitle">إضافة مستخدم</div>
       <div class="field"><label>الاسم الكامل</label><input type="text" id="tmName" class="input"></div>
       <div class="field"><label>اسم المستخدم</label><input type="text" id="tmUsername" class="input" dir="ltr"></div>
@@ -535,7 +535,7 @@
   <div class="sheet-overlay" id="linkSheet" onclick="if(event.target===this)closeSheet('linkSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('linkSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('linkSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" id="lkTitle">إضافة جهاز</div>
       <div class="field"><label>الاسم</label><input type="text" id="lkName" class="input"></div>
       <div class="field"><label>IP</label><input type="text" id="lkIp" class="input" dir="ltr"></div>
@@ -555,7 +555,7 @@
   <div class="sheet-overlay" id="cabinetSheet" onclick="if(event.target===this)closeSheet('cabinetSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('cabinetSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('cabinetSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" id="cabTitle">إضافة كابينة</div>
       <div class="field"><label>رقم الكابينة (FAT) *</label><input type="text" id="cabNumber" class="input" placeholder="مثال: FAT-12"></div>
       <div class="field"><label>عدد المنافذ</label><input type="number" id="cabPorts" class="input" value="16" min="1" max="64" inputmode="numeric"></div>
@@ -569,7 +569,7 @@
   <div class="sheet-overlay" id="editCustSheet" onclick="if(event.target===this)closeSheet('editCustSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('editCustSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('editCustSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">تعديل المشترك</div>
       <div class="field"><label>الاسم *</label><input type="text" id="ecName" class="input"></div>
       <div class="field"><label>الهاتف</label><input type="text" id="ecPhone" class="input" dir="ltr"></div>
@@ -593,7 +593,7 @@
   <div class="sheet-overlay" id="payEditSheet" onclick="if(event.target===this)closeSheet('payEditSheet')">
     <div class="sheet">
       <div class="sheet-grab"></div>
-      <button class="sheet-close" onclick="closeSheet('payEditSheet')">✕</button>
+      <button class="sheet-close" onclick="closeSheet('payEditSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">تعديل دفعة</div>
       <div class="field"><label>المبلغ (د.ع)</label><input type="number" id="peAmount" class="input" inputmode="numeric"></div>
       <div class="field"><label>التاريخ</label><input type="date" id="peDate" class="input" dir="ltr"></div>

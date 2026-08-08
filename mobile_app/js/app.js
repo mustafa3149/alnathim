@@ -46,6 +46,10 @@ function cacheSet(key, data) {
   } catch (e) {}
 }
 
+function cacheClear(key) {
+  try { localStorage.removeItem('alnathim_cache_' + key); } catch (e) {}
+}
+
 // ── Retry helper (handles Render free-tier cold starts) ─────
 // The first request after a long idle wakes the server (~30-60s);
 // a transient failure on wake-up is retried automatically.
@@ -113,7 +117,10 @@ async function warmupCache() {
   const tasks = [
     ['dashboard', '/dashboard/summary'],
     ['customers', '/customers'],
-    ['debts', '/debts']
+    ['debts', '/debts'],
+    ['packages', '/packages'],
+    ['payments', '/payments?limit=30'],
+    ['tickets', '/tickets']
   ];
   await Promise.all(tasks.map(async ([key, path]) => {
     try {
@@ -212,15 +219,17 @@ function showToast(msg, type) {
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast';
-    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.4);transition:opacity .2s;';
+    t.style.cssText = 'position:fixed;top:calc(70px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-6px);z-index:99999;display:flex;align-items:center;gap:8px;max-width:88%;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;box-shadow:0 12px 32px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.16);transition:opacity .25s, transform .25s;opacity:0;pointer-events:none;';
     document.body.appendChild(t);
   }
-  t.style.background = type === 'error' ? '#ef4444' : '#fafafa';
-  t.style.color = type === 'error' ? '#fff' : '#0a0a0a';
-  t.textContent = msg;
+  const err = type === 'error';
+  t.style.background = err ? 'linear-gradient(90deg,#b91c1c,#ef4444)' : 'linear-gradient(90deg,#15803d,#22c55e)';
+  t.style.color = '#fff';
+  t.innerHTML = (err ? '⚠️ ' : '✅ ') + esc(msg);
   clearTimeout(t._timer);
   t.style.opacity = '1';
-  t._timer = setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3500);
 }
 
 // ── Bottom-sheet modal helpers ────────────────────────────────
