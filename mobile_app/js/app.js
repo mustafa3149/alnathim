@@ -225,7 +225,7 @@ function showToast(msg, type) {
   const err = type === 'error';
   t.style.background = err ? 'linear-gradient(90deg,#b91c1c,#ef4444)' : 'linear-gradient(90deg,#15803d,#22c55e)';
   t.style.color = '#fff';
-  t.innerHTML = (err ? '⚠️ ' : '✅ ') + esc(msg);
+  t.innerHTML = '<span class="toast-dot"></span>' + esc(msg);
   clearTimeout(t._timer);
   t.style.opacity = '1';
   t.style.transform = 'translateX(-50%) translateY(0)';

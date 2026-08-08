@@ -102,7 +102,7 @@ function loadDashboard() {
     document.getElementById('expLabel').textContent = 'المنتهيون هذا الأسبوع (' + toArabicNum(d.expiring_this_week ?? 0) + ')';
     const exp = d.expiring_customers || [];
     if (!exp.length) {
-      expBox.innerHTML = '<div class="empty"><div class="big">✅</div>لا أحد ينتهي هذا الأسبوع</div>';
+      expBox.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا أحد ينتهي هذا الأسبوع</div>';
     } else {
       expBox.innerHTML = '<div class="list-card">' + exp.map(e =>
         '<a class="row" href="customer-detail.html?id=' + e.id + '">' +
@@ -118,7 +118,7 @@ function loadDashboard() {
     const payBox = document.getElementById('payBox');
     const pays = d.recent_payments || [];
     if (!pays.length) {
-      payBox.innerHTML = '<div class="empty"><div class="big">💳</div>لا مدفوعات بعد</div>';
+      payBox.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا مدفوعات بعد</div>';
     } else {
       payBox.innerHTML = '<div class="list-card">' + pays.map(p =>
         '<div class="row">' +
@@ -166,7 +166,7 @@ function renderFiltered() {
   document.getElementById('topLabel').textContent = toArabicNum(list.length) + ' مشترك';
   const box = document.getElementById('customerList');
   if (!list.length) {
-    box.innerHTML = '<div class="empty"><div class="big">👥</div>لا يوجد عملاء مطابقون</div>';
+    box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا يوجد عملاء مطابقون</div>';
     return;
   }
   box.innerHTML = '<div class="list-card">' + list.map(c => {
@@ -265,13 +265,13 @@ function loadInvoices() {
     document.getElementById('sumCollected').textContent = formatDinar(collected);
     document.getElementById('sumRemaining').textContent = formatDinar(remaining);
     if (!items.length) {
-      box.innerHTML = '<div class="empty"><div class="big">🧾</div>لا توجد فواتير لهذا الشهر</div>';
+      box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد فواتير لهذا الشهر</div>';
       return;
     }
     box.innerHTML = '<div class="list-card">' + items.map(inv => {
       const rem = (inv.total_amount || 0) - (inv.paid_amount || 0);
-      return '<a class="row" href="customer-detail.html?id=' + inv.customer_id + '">' +
-        '<div class="row-main">' +
+      return '<div class="row">' +
+        '<div class="row-main" style="cursor:pointer;" onclick="goTo(\'/customer/' + inv.customer_id + '\')">' +
           '<div class="row-title">' + esc(inv.customer_name || 'زبون #' + inv.customer_id) + '</div>' +
           '<div class="row-sub">' + esc(inv.package_name || '') + ' · ' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + '</div>' +
         '</div>' +
@@ -279,10 +279,10 @@ function loadInvoices() {
           '<div style="font-weight:800;">' + formatDinar(inv.total_amount || 0) + '</div>' +
           (rem > 0
             ? '<div style="font-size:11px;font-weight:800;color:var(--expired);">متبقي ' + formatDinar(rem) + '</div>'
-            : '<div style="font-size:11px;font-weight:800;color:var(--active);">مدفوعة ✓</div>') +
+            : '<div style="font-size:11px;font-weight:800;color:var(--active);">مدفوعة</div>') + (IS_ADMIN ? '<div style="margin-top:6px;"><button class="btn btn-sm" style="color:var(--expired);" onclick="deleteInvoice(' + inv.id + ')">حذف الفاتورة</button></div>' : '') +
         '</div>' +
-        '<span class="menu-arrow">‹</span>' +
-      '</a>';
+        '</div>' +
+      '</div>';
     }).join('') + '</div>';
   }
 
@@ -295,7 +295,14 @@ function loadInvoices() {
     }
   });
 }
-// ── DEBTS ──────────────────────────────────────────────────
+async function deleteInvoice(id) {
+  if (!confirm('حذف هذه الفاتورة نهائياً؟')) return;
+  const d = await api('/invoices/' + id, null, 'DELETE');
+  if (d.ok) { cacheClear('debts'); cacheClear('dashboard'); showToast('تم حذف الفاتورة'); loadInvoices(); }
+  else showToast((d.error && d.error.message_ar) || 'فشل الحذف', 'error');
+}
+
+// ── DEBTS ─+
 function renderDebts(data) {
   const items = (data && data.items) || [];
   let total = 0;
@@ -303,7 +310,7 @@ function renderDebts(data) {
   document.getElementById('topLabel').textContent = formatDinar(total);
   const box = document.getElementById('debtList');
   if (!items.length) {
-    box.innerHTML = '<div class="empty"><div class="big">✅</div>لا توجد ديون — كل شيء مدفوع</div>';
+    box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد ديون — كل شيء مدفوع</div>';
     return;
   }
   box.innerHTML = items.map(x => {
@@ -380,7 +387,7 @@ function loadPayments() {
   function render(data) {
     const items = (data && data.items) || [];
     if (!items.length) {
-      box.innerHTML = '<div class="empty"><div class="big">💳</div>لا مدفوعات بعد</div>';
+      box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا مدفوعات بعد</div>';
       return;
     }
     box.innerHTML = '<div class="list-card">' + items.map(p =>
@@ -673,7 +680,7 @@ async function pollStatus() {
       stopPolling();
       localStorage.setItem('alnathim_token', d.data.token);
       localStorage.setItem('alnathim_user', JSON.stringify(d.data.user || {}));
-      document.getElementById('waitingMsg').textContent = '✅ تمت الموافقة — جاري الدخول';
+      document.getElementById('waitingMsg').textContent = 'تمت الموافقة — جاري الدخول';
       setTimeout(enterApp, 600);
     } else if (state === 'pending') {
       document.getElementById('waitingMsg').textContent =
@@ -789,7 +796,7 @@ async function doRegister() {
   if (d.ok && d.data) {
     closeSheet('regSheet');
     document.getElementById('username').value = username;
-    showToast('✅ ' + (d.data.message_ar || 'تم التسجيل'));
+    showToast('' + (d.data.message_ar || 'تم التسجيل'));
     document.getElementById('password').focus();
   } else {
     showToast((d.error && d.error.message_ar) || 'فشل إنشاء الشركة', 'error');
@@ -800,11 +807,11 @@ async function doRegister() {
 // ── COMPANY MANAGEMENT (owner admin) ───────────────────────
 function loadAccountsManage() {
   const box = document.getElementById('accountsBox');
-  box.innerHTML = '<div class="empty"><div class="big">🏢</div>جارِ التحميل...</div>';
+  box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>جارِ التحميل...</div>';
   api('/accounts/manage').then(d => {
     if (!d.ok) { box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'غير مصرح') + '</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">🏢</div>لا توجد شركات</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد شركات</div>'; return; }
     const pend = items.filter(a => a.pending);
     const approved = items.filter(a => !a.pending && a.id !== 1);
     const usersTxt = a => {
@@ -814,10 +821,10 @@ function loadAccountsManage() {
     };
     box.innerHTML =
       (pend.length
-        ? '<div class="section-label">⚠️ بانتظار موافقتك</div><div class="list-card">' + pend.map(a =>
+        ? '<div class="section-label">بانتظار موافقتك</div><div class="list-card">' + pend.map(a =>
             '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
             '<div class="row-sub">' + esc(a.phone || '') + ' · ' + usersTxt(a) + '</div></div>' +
-            '<div class="row-end"><button class="btn btn-sm" style="color:var(--active);" onclick="approveAccount(' + a.id + ')">✅ موافقة</button></div></div>'
+            '<div class="row-end"><button class="btn btn-sm" style="color:var(--active);" onclick="approveAccount(' + a.id + ')">موافقة</button></div></div>'
           ).join('') + '</div>'
         : '<div class="card card-pad" style="color:var(--active);font-size:13px;">لا توجد طلبات معلقة ✅</div>') +
       (approved.length
@@ -904,11 +911,11 @@ if (localStorage.getItem('alnathim_token')) {
 // ── REMINDERS ──────────────────────────────────────────────
 function loadReminders() {
   const box = document.getElementById('remindersBox');
-  box.innerHTML = '<div class="empty"><div class="big">⏰</div>جارِ التحميل...</div>';
+  box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>جارِ التحميل...</div>';
   api('/reminders').then(d => {
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">✅</div>لا توجد تذكيرات</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد تذكيرات</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(r => {
       const wa = (r.whatsapp_phone || r.phone || '').replace(/[^0-9]/g, '');
       return '<div class="row">' +
@@ -943,7 +950,7 @@ function fetchExpenses() {
   function render(d) {
     document.getElementById('expTotal').textContent = formatDinar(d.total || 0);
     const items = d.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">💸</div>لا توجد مصاريف لهذا الشهر</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد مصاريف لهذا الشهر</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(e =>
       '<div class="row">' +
         '<div class="row-main">' +
@@ -990,7 +997,7 @@ function loadTickets() {
     const box = document.getElementById('ticketsBox');
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">🎫</div>لا توجد تذاكر صيانة</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد تذاكر صيانة</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(t => {
       const resolved = String(t.status) === 'resolved';
       return '<div class="row">' +
@@ -1033,7 +1040,7 @@ function loadPackages() {
     const box = document.getElementById('packagesBox');
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">📦</div>لا توجد باقات</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد باقات</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(p =>
       '<div class="row">' +
         '<div class="row-main">' +
@@ -1084,12 +1091,12 @@ async function deletePackage(id) {
 // ── CABINETS (FAT) ─────────────────────────────────────────
 function loadCabinets() {
   const box = document.getElementById('cabinetsBox');
-  box.innerHTML = '<div class="empty"><div class="big">📟</div>جارِ التحميل...</div>';
+  box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>جارِ التحميل...</div>';
   api('/cabinets').then(d => {
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
     window._cabinets = items;
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">📟</div>لا توجد كابينات — أضف أول كابينة</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد كابينات — أضف أول كابينة</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(c => {
       const pct = c.port_count ? Math.round((c.used_ports || 0) / c.port_count * 100) : 0;
       return '<div class="row">' +
@@ -1175,7 +1182,7 @@ function renderFatEntry() {
   const box = document.getElementById('fatEntryBox');
   const prog = document.getElementById('feProgress');
   if (!feRows.length) {
-    box.innerHTML = '<div class="empty"><div class="big">🎯</div>كل المشتركين معيّنين — مبروك!</div>';
+    box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>كل المشتركين معيّنين — مبروك!</div>';
     prog.textContent = 'مكتمل ✅';
     return;
   }
@@ -1321,7 +1328,7 @@ function loadTeam() {
     const box = document.getElementById('teamBox');
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">👥</div>لا يوجد أعضاء</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا يوجد أعضاء</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(u => {
       const active = String(u.status) !== 'suspended';
       return '<div class="row">' +
@@ -1364,11 +1371,11 @@ async function addTeam() {
 // ── AUDIT ──────────────────────────────────────────────────
 function loadAudit() {
   const box = document.getElementById('auditBox');
-  box.innerHTML = '<div class="empty"><div class="big">📜</div>جارِ التحميل...</div>';
+  box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>جارِ التحميل...</div>';
   api('/audit?limit=100').then(d => {
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">📜</div>لا يوجد سجل</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا يوجد سجل</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(a =>
       '<div class="row">' +
         '<div class="row-main">' +
@@ -1388,7 +1395,7 @@ function doBackup() {
   btn.disabled = true; btn.textContent = '⏳ جاري الإنشاء...';
   api('/backup', {}).then(d => {
     btn.disabled = false; btn.textContent = 'إنشاء نسخة احتياطية';
-    if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">✅ تم إنشاء النسخة: ' + esc(d.data.backup_path || '') + '</div>';
+    if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">تم إنشاء النسخة: ' + esc(d.data.backup_path || '') + '</div>';
     else box.innerHTML = '<div class="card card-pad" style="color:var(--expired);font-size:13px;">' + esc((d.error && d.error.message_ar) || 'فشل النسخ الاحتياطي') + '</div>';
   });
 }
@@ -1415,7 +1422,7 @@ function loadSignalBoard() {
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
     document.getElementById('signalUpdated').textContent = d.data.last_update ? 'آخر تحديث: ' + esc(d.data.last_update) : '';
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">📡</div>لا توجد إشارات مسجلة</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد إشارات مسجلة</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(s => {
       const q = signalQuality(s.signal_dbm);
       return '<div class="row">' +
@@ -1437,7 +1444,7 @@ function loadNetLinks() {
   api('/network/links').then(d => {
     if (!d.ok) { box.innerHTML = '<div class="empty">تعذر التحميل</div>'; return; }
     const items = d.data.items || [];
-    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">🌐</div>لا توجد أجهزة شبكة</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا توجد أجهزة شبكة</div>'; return; }
     box.innerHTML = '<div class="list-card">' + items.map(l =>
       '<div class="row">' +
         '<div class="row-main">' +
@@ -1554,14 +1561,14 @@ async function saveTower() {
     oid_mikrotik_signal: document.getElementById('twOidMikrotik').value.trim()
   }, 'PUT');
   const box = document.getElementById('towerMsg');
-  if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">✅ تم الحفظ</div>';
+  if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">تم الحفظ</div>';
   else box.innerHTML = '<div class="card card-pad" style="color:var(--expired);font-size:13px;">' + esc((d.error && d.error.message_ar) || 'فشل الحفظ') + '</div>';
 }
 async function testTower() {
   const box = document.getElementById('towerMsg');
   box.innerHTML = '<div class="empty">جاري اختبار الاتصال...</div>';
   const d = await api('/tower-test', {});
-  if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">✅ ' + esc(d.data && d.data.message) + '</div>';
+  if (d.ok) box.innerHTML = '<div class="card card-pad" style="color:var(--active);font-size:13px;">' + esc(d.data && d.data.message) + '</div>';
   else box.innerHTML = '<div class="card card-pad" style="color:var(--expired);font-size:13px;">' + esc((d.error && d.error.message_ar) || 'فشل الاتصال') + '</div>';
 }
 // ── PACKAGE SELECT HELPERS ────────────────────────────────
@@ -1763,3 +1770,11 @@ async function deleteTeam(id) {
   if (d.ok) { showToast('تم الحذف ✓'); loadTeam(); }
   else showToast((d.error && d.error.message_ar) || 'فشل الحذف', 'error');
 }
+// Keep focused inputs above the phone keyboard
+document.addEventListener('focusin', (e) => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    setTimeout(() => { try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }, 250);
+  }
+});
+document.addEventListener('scroll', () => { if (document.documentElement.scrollLeft !== 0) document.documentElement.scrollLeft = 0; }, { passive: true });
