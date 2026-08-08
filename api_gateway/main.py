@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -689,6 +689,28 @@ async def disable_cache_for_frontend(request, call_next):
     return response
 
 
-# ── Root UI mount (registered LAST so /api/* routes win) ──
+# ── Root UI routes (registered LAST so /api/* routes win) ──
 # http://localhost:8000  -> the Phase 5 minimalist PWA
-app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
+# SECURITY: We intentionally do NOT mount StaticFiles at "/" — that was
+# vulnerable to Path Traversal (CVE-2024-24762) in older Starlette versions.
+# Instead we serve explicit HTML pages with os.path.basename() validation,
+# which blocks any ".." / "%2e" traversal payloads.
+@app.get("/", include_in_schema=False)
+def index():
+    """Serve the SPA entry point (index.html)."""
+    index_path = os.path.join(_FRONTEND_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    return JSONResponse({"error": "frontend not found"}, status_code=404)
+
+
+@app.get("/{page}.html", include_in_schema=False)
+def spa_page(page: str):
+    """Serve a named HTML page safely (traversal-proof via basename)."""
+    safe = os.path.basename(page)
+    if safe != page:
+        return JSONResponse({"error": "invalid path"}, status_code=400)
+    target = os.path.join(_FRONTEND_DIR, f"{safe}.html")
+    if os.path.isfile(target):
+        return FileResponse(target)
+    return JSONResponse({"error": "not found"}, status_code=404)

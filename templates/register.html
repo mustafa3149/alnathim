@@ -26,7 +26,7 @@
                 <input type="text" id="inviteCode" class="input" dir="ltr" placeholder="XXXXXXXX">
                 <div class="text-xs" style="color:#999;margin-top:6px;">إن كان لديك رمز دخول من المدير أدخله ليتم تفعيل حسابك فوراً، وإلا سيُرسل طلبك للموافقة.</div>
             </div>
-            <button onclick="doRegister()" class="btn btn-primary" style="width:100%;">إنشاء الحساب</button>
+            <button id="regSubmitBtn" onclick="doRegister()" class="btn btn-primary" style="width:100%;">إنشاء الحساب</button>
             <p style="text-align:center;font-size:13px;color:#777;">
                 لديك حساب؟ <a href="/login" style="color:#1e3a5f;font-weight:600;">تسجيل الدخول</a>
             </p>
@@ -36,6 +36,7 @@
 <style>.f-label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;}</style>
 <script>
 async function doRegister() {
+    var btn = document.getElementById('regSubmitBtn');
     var f = document.getElementById('fullName').value.trim();
     var u = document.getElementById('username').value.trim();
     var p = document.getElementById('password').value;
@@ -43,19 +44,36 @@ async function doRegister() {
     var ic = document.getElementById('inviteCode').value.trim();
     if (!f || !u || !p) { showToast('جميع الحقول المطلوبة فارغة', 'error'); return; }
     if (p.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
+    if (btn.disabled) { return; } // منع الضغط المزدوج
+    btn.disabled = true; btn.textContent = 'جاري إنشاء الحساب...';
     showToast('جاري إنشاء الحساب...');
-    var r = await fetch('/register', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({full_name: f, username: u, password: p, phone: ph, invite_code: ic})
-    });
-    var d = await r.json();
-    if (d.ok) {
-        showToast('✅ ' + d.message);
-        var isPending = (d.message || '').indexOf('بانتظار') !== -1;
-        var target = isPending ? '/login?username=' + encodeURIComponent(u) + '&pending=1' : '/login';
-        setTimeout(function(){ window.location.href = target; }, 1500);
-    } else {
-        showToast('❌ ' + (d.error || 'فشل التسجيل'), 'error');
+    var ctrl = new AbortController();
+    var timer = setTimeout(function(){ ctrl.abort(); }, 25000); // مهلة ٢٥ ثانية
+    try {
+        var r = await fetch('/register', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({full_name: f, username: u, password: p, phone: ph, invite_code: ic}),
+            signal: ctrl.signal
+        });
+        clearTimeout(timer);
+        var d = await r.json().catch(function(){ return null; });
+        if (!d) {
+            showToast('❌ استجابة غير متوقعة من السيرفر (' + r.status + ') — حاول مجدداً', 'error');
+            return;
+        }
+        if (d.ok) {
+            showToast('✅ ' + d.message);
+            var isPending = (d.message || '').indexOf('بانتظار') !== -1;
+            var target = isPending ? '/login?username=' + encodeURIComponent(u) + '&pending=1' : '/login';
+            setTimeout(function(){ window.location.href = target; }, 1500);
+        } else {
+            showToast('❌ ' + (d.error || 'فشل التسجيل'), 'error');
+        }
+    } catch (err) {
+        clearTimeout(timer);
+        showToast('❌ تعذر الاتصال بالسيرفر أو انتهت المهلة — تحقق من الإنترنت وحاول مجدداً', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'إنشاء الحساب';
     }
 }
 document.getElementById('password').addEventListener('keydown', function(e){ if(e.key==='Enter') doRegister(); });

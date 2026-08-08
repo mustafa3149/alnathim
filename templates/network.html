@@ -1,23 +1,16 @@
 {% extends "layout.html" %}
-{% block title %}الأجهزة{% endblock %}
+{% block title %}فحص الاتصال{% endblock %}
 {% block content %}
 
 <div class="mb-6">
-  <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">الأجهزة</h1>
-  <p class="text-sm text-muted mt-1 font-tajawal">أدوات التشخيص وإدارة السيكتورات والروابط</p>
+  <h1 class="text-2xl font-extrabold text-main" style="letter-spacing:-0.02em;">فحص الاتصال</h1>
+  <p class="text-sm text-muted mt-1 font-tajawal">تشخيص الشبكة من الهاتف مباشرةً — بدون السيرفر</p>
 </div>
 
-<!-- Inner segmented tabs (monochrome with clear active state) -->
-<div class="grid grid-cols-3 gap-1 mb-6 rounded-xl surface-2 p-1" style="border:1px solid var(--border);">
-  <button onclick="showNetTab('ping')" id="tabPingBtn" class="tab-btn tab-active">Ping</button>
-  <button onclick="showNetTab('sectors')" id="tabSectorsBtn" class="tab-btn">السيكتورات</button>
-  <button onclick="showNetTab('snmp')" id="tabSnmpBtn" class="tab-btn">SNMP</button>
-</div>
-
-<!-- Ping tab -->
-<div id="tabPing" class="space-y-4">
+<!-- Ping card -->
+<div class="space-y-4">
   <div class="card card-pad">
-    <div class="text-sm font-bold text-main mb-4">تشخيص الشبكة</div>
+    <div class="text-sm font-bold text-main mb-4">تشخيص الشبكة (Ping)</div>
     <div class="space-y-4">
       <div>
         <label class="f-label">العنوان (IP أو اسم النطاق)</label>
@@ -40,134 +33,19 @@
       </div>
       <button onclick="doPing()" id="pingBtn" class="btn btn-primary w-full py-3">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        فحص
+        فحص مباشر من الهاتف
       </button>
     </div>
   </div>
   <div id="pingResult" class="hidden"></div>
 </div>
 
-<!-- Sectors tab -->
-<div id="tabSectors" class="hidden space-y-4">
-  <div class="card card-pad">
-    <div class="flex items-center justify-between mb-4">
-      <div class="text-sm font-bold text-main">السيكتورات والروابط</div>
-      <div class="flex gap-2">
-        <button onclick="syncAll()" id="syncAllBtn" class="btn btn-sm">سحب المشتركين</button>
-        <button onclick="openLinkModal()" class="btn btn-sm">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          اضافة
-        </button>
-      </div>
-    </div>
-    <div class="space-y-2">
-      {% for l in links %}
-      <div class="flex items-center justify-between rounded-xl surface-2 p-3" style="border:1px solid var(--border);" data-id="{{ l.id }}" data-name="{{ l.name }}" data-ip="{{ l.ip or '' }}" data-type="{{ l.link_type }}" data-location="{{ l.location or '' }}" data-notes="{{ l.notes or '' }}" data-username="{{ l.username or '' }}" data-password="{{ l.password or '' }}" data-community="{{ l.community or 'public' }}">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="text-main font-bold text-sm truncate">{{ l.name }}</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full border font-bold text-muted" style="border-color:var(--border-2);">{{ l.link_type }}</span>
-          </div>
-          <div class="text-[11px] text-faint font-tajawal mt-0.5" dir="ltr" style="text-align:right;">{{ l.ip or '—' }}{% if l.location %} · {{ l.location }}{% endif %}</div>
-        </div>
-        <div class="flex gap-1.5 shrink-0">
-          <button onclick="probeLink(this)" class="btn btn-sm native-only" style="display:none;">فحص مباشر</button>
-          <button onclick="editLink(this)" class="btn btn-sm">تعديل</button>
-          <button onclick="deleteLink(this)" class="btn btn-sm btn-danger">حذف</button>
-        </div>
-      </div>
-      {% else %}
-      <div class="text-center text-muted py-8 font-tajawal">لا توجد أجهزة شبكة</div>
-      {% endfor %}
-    </div>
-  </div>
-</div>
-
-<!-- SNMP tab -->
-<div id="tabSnmp" class="hidden space-y-4">
-  <div class="card card-pad">
-    <div class="text-sm font-bold text-main mb-4">فحص الإشارة</div>
-    <div class="space-y-4">
-      <div>
-        <label class="f-label">عنوان IP الجهاز</label>
-        <input type="text" id="signalIp" dir="ltr" placeholder="10.0.0.x" class="input" onkeydown="if(event.key==='Enter')checkSignal()">
-      </div>
-      <div>
-        <label class="f-label">نوع الجهاز</label>
-        <select id="signalType" class="input">
-          <option value="auto">تلقائي</option>
-          <option value="wireless">نانو / واي فاي</option>
-          <option value="optical">كيبل ضوئي / GPON</option>
-        </select>
-      </div>
-      <div>
-        <label class="f-label">SNMP Community</label>
-        <input type="text" id="signalCommunity" dir="ltr" value="public" class="input" placeholder="public">
-      </div>
-      <button onclick="checkSignal()" class="btn btn-primary w-full py-3">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></svg>
-        فحص الإشارة
-      </button>
-    </div>
-  </div>
-  <div id="signalResult" class="hidden"></div>
-</div>
-
-<!-- Link Modal -->
-<div id="linkModal" class="fixed inset-0 z-50 hidden overflow-y-auto modal-overlay">
-  <div class="min-h-full flex items-center justify-center p-4">
-    <div class="sheet max-w-md w-full p-6">
-      <h3 class="text-lg font-bold text-main mb-4">اضافة / تعديل جهاز شبكة</h3>
-      <input type="hidden" id="linkEditId" value="">
-      <div class="space-y-4">
-        <div><label class="f-label">اسم الجهاز *</label><input type="text" id="linkName" class="input" placeholder="سيكتور-1"></div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="f-label">النوع</label>
-            <select id="linkDeviceType" class="input">
-              <option value="Sector">سيكتور</option><option value="Link">رابط</option><option value="Switch">سويتش</option>
-            </select>
-          </div>
-          <div>
-            <label class="f-label">الشركة / البراند</label>
-            <select id="linkType" class="input">
-              <option value="MikroTik">MikroTik</option><option value="Ubnt">Ubnt</option><option value="Mimosa">Mimosa</option>
-            </select>
-          </div>
-        </div>
-        <div><label class="f-label">عنوان IP</label><input type="text" id="linkIp" dir="ltr" class="input"></div>
-        <div><label class="f-label">الموقع</label><input type="text" id="linkLocation" class="input"></div>
-        <div class="sm:col-span-2"><label class="f-label">ملاحظات</label><input type="text" id="linkNotes" class="input"></div>
-        <!-- Auth fields (2-column grid for a compact premium layout) -->
-        <div class="grid grid-cols-2 gap-3 sm:col-span-2">
-          <div>
-            <label class="f-label">اسم المستخدم</label>
-            <input type="text" id="linkUsername" dir="ltr" class="input" placeholder="admin">
-          </div>
-          <div>
-            <label class="f-label">كلمة المرور</label>
-            <input type="password" id="linkPassword" dir="ltr" class="input" placeholder="••••••••">
-          </div>
-        </div>
-        <div class="sm:col-span-2">
-          <label class="f-label">SNMP Community</label>
-          <input type="text" id="linkCommunity" dir="ltr" value="public" class="input" placeholder="public">
-        </div>
-      </div>
-      <div class="flex gap-3 mt-5">
-        <button onclick="saveLink()" class="btn btn-primary flex-1 py-3">حفظ</button>
-        <button onclick="document.getElementById('linkModal').style.display='none'" class="btn px-6">الغاء</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 {% block extra_scripts %}
 <script>
-// ── Native bridge (AlNathimNative): phone-side probes when running in the app ──
-// Only used inside the Android WebView. In a normal browser the whole page
-// falls back to the server (/api/network/ping, /api/network/signal).
+// ── Native bridge (AlNathimNative): phone-side ping when running in the app ──
+// Only used inside the Android WebView. In a normal browser the page falls
+// back to the server (/api/network/ping).
 var NATIVE = (typeof window.AlNathimNative !== 'undefined' && window.AlNathimNative !== null);
 var _cbSeq = 0;
 var _cbs = {};
@@ -178,27 +56,13 @@ window.onNativeResult = function(callbackId, json){
 function nativeCall(method, payload, cb){
   var id = 'cb' + (++_cbSeq);
   _cbs[id] = cb;
-  var args;
-  if(method === 'probeSnmp'){
-    // التوقيع: (ip, device_type, community, callbackId)
-    args = [payload.ip||'', payload.device_type||'', payload.community||'public', id];
-  } else {
-    // التوقيع: (ip, username, password, community, callbackId)
-    args = [payload.ip||'', payload.username||'', payload.password||'', payload.community||'', id];
-  }
+  var args = [payload.ip||'', id];
   try { window.AlNathimNative[method].apply(null, args); }
   catch(e){ delete _cbs[id]; if(cb) cb({ok:false, error:'الفحص المحلي غير متاح'}); }
 }
 
 function setPingHost(host){ document.getElementById('pingHost').value = host; }
-function showNetTab(tab){
-  ['ping','sectors','snmp'].forEach(t=>{
-    document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('hidden', t!==tab);
-    var btn = document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)+'Btn');
-    if(t===tab){ btn.classList.add('tab-active'); }
-    else { btn.classList.remove('tab-active'); }
-  });
-}
+
 async function doPing(){
   var host = document.getElementById('pingHost').value.trim();
   // اقرأ عدد الحزم من حقل الإدخال مع تقييد بين 1 و 10
@@ -220,7 +84,7 @@ async function doPing(){
         + (d.is_tcp_probe ? '<div class="text-center text-[11px] text-muted font-tajawal mt-1" style="color:var(--dot-active);">فحص مباشر من الهاتف</div>' : '')
         + '</div>';
     } else { box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);font-weight:600;">'+(d&&d.error||'فشل')+'</div>'; }
-    btn.textContent = 'فحص'; btn.disabled = false;
+    btn.textContent = 'فحص مباشر من الهاتف'; btn.disabled = false;
   }
   if(NATIVE){
     // فحص ICMP مباشرة من الهاتف عبر الجسر المحلي (لا يمر على السيرفر)
@@ -230,154 +94,8 @@ async function doPing(){
       var r = await fetch('/api/network/ping', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host:host, count:count})});
       var d = await r.json();
       render(d);
-    } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; btn.textContent = 'فحص'; btn.disabled = false; }
+    } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; btn.textContent = 'فحص مباشر من الهاتف'; btn.disabled = false; }
   }
 }
-async function checkSignal(){
-  var ip = document.getElementById('signalIp').value.trim();
-  var type = document.getElementById('signalType').value;
-  if(!ip){ showToast('يرجى ادخال عنوان IP', 'error'); return; }
-  var box = document.getElementById('signalResult'); box.style.display = 'block'; box.innerHTML = '<div class="text-center text-muted py-6">جاري القراءة...</div>';
-  function render(d){
-    if(d && (d.status === 'good' || d.snmp_ok)){
-      var h = '<div class="card card-pad text-center"><div class="font-bold mb-2" style="color:var(--dot-active);">الجهاز متصل</div><div class="flex justify-center gap-6 text-sm">';
-      var shown = false;
-      if(d.type === 'optical'){ h += '<div>RX: <strong class="text-main">'+(d.rx_dbm||'—')+' dBm</strong></div><div>TX: <strong class="text-main">'+(d.tx_dbm||'—')+' dBm</strong></div>'; shown = true; }
-      if(d.signal_dbm!==null && d.signal_dbm!==undefined){ h += '<div>الإشارة: <strong class="text-main">'+(d.signal_dbm||'—')+' dBm</strong></div>'; shown = true; }
-      if(d.ccq!==null && d.ccq!==undefined){ h += '<div>CCQ: <strong class="text-main">'+(d.ccq||'—')+'%</strong></div>'; shown = true; }
-      h += '</div>' + (d.is_native ? '<div class="text-center text-[11px] text-muted font-tajawal mt-2" style="color:var(--dot-active);">فحص مباشر من الهاتف</div>' : '') + '</div>';
-      box.innerHTML = shown ? h : '<div class="card card-pad text-center font-semibold" style="color:var(--dot-expired);">لا توجد قراءة SNMP — تحقق من الـ Community</div>';
-    } else {
-      var msg = 'الجهاز غير متصل / مهلة انتهت';
-      if(d && d.error){ msg = d.error; }
-      box.innerHTML = '<div class="card card-pad text-center font-semibold" style="color:var(--dot-expired);">'+msg+'</div>';
-    }
-  }
-  if(NATIVE){
-    // SNMP مباشرة من الهاتف عبر الجسر المحلي (يدعم wireless + optical RX/TX)
-    nativeCall('probeSnmp', {ip: ip, device_type: type, community: document.getElementById('signalCommunity').value.trim()||'public'}, function(d){
-      if(d && d.ok && d.snmp_ok){
-        d.is_native = true;
-        // سلوك عرض: الجهاز متصل (SNMP رجع قراءة)
-        render({status:'good', snmp_ok:true, type: d.device_type === 'optical' ? 'optical' : 'wireless', signal_dbm: d.signal_dbm, ccq: d.ccq, rx_dbm: d.rx_dbm, tx_dbm: d.tx_dbm, is_native:true});
-      } else {
-        render({status:'error', error: (d&&d.error)||'الجهاز غير متصل / لا توجد قراءة SNMP — تحقق من الـ Community'});
-      }
-    });
-  } else {
-    try{
-      var r = await fetch('/api/network/signal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:ip, device_type:type, community:document.getElementById('signalCommunity').value.trim()||'public'})});
-      var d = await r.json();
-      render(d);
-    } catch(e){ box.innerHTML = '<div class="card card-pad text-center" style="color:var(--dot-expired);">خطأ</div>'; }
-  }
-}
-function openLinkModal(){
-  document.getElementById('linkEditId').value = '';
-  ['linkName','linkIp','linkLocation','linkNotes','linkUsername','linkPassword'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('linkType').value = 'MikroTik';
-  document.getElementById('linkCommunity').value = 'public';
-  document.getElementById('linkModal').style.display = 'block';
-}
-function editLink(btn){
-  var row = btn.closest('[data-id]');
-  document.getElementById('linkEditId').value = row.dataset.id;
-  document.getElementById('linkName').value = row.dataset.name;
-  document.getElementById('linkType').value = row.dataset.type || 'MikroTik';
-  document.getElementById('linkIp').value = row.dataset.ip || '';
-  document.getElementById('linkLocation').value = row.dataset.location || '';
-  document.getElementById('linkNotes').value = row.dataset.notes || '';
-  document.getElementById('linkUsername').value = row.dataset.username || '';
-  document.getElementById('linkPassword').value = row.dataset.password || '';
-  document.getElementById('linkCommunity').value = row.dataset.community || 'public';
-  document.getElementById('linkModal').style.display = 'block';
-}
-async function saveLink(){
-  var id = document.getElementById('linkEditId').value;
-  var data = {name: document.getElementById('linkName').value.trim(), link_type: document.getElementById('linkType').value, ip: document.getElementById('linkIp').value.trim(), location: document.getElementById('linkLocation').value.trim(), notes: document.getElementById('linkNotes').value.trim(), username: document.getElementById('linkUsername').value.trim(), password: document.getElementById('linkPassword').value.trim(), community: document.getElementById('linkCommunity').value.trim()||'public'};
-  if(!data.name){ showToast('اسم الجهاز مطلوب', 'error'); return; }
-  var btn = document.querySelector('#linkModal .btn-primary');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ جاري الحفظ والسحب...'; }
-  var url = id ? '/api/network/links/edit/' + id : '/api/network/links/add';
-  try{
-    var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
-    var j = await r.json();
-    if(j.ok){
-      var msg = (id?'تم التعديل':'تمت الاضافة');
-      if(j.auto_pull){
-        var s = j.auto_pull.secrets || 0;
-        if(s > 0){ msg += ' — تم سحب '+s+' مشترك بنجاح ✔'; }
-        else if(j.auto_pull.errors && j.auto_pull.errors.length){ msg += ' — تعذر السحب: '+j.auto_pull.errors[0]; }
-        else if(j.auto_pull.secrets !== undefined){ msg += ' — لا يوجد مشتركين على الراوتر'; }
-      }
-      showToast(msg, s > 0 ? 'success' : (j.auto_pull && j.auto_pull.errors && j.auto_pull.errors.length ? 'error' : ''));
-      document.getElementById('linkModal').style.display='none';
-      setTimeout(()=>location.reload(), 600);
-    } else { showToast(j.error || 'خطأ', 'error'); }
-  } catch(e){ showToast('خطأ في الاتصال', 'error'); }
-  if(btn){ btn.disabled = false; btn.textContent = 'حفظ'; }
-}
-async function syncAll(){
-  var btn = document.getElementById('syncAllBtn');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ جاري السحب...'; }
-  try{
-    var r = await fetch('/api/network/sync', {method:'POST', headers:{'Content-Type':'application/json'}});
-    var j = await r.json();
-    if(j.ok){
-      if(j.cloud_mode){ showToast(j.message || 'يتم السحب على جهاز البرج', ''); }
-      else if(j.total_secrets > 0){ showToast('تم سحب '+j.total_secrets+' مشترك من الميكروتيك ✔'); }
-      else if(j.errors && j.errors.length){ showToast('تعذر السحب: '+j.errors[0], 'error'); }
-      else { showToast('لا يوجد مشتركين — تأكد من اعدادات الميكروتيك'); }
-    } else { showToast(j.error || 'فشل السحب', 'error'); }
-  } catch(e){ showToast('خطأ في الاتصال', 'error'); }
-  if(btn){ btn.disabled = false; btn.textContent = 'سحب المشتركين'; }
-}
-function probeLink(btn){
-  var row = btn.closest('[data-id]');
-  var ip = (row.dataset.ip || '').trim();
-  if(!ip){ showToast('لا يوجد عنوان IP لهذا الجهاز', 'error'); return; }
-  var panel = row.querySelector('.probe-panel');
-  if(!panel){
-    panel = document.createElement('div');
-    panel.className = 'probe-panel mt-2 rounded-xl p-3 text-[12px] font-tajawal';
-    panel.style.cssText = 'border:1px solid var(--border);background:var(--surface);';
-    var info = row.querySelector('.min-w-0');
-    if(info){ info.appendChild(panel); } else { row.appendChild(panel); }
-  }
-  panel.innerHTML = '<div class="text-center text-muted py-2">جاري الفحص المباشر من الهاتف...</div>';
-  nativeCall('probeSector', {ip: ip, username: row.dataset.username||'', password: row.dataset.password||'', community: row.dataset.community||'public'}, function(d){
-    if(!d || !d.ok){ panel.innerHTML = '<span style="color:var(--dot-expired);font-weight:600;">'+(d&&d.error||'فشل الفحص')+'</span>'; return; }
-    var h = '<div class="flex flex-wrap gap-2 items-center">';
-    h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:'+(d.reachable?'var(--dot-active)':'var(--dot-expired)')+';">'+(d.reachable?'متصل':'غير متصل')+'</span>';
-    if(d.reachable){
-      if(d.open_ports && d.open_ports.length){
-        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">منافذ: '+d.open_ports.join('، ')+'</span>';
-      }
-      if(d.latency_ms && d.latency_ms !== -1){
-        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">'+Math.round(d.latency_ms)+' ms</span>';
-      }
-      if(d.ppp_active !== null && d.ppp_active !== undefined){
-        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--dot-active);">مشتركين نشطين: '+d.ppp_active+'</span>';
-      }
-      if(d.signal_dbm !== null && d.signal_dbm !== undefined){
-        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">إشارة: '+d.signal_dbm+' dBm</span>';
-      }
-      if(d.ccq !== null && d.ccq !== undefined){
-        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--muted);">CCQ: '+d.ccq+'%</span>';
-      }
-      if(d.routeros_ok === false){
-        h += '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold" style="background:var(--surface);border:1px solid var(--border-2);color:var(--dot-expired);">RouterOS: '+String(d.routeros_error||'فشل').slice(0,45)+'</span>';
-      }
-    }
-    h += '</div>';
-    panel.innerHTML = h;
-  });
-}
-// إظهار زر الفحص المباشر فقط داخل تطبيق الأندرويد (WebView)
-if(NATIVE){
-  var nb = document.querySelectorAll('.native-only');
-  for(var i=0;i<nb.length;i++){ nb[i].style.display=''; }
-}
-document.addEventListener('keydown', function(e){ if(e.key==='Escape') document.getElementById('linkModal').style.display='none'; });
 </script>
 {% endblock %}

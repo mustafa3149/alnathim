@@ -96,7 +96,7 @@
                     <button onclick="saveNumeralStyle('EN')" class="btn btn-sm{% if numeral_style=='EN' %} btn-primary{% endif %}" style="flex:1;">English (123)</button>
                 </div>
                 <a href="/api/export/excel" class="btn btn-primary" style="text-decoration:none;text-align:center;">تصدير Excel</a>
-                <a href="/api/backup" class="btn btn-primary" style="text-decoration:none;text-align:center;background:#0d6e3c;border-color:#0d6e3c;">تحميل النسخة الاحتياطية</a>
+                <a href="#" onclick="downloadBackup(event)" class="btn btn-primary" style="text-decoration:none;text-align:center;background:#0d6e3c;border-color:#0d6e3c;">تحميل النسخة الاحتياطية</a>
             </div>
         </div>
 
@@ -111,6 +111,7 @@ async function saveGeneratorInfo(){var d={owner_name:document.getElementById('ow
 async function saveDefaultConnection(){var r=await fetch('/api/settings/default-connection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({default_connection_type:document.getElementById('defaultConnectionType').value})});var j=await r.json();showToast(j.ok?'تم الحفظ':(j.error||'خطأ'),j.ok?'':'error');}
 async function saveNumeralStyle(s){var r=await fetch('/api/settings/numeral-style',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numeral_style:s})});var j=await r.json();if(j.ok){numeralStyle=s;showToast('تم تغيير نمط الأرقام');setTimeout(function(){location.reload();},300);}else{showToast(j.error||'خطأ','error');}}
 function toggleMikrotikPass(){var inp=document.getElementById('mikrotikPassword');inp.type=inp.type==='password'?'text':'password';}
+async function downloadBackup(e){if(e){e.preventDefault();}try{var r=await fetch('/api/backup',{method:'POST',headers:{'X-CSRF-Token':'{{ csrf_token }}'}});if(!r.ok){var j=await r.json();showToast(j.error||'فشل التنزيل','error');return;}var blob=await r.blob();var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='isp_backup.db';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);showToast('تم تنزيل النسخة الاحتياطية');}catch(err){showToast('فشل التنزيل','error');}}
 function collectTowerData(){return {
     mikrotik_host:document.getElementById('mikrotikHost').value.trim(),
     mikrotik_user:document.getElementById('mikrotikUser').value.trim(),

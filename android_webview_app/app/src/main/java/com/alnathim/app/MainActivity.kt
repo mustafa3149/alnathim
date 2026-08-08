@@ -2,32 +2,32 @@ package com.alnathim.app
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewAssetLoader
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
-    /**
-     * ⚠️ IMPORTANT — UPDATE THIS URL AFTER RENDER DEPLOYMENT
-     * Change this to your real production URL, e.g.:
-     *   private val APP_URL = "https://your-app-name.onrender.com"
-     */
-    private val APP_URL = "https://alnathim.onrender.com/"
-
     private lateinit var webView: WebView
+    private lateinit var assetLoader: WebViewAssetLoader
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +35,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
+
+        // ── Fullscreen: hide the system bars so there is no letterbox ─────
+        enableFullscreen()
+        applySafeAreaInsets(webView)
 
         // ── WebView settings ──────────────────────────────────────────────
         val settings: WebSettings = webView.settings
@@ -45,16 +49,34 @@ class MainActivity : AppCompatActivity() {
         settings.useWideViewPort = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.textZoom = 100
-        // Let the page handle its own zoom (viewport meta enforces user-scalable=no)
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
+        // Allow HTTP API calls to the ISP server from a local page
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
-        // Copy/paste is handled by the web app's built-in copy buttons (copyText)
-        // in the SNMP / customer pages. This avoids the system "Manage apps"
-        // context menu that Android shows inside WebView on long-press.
+        // ── Local asset loader: serve bundled HTML from assets/ ──────────
+        // This is the "Blood" pattern: the app's UI is bundled INSIDE the
+        // APK and loads instantly from the device (file://android_asset),
+        // while data comes from the server API.
+        assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
 
-        // ── WebViewClient: route deep links to external apps ──────────────
+        // ── WebViewClient: route deep links to external apps ─────────────
         webView.webViewClient = object : WebViewClient() {
+
+            override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): WebResourceResponse? {
+                // Serve local assets for our app scheme
+                return assetLoader.shouldInterceptRequest(request?.url ?: return null)
+            }
+
+            @Suppress("DEPRECATION")
+            override fun shouldInterceptRequest(view: WebView?, url: String?): WebResourceResponse? {
+                return assetLoader.shouldInterceptRequest(Uri.parse(url))
+            }
 
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
@@ -151,73 +173,72 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        // Preserve URL across configuration changes (rotation / resize)
-        val savedUrl = savedInstanceState?.getString(KEY_URL)
-        webView.loadUrl(savedUrl ?: APP_URL)
-    }
+        // ── Native bridge (window.AlNathimNative) — phone-side probes ────
+        // Lets the bundled HTML pages trigger native ICMP ping directly
+        // from the phone on the ISP LAN.
+        webView.addJavascriptInterface(NativeBridge(this, webView), "AlNathimNative")
 
-    private fun getClipboardManager(): ClipboardManager {
-        return getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    }
-
-    private fun copySelectedText() {
-        // Evaluate JS to copy the selected text into an element we can read
-        webView.evaluateJavascript(
-            """
-            (function(){
-                var sel = window.getSelection();
-                if(!sel || sel.toString().trim() === '') return '';
-                var ta = document.createElement('textarea');
-                ta.value = sel.toString();
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
-                ta.style.top = '0';
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                var copied = '';
-                try { document.execCommand('copy'); copied = ta.value; } catch(e) {}
-                document.body.removeChild(ta);
-                return copied;
-            })()
-            """.trimIndent()
-        ) { result ->
-            val value = result?.trim()?.trim('"') ?: ""
-            if (value.isNotEmpty()) {
-                val clip = ClipData.newPlainText("text", value)
-                getClipboardManager().setPrimaryClip(clip)
-                Toast.makeText(this, "تم النسخ", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "لا يوجد نص محدد", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    /** Minimal JSON string escaping helper for pasting into JS. */
-    private fun escapeJs(s: String): String {
-        val sb = StringBuilder()
-        for (c in s) {
-            when (c) {
-                '\\' -> sb.append("\\\\")
-                '"' -> sb.append("\\\"")
-                '\n' -> sb.append("\\n")
-                '\r' -> sb.append("\\r")
-                '\t' -> sb.append("\\t")
-                else -> sb.append(c)
-            }
-        }
-        return sb.toString()
+        // Load the LOCAL bundled index.html (instant, no network wait).
+        // The asset loader registers "/" → app/src/main/assets/, so
+        // mobile/index.html is assets/mobile/index.html (no extra /assets/).
+        webView.loadUrl("https://appassets.androidplatform.net/mobile/index.html")
     }
 
     /**
-     * Decide how to handle a navigation request:
-     * - http/https (normal pages)  → load inside the WebView (return false)
-     * - WhatsApp links (wa.me, api.whatsapp.com, whatsapp://)
-     *   → open the real WhatsApp app / external browser (return true)
-     * - intent:// or other custom schemes → launch external app
+     * Enter immersive fullscreen.
+     */
+    private fun enableFullscreen() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = fullscreenUiFlags
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private val fullscreenUiFlags: Int
+        get() =
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = fullscreenUiFlags
+        }
+    }
+
+    /**
+     * Pad the WebView by safe-area insets.
+     */
+    private fun applySafeAreaInsets(view: View) {
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val top = maxOf(systemBars.top, cutout.top)
+            val bottom = maxOf(systemBars.bottom, cutout.bottom, ime.bottom)
+            val left = maxOf(systemBars.left, cutout.left)
+            val right = maxOf(systemBars.right, cutout.right)
+            v.setPadding(left, top, right, bottom)
+            insets
+        }
+    }
+
+    /**
+     * Decide how to handle a navigation request.
      */
     private fun handleUrl(url: String): Boolean {
-
         if (url.startsWith("https://wa.me/") ||
             url.startsWith("http://wa.me/") ||
             url.startsWith("https://api.whatsapp.com/") ||
@@ -228,6 +249,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         return when {
+            // Local asset URLs load inside the WebView
+            url.startsWith("https://appassets.androidplatform.net/") -> false
             url.startsWith("http://") || url.startsWith("https://") -> false
 
             url.startsWith("whatsapp://") -> {
@@ -261,9 +284,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Launch an external app via ACTION_VIEW.
-     */
     private fun launchExternal(url: String) {
         try {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -275,11 +295,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putString(KEY_URL, webView.url)
     }
 
     companion object {

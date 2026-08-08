@@ -1130,11 +1130,13 @@ def create_user(username, password, role="agent", full_name="", phone="", accoun
                 status="active"):
     """Create a new user. Raises sqlite3.IntegrityError on duplicate username.
 
-    account_id defaults to the current request account (None stays unassigned).
+    account_id defaults to the current request account; when there is no
+    request context (desktop launcher mirroring a cloud user, tests) the new
+    user joins the main company so login gates never block them as unbound.
     status: 'active' | 'pending' (pending blocks login until approved).
     """
     if account_id is None:
-        account_id = current_account()
+        account_id = current_account() or _default_account_id()
     return _insert(
         "INSERT INTO users (username, password_hash, role, full_name, phone, status, account_id) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1193,6 +1195,25 @@ def delete_all_agents():
 
 # ── Registration / Invite / Access (Phase 14.4) ────────────
 
+def _default_account_id():
+    """Return the id of the first (main) account, creating it when missing.
+
+    Standalone registrations (web /register and mobile /auth/register) join the
+    main company immediately instead of waiting for the startup migration to
+    bind NULL account_id rows — otherwise an approved user would stay blocked
+    by the "لم يُربط حسابك بشركة" login gate until the server restarts.
+    """
+    row = _fetchone("SELECT id FROM accounts ORDER BY id LIMIT 1")
+    if row:
+        return row["id"]
+    _execute(
+        "INSERT INTO accounts (name, status) VALUES (?, 'active')",
+        ("حسابي",),
+    )
+    row = _fetchone("SELECT id FROM accounts ORDER BY id LIMIT 1")
+    return row["id"] if row else None
+
+
 def create_registration(full_name, username, password, phone="", invite_code=""):
     """Create a pending-registration user (or active when a valid invite code).
 
@@ -1213,9 +1234,10 @@ def create_registration(full_name, username, password, phone="", invite_code="")
     """
     status = "active" if invite_code and redeem_invite_code(invite_code) else "pending"
     user_id = _insert(
-        "INSERT INTO users (username, password_hash, role, full_name, phone, status) "
-        "VALUES (?, ?, 'agent', ?, ?, ?)",
-        (username, generate_password_hash(password), full_name, phone, status),
+        "INSERT INTO users (username, password_hash, role, full_name, phone, status, account_id) "
+        "VALUES (?, ?, 'agent', ?, ?, ?, ?)",
+        (username, generate_password_hash(password), full_name, phone, status,
+         _default_account_id()),
     )
     if status == "active" and invite_code:
         # Record which code activated the account for auditability.
@@ -1252,19 +1274,67 @@ def redeem_invite_code(code):
 
 
 def approve_user(user_id):
-    """Approve a pending registration (status -> active). Returns True on success."""
-    return _execute(
-        "UPDATE users SET status = 'active', failed_logins = 0 WHERE id = ? AND status = 'pending'",
+    """Approve a pending registration (status -> active). Returns True on success.
+
+    When the user belongs to a still-pending company (register-company flow),
+    the company is approved too and its pending users are activated — otherwise
+    approving the user would be a dead end and they would stay stuck on
+    "بانتظار موافقة المدير" forever because the company gate still blocks login.
+    """
+    user = _fetchone(
+        "SELECT * FROM users WHERE id = ? AND status = 'pending'", (user_id,)
+    )
+    if not user:
+        return False
+    _execute(
+        "UPDATE users SET status = 'active', failed_logins = 0 WHERE id = ?",
         (user_id,),
-    ) > 0
+    )
+    if user["account_id"]:
+        acct = _fetchone(
+            "SELECT id FROM accounts WHERE id = ? AND pending = 1",
+            (user["account_id"],),
+        )
+        if acct:
+            _execute(
+                "UPDATE accounts SET pending = 0 WHERE id = ?",
+                (user["account_id"],),
+            )
+            _execute(
+                "UPDATE users SET status = 'active' "
+                "WHERE account_id = ? AND status = 'pending'",
+                (user["account_id"],),
+            )
+    return True
 
 
 def reject_user(user_id):
-    """Delete a pending registration (rejection)."""
-    return _execute(
-        "DELETE FROM users WHERE id = ? AND status = 'pending'",
-        (user_id,),
-    ) > 0
+    """Delete a pending registration (rejection). Returns True on success.
+
+    If the user was the only member of a still-pending company (the
+    register-company flow), the empty pending account is removed too — otherwise
+    the company name could never be re-registered ("هذه الشركة مسجلة مسبقاً")
+    and a dead 'pending' account would linger forever.
+    """
+    user = _fetchone(
+        "SELECT * FROM users WHERE id = ? AND status = 'pending'", (user_id,)
+    )
+    if not user:
+        return False
+    _execute("DELETE FROM users WHERE id = ?", (user_id,))
+    if user["account_id"]:
+        acct = _fetchone(
+            "SELECT id FROM accounts WHERE id = ? AND pending = 1",
+            (user["account_id"],),
+        )
+        if acct:
+            remaining = _fetchone(
+                "SELECT COUNT(*) AS n FROM users WHERE account_id = ?",
+                (user["account_id"],),
+            )
+            if not remaining or remaining["n"] == 0:
+                _execute("DELETE FROM accounts WHERE id = ?", (user["account_id"],))
+    return True
 
 
 def set_user_status(user_id, status):
@@ -1869,7 +1939,8 @@ def customer_stats():
         "SUM(CASE WHEN is_active = 1 AND status = 'active' THEN 1 ELSE 0 END) AS active, "
         "SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired, "
         "SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) AS suspended "
-        "FROM customers WHERE 1 = 1" + cw
+        "FROM customers WHERE 1 = 1" + cw,
+        owner_params,
     )
     return {
         "total": row["total"] or 0,
@@ -2224,7 +2295,7 @@ def update_invoice(invoice_id, **fields):
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    owner_where, owner_params = _owner_filter("owner_id")
+    owner_where, owner_params = _owner_filter("account_id")
     sql = f"UPDATE invoices SET {cols} WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2232,8 +2303,13 @@ def update_invoice(invoice_id, **fields):
 
 
 def delete_invoice(invoice_id):
-    """Delete an invoice (cascades payments/extras) — owner-scoped."""
-    owner_where, owner_params = _owner_filter("owner_id")
+    """Delete an invoice (cascades payments/extras) — owner-scoped.
+
+    Scoped by account_id: the legacy `owner_id` column was dropped from the
+    invoices table during the schema migration, so filtering on it would raise
+    "no such column" on every account-scoped request.
+    """
+    owner_where, owner_params = _owner_filter("account_id")
     sql = "DELETE FROM invoices WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2506,7 +2582,7 @@ def update_expense(expense_id, **fields):
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    owner_where, owner_params = _owner_filter("owner_id")
+    owner_where, owner_params = _owner_filter("account_id")
     sql = f"UPDATE expenses SET {cols} WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2514,8 +2590,8 @@ def update_expense(expense_id, **fields):
 
 
 def delete_expense(expense_id):
-    """Delete an expense by id (owner-scoped)."""
-    owner_where, owner_params = _owner_filter("owner_id")
+    """Delete an expense by id (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
     sql = "DELETE FROM expenses WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2649,7 +2725,7 @@ def get_ticket(ticket_id):
 
 def update_ticket(ticket_id, customer_id, issue_description):
     """Update a maintenance ticket's customer + description."""
-    owner_where, owner_params = _owner_filter("owner_id")
+    owner_where, owner_params = _owner_filter("account_id")
     sql = "UPDATE maintenance_tickets SET customer_id = ?, issue_description = ? WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2660,7 +2736,7 @@ def toggle_ticket(ticket_id):
     """Toggle a ticket's resolved/pending status in one statement."""
     db = get_db()
     try:
-        owner_where, owner_params = _owner_filter("owner_id")
+        owner_where, owner_params = _owner_filter("account_id")
         where_sql = "WHERE id = ?" + ((" AND " + owner_where) if owner_where else "")
         db.execute(
             "UPDATE maintenance_tickets SET "
@@ -2680,8 +2756,8 @@ def toggle_ticket(ticket_id):
 
 
 def delete_ticket(ticket_id):
-    """Delete a ticket by id (owner-scoped)."""
-    owner_where, owner_params = _owner_filter("owner_id")
+    """Delete a ticket by id (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
     sql = "DELETE FROM maintenance_tickets WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2803,7 +2879,7 @@ def update_network_link(link_id, name=None, ip=None, link_type=None,
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    owner_where, owner_params = _owner_filter("owner_id")
+    owner_where, owner_params = _owner_filter("account_id")
     sql = f"UPDATE network_links SET {cols} WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where
@@ -2811,8 +2887,8 @@ def update_network_link(link_id, name=None, ip=None, link_type=None,
 
 
 def delete_network_link(link_id):
-    """Delete a network link by id (owner-scoped)."""
-    owner_where, owner_params = _owner_filter("owner_id")
+    """Delete a network link by id (account-scoped)."""
+    owner_where, owner_params = _owner_filter("account_id")
     sql = "DELETE FROM network_links WHERE id = ?"
     if owner_where:
         sql += " AND " + owner_where

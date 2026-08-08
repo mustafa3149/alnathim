@@ -37,6 +37,7 @@ Name: "quicklaunchicon"; Description: "إنشاء اختصار في شريط ا�
 [Files]
 Source: "dist\Al-Nathim.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "al-nazim-icon.svg"; DestDir: "{app}"; Flags: ignoreversion
+Source: ".env"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 
 [Icons]
 Name: "{commondesktop}\الناظم"; Filename: "{app}\Al-Nathim.exe"; Tasks: desktopicon; Comment: "الناظم - لإدارة أبراج الإنترنت"; WorkingDir: "{app}"

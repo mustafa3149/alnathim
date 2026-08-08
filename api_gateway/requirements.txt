@@ -1,6 +1,8 @@
-# API Gateway (Phase 4)
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# API Gateway (Phase 4) — Security Hardening (CVE-2024-24762)
+# fastapi>=0.110.0 pulls in Starlette>=0.36.3 which fixes the Path Traversal
+# vulnerability in StaticFiles (CVE-2024-24762).
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
 # Phase 1/2 libs imported by the gateway at module load
 routeros_api==0.21.0
 pysnmp==7.1.28

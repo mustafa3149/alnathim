@@ -1349,6 +1349,28 @@ def api_invoice_extra_delete(extra_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/invoices/<int:invoice_id>", methods=["DELETE"])
+@admin_required
+def api_invoice_delete(invoice_id):
+    """Permanently delete an invoice (admin only) — mirrors the mobile endpoint.
+
+    Cascades payments/extras via the DB and re-syncs the customer's router debt
+    because their unpaid balance just changed.
+    """
+    invoice = db.get_invoice(invoice_id)
+    if not invoice:
+        return jsonify({"ok": False, "error": "الفاتورة غير موجودة"}), 404
+
+    customer = db.get_customer(invoice["customer_id"]) if invoice["customer_id"] else None
+    db.delete_invoice(invoice_id)
+    if customer:
+        sync_customer_debt(customer)
+    _audit("حذف فاتورة", "invoice", invoice_id,
+           f"تم حذف فاتورة {invoice['month']}/{invoice['year']} "
+           f"للمشترك #{invoice['customer_id']}")
+    return jsonify({"ok": True, "message": "تم حذف الفاتورة"})
+
+
 @app.route("/api/tickets/add", methods=["POST"])
 @login_required
 def api_ticket_add():

@@ -85,24 +85,24 @@
     </div>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
   </a>
-  <a href="/network" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+  <a href="/billing" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
     <div class="flex-1">
-      <div class="font-bold text-sm text-main">الأجهزة</div>
-      <div class="text-xs text-muted font-tajawal mt-0.5">Ping وفحص الإشارة</div>
+      <div class="font-bold text-sm text-main">الفواتير</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">إدارة فواتير الشهر والمبالغ</div>
     </div>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
   </a>
-  <a href="/api/export/excel" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+  <a href="/debts" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
     <div class="flex-1">
-      <div class="font-bold text-sm text-main">تصدير Excel</div>
-      <div class="text-xs text-muted font-tajawal mt-0.5">تصدير بيانات المشتركين</div>
+      <div class="font-bold text-sm text-main">الديون</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">المشتركين عليهم ديون</div>
     </div>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
   </a>
-  <a href="/api/backup" onclick="backupNow(event)" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
+  <a href="/payments" class="card card-pad p-4 flex items-center gap-3 transition hover:opacity-75">
     <div class="flex-1">
-      <div class="font-bold text-sm text-main">نسخ احتياطي</div>
-      <div class="text-xs text-muted font-tajawal mt-0.5">تحميل نسخة من قاعدة البيانات</div>
+      <div class="font-bold text-sm text-main">المدفوعات</div>
+      <div class="text-xs text-muted font-tajawal mt-0.5">سجل الدفعات المستلمة</div>
     </div>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
   </a>
@@ -112,6 +112,5 @@
 {% block extra_scripts %}
 <script>
 function applyAlertDays(){ var d = document.getElementById('alertDaysInput').value; window.location.href = '/?alert_days=' + (parseInt(d)||3); }
-async function backupNow(e){ e.preventDefault(); window.location.href = '/api/backup'; }
 </script>
 {% endblock %}

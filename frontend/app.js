@@ -60,7 +60,7 @@
     opts.headers = Object.assign({}, opts.headers);
     if (authToken) opts.headers["Authorization"] = "Bearer " + authToken;
 
-    const res = await fetch(API_BASE + path, opts);
+    const res = await fetchWithRetry(API_BASE + path, opts);
     if (res.status === 401) {
       logout();
       throw new Error("unauthorized");
@@ -75,6 +75,52 @@
       throw err;
     }
     return res.json();
+  }
+
+  // ── Blood-style speed layer (same feel as the Android APK) ──
+  // Fetch with automatic retry — absorbs Render free-tier cold-start
+  // blips so the first request never surfaces an error to the user.
+  async function fetchWithRetry(url, opts, attempts, delayMs) {
+    attempts = attempts || 3;
+    delayMs = delayMs || 2000;
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await fetch(url, opts);
+      } catch (e) {
+        lastErr = e;
+        if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+    throw lastErr;
+  }
+
+  // localStorage cache — pages paint instantly from the last good data,
+  // then refresh silently in the background (no visible loaders).
+  function cacheGet(key) {
+    try {
+      const raw = localStorage.getItem("alnathim_cache_" + key);
+      if (!raw) return null;
+      return JSON.parse(raw).data;
+    } catch (_) { return null; }
+  }
+  function cacheSet(key, data) {
+    try {
+      localStorage.setItem("alnathim_cache_" + key, JSON.stringify({ data: data, ts: Date.now() }));
+    } catch (_) { /* storage full — ignore */ }
+  }
+
+  // Keep the Render server warm so navigation never hits a 30-60s cold start.
+  function startKeepAlive() {
+    if (startKeepAlive._t) return;
+    startKeepAlive._t = setInterval(() => {
+      if (!authToken) return;
+      fetchWithRetry(API_BASE + "/api/users", {
+        headers: { "Authorization": "Bearer " + authToken }
+      })
+        .then((r) => { if (r.status === 401) logout(); })
+        .catch(() => {});
+    }, 600000);
   }
 
   // ── Auth (Phase 8) ────────────────────────────────────
@@ -113,6 +159,9 @@
       $("loginPassword").value = "";
       showApp();
       switchTab("dashboard");
+      // Blood-style speed: seed the debts cache + keep the server warm.
+      loadFinance();
+      startKeepAlive();
     } catch (e) {
       $("loginError").textContent = (e && e.message && e.message !== "unauthorized")
         ? e.message
@@ -153,6 +202,14 @@
 
   async function loadDashboard() {
     errorBox.classList.add("hidden");
+    // Instant paint from cache — Blood-style, no visible loader.
+    const cached = cacheGet("dashboard");
+    if (cached) {
+      users = cached.users || [];
+      finance = cached.finance || null;
+      renderDashboard();
+      if (finance) $("statRevenue").textContent = fmtMoney(finance.total_revenue);
+    }
     try {
       users = await fetchUsers();
       renderDashboard();
@@ -160,9 +217,12 @@
       try {
         finance = await api("/api/finance");
         $("statRevenue").textContent = fmtMoney(finance.total_revenue);
-      } catch (_) { /* non-fatal */ }
+        cacheSet("dashboard", { users: users, finance: finance });
+      } catch (_) {
+        cacheSet("dashboard", { users: users, finance: finance || null });
+      }
     } catch (e) {
-      showError();
+      if (!cached) showError();
     }
   }
 
@@ -224,7 +284,7 @@
   // ── CSV export download (auth-aware) ──────────────────
   async function exportCsv() {
     try {
-      const res = await fetch(API_BASE + "/api/finance/export", {
+      const res = await fetchWithRetry(API_BASE + "/api/finance/export", {
         headers: { "Authorization": authToken ? "Bearer " + authToken : "" }
       });
       if (res.status === 401) {
@@ -249,11 +309,18 @@
   // ── Finance / debts ────────────────────────────────────
   async function loadFinance() {
     errorBox.classList.add("hidden");
+    // Instant paint from cache, then silent background refresh.
+    const cached = cacheGet("debts");
+    if (cached) {
+      finance = cached;
+      renderFinance();
+    }
     try {
       finance = await api("/api/finance");
       renderFinance();
+      cacheSet("debts", finance);
     } catch (e) {
-      showError();
+      if (!cached) showError();
     }
   }
 
@@ -668,6 +735,9 @@
   if (authToken) {
     showApp();
     switchTab("dashboard");
+    // Blood-style speed: seed the debts cache + keep the server warm.
+    loadFinance();
+    startKeepAlive();
   } else {
     showLogin();
   }

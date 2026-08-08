@@ -73,11 +73,18 @@ async function fetchWithRetry(url, opts, attempts, delayMs) {
 // api(path, body)           → POST (body = object)
 // api(path, body, 'PUT')    → PUT
 // api(path, body, 'DELETE') → DELETE
-async function api(path, body, method) {
+// api(path, body, method, timeoutMs) → abort after timeoutMs (0 = no timeout)
+async function api(path, body, method, timeoutMs) {
   const url = API_BASE + path;
   const opts = {method: method || (body !== undefined && body !== null ? 'POST' : 'GET'), headers: getAuthHeaders()};
   if (body !== undefined && body !== null) {
     opts.body = JSON.stringify(body);
+  }
+  let timer = null;
+  if (timeoutMs) {
+    const ctrl = new AbortController();
+    timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    opts.signal = ctrl.signal;
   }
   try {
     const r = await fetch(url, opts);
@@ -94,7 +101,10 @@ async function api(path, body, method) {
     }
     return d;
   } catch (e) {
-    return {ok: false, error: {code: 'network', message_ar: 'تعذر الاتصال بالسيرفر — تحقق من الإنترنت'}};
+    const aborted = !!(timer && e && e.name === 'AbortError');
+    return {ok: false, error: {code: aborted ? 'timeout' : 'network', message_ar: aborted ? 'انتهت المهلة — حاول مجدداً' : 'تعذر الاتصال بالسيرفر — تحقق من الإنترنت'}};
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

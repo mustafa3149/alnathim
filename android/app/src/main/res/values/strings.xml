@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">الناظم</string>
+    <string name="title_activity_main">الناظم</string>
+    <string name="package_name">com.alnathim.isp</string>
+    <string name="custom_url_scheme">com.alnathim.isp</string>
+</resources>

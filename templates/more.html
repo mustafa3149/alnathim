@@ -11,14 +11,6 @@
 <div class="mb-7">
   <div class="text-[11px] font-bold text-faint tracking-wide mb-2 font-tajawal">المالية</div>
   <div class="card overflow-hidden divide-y" style="border:1px solid var(--border);">
-    <a href="/billing" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      <div class="flex-1 min-w-0">
-        <div class="font-bold text-main">الفواتير</div>
-        <div class="text-xs text-muted font-tajawal mt-0.5">إدارة فواتير الشهر والمبالغ</div>
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
-    </a>
     <a href="/payments" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
       <div class="flex-1 min-w-0">
@@ -110,39 +102,15 @@
 </div>
 {% endif %}
 
-<!-- Tools: export & print -->
+<!-- Tools: Ping only (network diagnostics work directly from the phone) -->
 <div class="mb-7">
   <div class="text-[11px] font-bold text-faint tracking-wide mb-2 font-tajawal">أدوات</div>
   <div class="card overflow-hidden divide-y" style="border:1px solid var(--border);">
-    <a href="/api/export/excel" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <a href="/network" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <div class="flex-1 min-w-0">
-        <div class="font-bold text-main">تصدير Excel</div>
-        <div class="text-xs text-muted font-tajawal mt-0.5">تصدير بيانات المشتركين</div>
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
-    </a>
-    <a href="/api/backup" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg>
-      <div class="flex-1 min-w-0">
-        <div class="font-bold text-main">نسخة احتياطية</div>
-        <div class="text-xs text-muted font-tajawal mt-0.5">تحميل نسخة من قاعدة البيانات</div>
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
-    </a>
-    <a href="/billing" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-      <div class="flex-1 min-w-0">
-        <div class="font-bold text-main">طباعة الفواتير</div>
-        <div class="text-xs text-muted font-tajawal mt-0.5">طباعة فواتير الشهر</div>
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
-    </a>
-    <a href="/signal-board" class="flex items-center gap-4 px-5 py-4 transition hover:opacity-75">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="color:var(--muted);"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
-      <div class="flex-1 min-w-0">
-        <div class="font-bold text-main">لوحة الإشارة</div>
-        <div class="text-xs text-muted font-tajawal mt-0.5">إشارة و CCQ لجميع المشتركين</div>
+        <div class="font-bold text-main">فحص الاتصال (Ping)</div>
+        <div class="text-xs text-muted font-tajawal mt-0.5">تشخيص الشبكة مباشرة من الهاتف</div>
       </div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--faint);"><polyline points="15 18 9 12 15 6"/></svg>
     </a>

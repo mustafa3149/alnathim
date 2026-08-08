@@ -1086,6 +1086,11 @@ def api_admin_registrations():
                 # created_at is added via schema migration; older DBs (or
                 # legacy rows) may lack the column — read defensively.
                 "created_at": (u["created_at"] if "created_at" in u.keys() else "") or "",
+                # Show the company so the admin knows approving the user also
+                # approves its still-pending company (cascade in approve_user).
+                "account_id": u["account_id"],
+                "account_name": (db.get_account(u["account_id"])["name"]
+                                 if u["account_id"] else ""),
             }
             for u in users
         ],

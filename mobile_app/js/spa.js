@@ -791,7 +791,7 @@ async function doRegister() {
   if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
   const btn = document.getElementById('regBtn');
   btn.textContent = 'جاري إنشاء الشركة...'; btn.disabled = true;
-  const d = await api('/auth/register-company', {company_name, full_name: username, username, password, phone});
+  const d = await api('/auth/register-company', {company_name, full_name: username, username, password, phone}, null, 25000);
   btn.textContent = 'إنشاء الشركة'; btn.disabled = false;
   if (d.ok && d.data) {
     const er = document.getElementById('regError'); if (er) { er.style.display = 'none'; }

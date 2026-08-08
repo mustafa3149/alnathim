@@ -367,7 +367,9 @@ def mobile_login():
     # Company status / owner-approval gate.
     if password_ok:
         account = db.get_account(user["account_id"]) if user["account_id"] else None
-        if not account or str(account["status"] or "active") == "suspended":
+        if not account:
+            return _err("unbound", "الحساب غير مرتبط بشركة — راجع مدير النظام لربطه بشركة", 403)
+        if str(account["status"] or "active") == "suspended":
             return _err("suspended", "هذه الشركة موقوفة — راجع إدارة النظام", 403)
         if (account["pending"] or 0) == 1:
             return _err("pending", "شركتك بانتظار موافقة المدير الرئيسي — حاول لاحقاً", 403)
@@ -1152,6 +1154,29 @@ def mobile_invoice_get(invoice_id):
         ],
         "payments": [_payment_payload(p) for p in payments],
     })
+
+
+@mobile_bp.route("/invoices/<int:invoice_id>", methods=["DELETE"])
+@mobile_admin_required
+def mobile_invoice_delete(invoice_id):
+    """DELETE /invoices/{id} — permanently delete an invoice (admin only).
+
+    The app's billing screen calls this for "حذف الفاتورة". Payments/extras
+    cascade via the DB; the customer's router debt is re-synced afterwards
+    because their unpaid balance just changed.
+    """
+    invoice = db.get_invoice(invoice_id)
+    if not invoice:
+        return _err("not_found", "الفاتورة غير موجودة", 404)
+
+    customer = db.get_customer(invoice["customer_id"]) if invoice["customer_id"] else None
+    db.delete_invoice(invoice_id)
+    if customer:
+        sync_customer_debt(customer)
+    _audit("حذف فاتورة", "invoice", invoice_id,
+           f"تم حذف فاتورة {invoice['month']}/{invoice['year']} "
+           f"للمشترك #{invoice['customer_id']}")
+    return _ok({"deleted": True})
 
 
 @mobile_bp.route("/payments/current-invoice/<int:customer_id>")

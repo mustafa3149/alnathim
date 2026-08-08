@@ -5,8 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
-const pages = fs.readdirSync(__dirname).filter(f => f.endsWith('.html'));
+const appJs = fs.readFileSync(path.join(__dirname, 'mobile_app', 'js', 'app.js'), 'utf8');
+const pages = fs.readdirSync(path.join(__dirname, 'mobile_app')).filter(f => f.endsWith('.html'));
 
 function makeEl(id) {
   return {
@@ -56,7 +56,7 @@ const check = (cond, msg) => { if (cond) { pass++; console.log('[OK  ] ' + msg);
 
 // ── 1) Every page must LOAD without throwing (auth pages with a token) ──
 for (const page of pages) {
-  const html = fs.readFileSync(path.join(__dirname, page), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, 'mobile_app', page), 'utf8');
   const inline = (html.match(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/) || [])[1] || '';
   const isIndex = page === 'index.html';
   const sb = makeSandbox(!isIndex); // non-index pages need a token for requireAuth()
@@ -71,7 +71,7 @@ for (const page of pages) {
 }
 
 // ── 2) index.html: pressing the login button completes the flow ──
-const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+const indexHtml = fs.readFileSync(path.join(__dirname, 'mobile_app', 'index.html'), 'utf8');
 const indexInline = (indexHtml.match(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/) || [])[1] || '';
 const sb = makeSandbox(false);
 let loginUrl = '';
@@ -109,3 +109,4 @@ sb.fetch = async (url, opts) => {
   console.log('\nRuntime page simulation: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();
+
