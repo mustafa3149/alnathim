@@ -169,3 +169,18 @@ account and everything inside it is fully isolated from every other company.
 2. On restart, `init_db()` runs `_ensure_account_columns()` automatically
    (creates `accounts`, adds `account_id`, assigns existing data — no loss).
 3. Rebuild the APK (the login screen now has the company picker).
+
+
+## 8. Review fixes (approval gate + simplified login/ports)
+
+- **Simple login**: username + password only (the company picker was removed;
+  the account is derived from the user). Isolation is unchanged.
+- **Owner approval**: new companies register as *pending* — nobody from the
+  company can log in until the main account (id 1) admin approves them from
+  the new "الشركات" screen (`/accounts/manage`, `PUT /accounts/{id}/status`).
+- **Cabinet/Port = numbers**: no separate cabinet-management screens. When
+  adding/editing a customer the operator types the cabinet number and the
+  port; the only rule is no duplicate (cabinet, port) in the same account.
+- **Removed sections**: network, tower, cabinets management, fast-entry.
+- Report tab uses an SVG icon like the other tabs.
+- Web login enforces the same account approval/suspension gates.

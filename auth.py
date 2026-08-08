@@ -318,6 +318,18 @@ def login():
     if not db.is_user_active(user):
         return jsonify({"ok": False, "state": "expired", "error": "انتهت صلاحية الدخول — راجع المدير"}), 403
 
+    # Multi-account gate: the user must belong to an approved company.
+    if not user["account_id"]:
+        return jsonify({"ok": False, "state": "invalid",
+                        "error": "لم يُربط حسابك بشركة — سجّل عبر التطبيق أو راجع المدير"}), 400
+    _acct = db.get_account(user["account_id"])
+    if _acct and (_acct["pending"] or 0) == 1:
+        return jsonify({"ok": False, "state": "pending",
+                        "error": "شركتك بانتظار موافقة المدير الرئيسي"}), 403
+    if _acct and str(_acct["status"] or "active") == "suspended":
+        return jsonify({"ok": False, "state": "suspended",
+                        "error": "شركتك موقوفة — راجع إدارة النظام"}), 403
+
     session.permanent = True
     session["user_id"] = user["id"]
     session["user_role"] = user["role"]

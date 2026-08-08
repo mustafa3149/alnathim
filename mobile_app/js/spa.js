@@ -27,7 +27,7 @@ const VIEWS = {
   customers: { title: 'العملاء', load: loadCustomers },
   billing:   { title: 'الفواتير', load: loadBilling },
   debts:     { title: 'الديون', load: loadDebts },
-  more:      { title: 'المزيد', load: loadMore },  report: { title: 'التقرير', load: loadReportSection },  reminders: { title: 'التذكيرات', load: loadReminders, sub: true },  expenses: { title: 'المصاريف', load: loadExpenses, sub: true },  tickets: { title: 'التذاكر', load: loadTickets, sub: true },  packages: { title: 'الباقات', load: loadPackages, sub: true },  cabinets: { title: 'الكابينات (FAT)', load: loadCabinets, sub: true },  fatentry: { title: 'إدخال المنافذ', load: loadFatEntry, sub: true },  generator: { title: 'بيانات الشركة', load: loadGenerator, sub: true },  team: { title: 'الفريق', load: loadTeam, sub: true },  audit: { title: 'سجل التدقيق', load: loadAudit, sub: true },  network: { title: 'الشبكة', load: loadNetwork, sub: true },  tower: { title: 'البرج', load: loadTower, sub: true },  backup: { title: 'النسخ الاحتياطي', load: loadBackup, sub: true }
+  more:      { title: 'المزيد', load: loadMore },  report: { title: 'التقرير', load: loadReportSection },  reminders: { title: 'التذكيرات', load: loadReminders, sub: true },  expenses: { title: 'المصاريف', load: loadExpenses, sub: true },  tickets: { title: 'التذاكر', load: loadTickets, sub: true },  packages: { title: 'الباقات', load: loadPackages, sub: true },  accounts: { title: 'الشركات', load: loadAccountsManage, sub: true },  generator: { title: 'بيانات الشركة', load: loadGenerator, sub: true },  team: { title: 'الفريق', load: loadTeam, sub: true },  audit: { title: 'سجل التدقيق', load: loadAudit, sub: true },  backup: { title: 'النسخ الاحتياطي', load: loadBackup, sub: true }
 };
 let currentView = 'dashboard';
 let currentCustomerId = null;
@@ -219,7 +219,9 @@ async function addCustomer() {
     previous_debt: parseInt(document.getElementById('cDebt').value) || 0,
     address: document.getElementById('cAddress').value.trim(),
     region: document.getElementById('cRegion').value.trim(),
-    notes: document.getElementById('cNotes').value.trim()
+    notes: document.getElementById('cNotes').value.trim(),
+    cabinet_number: document.getElementById('cCabinet') ? document.getElementById('cCabinet').value.trim() : '',
+    port_number: document.getElementById('cPort') ? (document.getElementById('cPort').value || null) : null
   };
   const btn = document.getElementById('addCustBtn');
   btn.textContent = '⏳ جاري الحفظ...'; btn.disabled = true;
@@ -228,7 +230,7 @@ async function addCustomer() {
   if (d.ok) {
     closeSheet('addSheet');
     showToast('تمت إضافة المشترك ✓');
-    ['cName','cPhone','cPackage','cAddress','cRegion','cNotes'].forEach(id => document.getElementById(id).value = '');
+    ['cName','cPhone','cPackage','cAddress','cRegion','cNotes','cCabinet','cPort'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('cPrice').value = '25000';
     document.getElementById('cMonths').value = '1';
     document.getElementById('cDebt').value = '0';
@@ -335,7 +337,9 @@ function loadMore() {
     (u.account_name ? u.account_name + ' · ' : '') +
     (u.role === 'admin' ? 'مدير' : (u.full_name || u.username || ''));
   const isAdmin = !!(u && u.role === 'admin');
+  const isOwner = !!(u && u.role === 'admin' && (u.account_id || 0) === 1);
   document.querySelectorAll('#view-more .admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
+  document.querySelectorAll('#view-more .owner-only').forEach(el => el.classList.toggle('hidden', !isOwner));
 
 }
 function loadReport() {
@@ -685,11 +689,10 @@ async function pollStatus() {
   }
 }
 async function doLogin() {
-  const accountId = document.getElementById('accountId').value;
-  const username = document.getElementById('username').value;
+  const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
   const server = document.getElementById('serverBase').value.trim().replace(/\/+$/, '');
-  if (!accountId || !username || !password) return showError('اختر الشركة والمستخدم وأدخل كلمة المرور');
+  if (!username || !password) return showError('أدخل اسم المستخدم وكلمة المرور');
   if (!server) return showError('أدخل عنوان السيرفر');
   localStorage.setItem('alnathim_server', server);
   refreshApiBase();
@@ -699,7 +702,7 @@ async function doLogin() {
     const r = await fetchWithRetry(API_BASE + '/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({account_id: parseInt(accountId, 10), username, password})
+      body: JSON.stringify({username, password})
     }, 3, 2500);
     const d = await r.json().catch(() => null);
     btn.textContent = 'دخول'; btn.disabled = false;
@@ -784,22 +787,48 @@ async function doRegister() {
   btn.textContent = 'إنشاء الشركة'; btn.disabled = false;
   if (d.ok && d.data) {
     closeSheet('regSheet');
-    showToast('✅ ' + (d.data.message_ar || 'تم إنشاء الشركة — سجل دخولك الآن'));
-    // Pre-select the new company + user so login is one step away.
-    loadAccounts();
-    const accSel = document.getElementById('accountId');
-    setTimeout(() => {
-      accSel.value = String(d.data.account_id);
-      onAccountChange();
-      setTimeout(() => {
-        const uSel = document.getElementById('username');
-        uSel.value = username;
-        document.getElementById('password').focus();
-      }, 400);
-    }, 400);
+    document.getElementById('username').value = username;
+    showToast('✅ ' + (d.data.message_ar || 'تم التسجيل'));
+    document.getElementById('password').focus();
   } else {
     showToast((d.error && d.error.message_ar) || 'فشل إنشاء الشركة', 'error');
   }
+}
+
+
+// ── COMPANY MANAGEMENT (owner admin) ───────────────────────
+function loadAccountsManage() {
+  const box = document.getElementById('accountsBox');
+  box.innerHTML = '<div class="empty"><div class="big">🏢</div>جارِ التحميل...</div>';
+  api('/accounts/manage').then(d => {
+    if (!d.ok) { box.innerHTML = '<div class="empty">' + esc((d.error && d.error.message_ar) || 'غير مصرح') + '</div>'; return; }
+    const items = d.data.items || [];
+    if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">🏢</div>لا توجد شركات</div>'; return; }
+    const pend = items.filter(a => a.pending);
+    box.innerHTML =
+      (pend.length ? '<div class="section-label">بانتظار الموافقة</div><div class="list-card">' + pend.map(a =>
+        '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
+        '<div class="row-sub">' + esc(a.phone || '') + ' · مستخدمون: ' + toArabicNum(a.users.length) + '</div></div>' +
+        '<div class="row-end"><button class="btn btn-sm" style="color:var(--active);" onclick="approveAccount(' + a.id + ',false)">موافقة</button></div></div>'
+      ).join('') + '</div>' : '<div class="card card-pad" style="color:var(--active);font-size:13px;">لا توجد طلبات معلقة ✅</div>') +
+      '<div class="section-label">الشركات المسجلة</div><div class="list-card">' + items.map(a =>
+        '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
+        '<div class="row-sub">' + (a.pending ? 'بانتظار الموافقة' : (a.status === 'suspended' ? 'موقوفة' : 'نشطة')) + ' · ' + toArabicNum(a.users.length) + ' مستخدم</div></div>' +
+        (a.id !== 1 ? '<div class="row-end"><button class="btn btn-sm" onclick="approveAccount(' + a.id + ',false)">تفعيل</button>' +
+          '<button class="btn btn-sm" style="color:var(--expired);margin-top:6px;" onclick="suspendAccount(' + a.id + ')">إيقاف</button></div>' : '<div class="row-end"><span class="badge badge-ok">الحساب الرئيسي</span></div>') +
+        '</div>').join('') + '</div>';
+  });
+}
+async function approveAccount(id, pending) {
+  const d = await api('/accounts/' + id + '/status', { pending: false }, 'PUT');
+  if (d.ok) { showToast('تمت الموافقة على الشركة ✓'); loadAccountsManage(); }
+  else showToast((d.error && d.error.message_ar) || 'فشل', 'error');
+}
+async function suspendAccount(id) {
+  if (!confirm('إيقاف هذه الشركة؟ لن يتمكن مستخدموها من الدخول.')) return;
+  const d = await api('/accounts/' + id + '/status', { status: 'suspended' }, 'PUT');
+  if (d.ok) { showToast('تم الإيقاف ✓'); loadAccountsManage(); }
+  else showToast((d.error && d.error.message_ar) || 'فشل', 'error');
 }
 
 // ── LOGOUT (overrides the redirect version in app.js) ──
@@ -813,7 +842,6 @@ async function logout() {
   document.getElementById('loginView').classList.remove('hidden');
   document.getElementById('loginCard').classList.remove('hidden');
   document.getElementById('waitingCard').classList.add('hidden');
-  loadAccounts();
   document.getElementById('username').value = '';
   document.getElementById('password').value = '';
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -844,7 +872,6 @@ if (localStorage.getItem('alnathim_token')) {
   enterApp();
 } else {
   document.getElementById('loginView').classList.remove('hidden');
-  loadAccounts();
 }
 // ── REMINDERS ──────────────────────────────────────────────
 function loadReminders() {
@@ -1592,16 +1619,10 @@ function openEditCustSheet() {
   document.getElementById('ecIp').value = c.ip_address || '';
   document.getElementById('ecDevice').value = c.device_type || '';
   document.getElementById('ecNotes').value = c.notes || '';
-  const feOpts = document.getElementById('ecFat');
-  if (feOpts) {
-    api('/cabinets').then(d => {
-      const cabs = (d.ok && d.data && d.data.items) || [];
-      window._cabinets = cabs;
-      feOpts.innerHTML = '<option value="">بدون كابينة</option>' + cabs.map(cb =>
-        '<option value="' + cb.id + '"' + (String(c.fat_id) === String(cb.id) ? ' selected' : '') + '>' + esc(cb.fat_number) + '</option>').join('');
-    });
-    document.getElementById('ecPort').value = c.port_number || '';
-  }
+  const ecCab = document.getElementById('ecCabinet');
+  if (ecCab) ecCab.value = c.cabinet_number || '';
+  const ecPort = document.getElementById('ecPort');
+  if (ecPort) ecPort.value = c.port_number || '';
   fillPackagesSelect(document.getElementById('ecPkg'), c.package_name || '');
   openSheet('editCustSheet');
 }
@@ -1622,7 +1643,7 @@ async function saveCustEdit() {
     ip_address: document.getElementById('ecIp').value.trim(),
     device_type: document.getElementById('ecDevice').value.trim(),
     notes: document.getElementById('ecNotes').value.trim(),
-    fat_id: document.getElementById('ecFat') ? (document.getElementById('ecFat').value || null) : null,
+    cabinet_number: document.getElementById('ecCabinet') ? document.getElementById('ecCabinet').value.trim() : '',
     port_number: document.getElementById('ecPort') ? (document.getElementById('ecPort').value || null) : null
   }, 'PUT');
   if (d.ok) { closeSheet('editCustSheet'); showToast('تم الحفظ ✓'); loadCustomer(); }

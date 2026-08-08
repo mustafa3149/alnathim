@@ -312,24 +312,33 @@ def _port_values(data):
     return fat_id, port
 
 
-def _port_validation_error(data, exclude_customer_id=None):
-    """Validate a FAT/port assignment from request data.
+def _cabinet_port_error(data, exclude_customer_id=None):
+    """Validate cabinet_number/port_number from request data.
 
     Returns an Arabic error message string, or None when valid (or when no
-    assignment was sent). Prevents 'port 20 on a 16-port splitter'.
+    assignment was sent). The cabinet and port are just numbers — the operator
+    types or picks them; the only rule is no duplicate (cabinet, port) in the
+    same account.
     """
-    fat_id = data.get("fat_id")
-    port = data.get("port_number")
-    if fat_id is None and port is None:
+    cabinet_number = data.get("cabinet_number")
+    port_number = data.get("port_number")
+    if cabinet_number in (None, "") and port_number in (None, ""):
         return None
-    if fat_id is None or port is None:
-        return "يجب تحديد الكابينة والمنفذ معاً"
-    try:
-        fat_id = int(fat_id)
-    except (ValueError, TypeError):
-        return "رقم الكابينة غير صالح"
-    ok, err = db.validate_port(fat_id, port, exclude_customer_id=exclude_customer_id)
+    ok, err = db.validate_cabinet_port(
+        cabinet_number, port_number, exclude_customer_id=exclude_customer_id
+    )
     return None if ok else err
+
+
+def _cabinet_port_values(data):
+    """Extract (cabinet_number, port_number) from request data."""
+    cabinet_number = str(data.get("cabinet_number") or "").strip()
+    port_number = data.get("port_number")
+    try:
+        port_number = int(port_number) if port_number not in (None, "") else None
+    except (ValueError, TypeError):
+        port_number = None
+    return cabinet_number, port_number
 
 
 # ── AUTH ─────────────────────────────────────────────────────
@@ -341,15 +350,10 @@ def mobile_login():
         return _err("rate_limited", "محاولات كثيرة — حاول بعد قليل", 429)
 
     data = request.get_json() or {}
-    account_id = data.get("account_id")
     username = str(data.get("username", "")).strip()
     password = data.get("password", "")
-    if not account_id or not username or not password:
-        return _err("invalid_input", "اختر الشركة وأدخل اسم المستخدم وكلمة المرور", 400)
-    try:
-        account_id = int(account_id)
-    except (ValueError, TypeError):
-        return _err("invalid_input", "الشركة غير صحيحة", 400)
+    if not username or not password:
+        return _err("invalid_input", "أدخل اسم المستخدم وكلمة المرور", 400)
 
     user = db.get_user_by_username(username)
 
@@ -360,15 +364,13 @@ def mobile_login():
     else:
         password_ok = db.verify_password(user, password)
 
-    # The user must belong to the chosen company.
-    if password_ok and int(user["account_id"] or 0) != account_id:
-        password_ok = False
-
-    # Company status gate.
+    # Company status / owner-approval gate.
     if password_ok:
-        account = db.get_account(account_id)
+        account = db.get_account(user["account_id"]) if user["account_id"] else None
         if not account or str(account["status"] or "active") == "suspended":
             return _err("suspended", "هذه الشركة موقوفة — راجع إدارة النظام", 403)
+        if (account["pending"] or 0) == 1:
+            return _err("pending", "شركتك بانتظار موافقة المدير الرئيسي — حاول لاحقاً", 403)
 
     # Failed-login lockout (mirrors auth.py).
     if not password_ok:
@@ -476,8 +478,58 @@ def mobile_register_company():
     )
     return _ok({
         "account_id": result["account_id"],
-        "message_ar": f"تم إنشاء شركة {company_name} — سجل دخولك الآن",
+        "message_ar": f"تم تسجيل شركة {company_name} — بانتظار موافقة المدير الرئيسي",
     })
+
+
+def _is_owner_admin():
+    """Only the main account (id 1) admin manages the company registry."""
+    u = getattr(g, "mobile_user", None)
+    return bool(u and u["role"] == "admin" and (u["account_id"] or 0) == 1)
+
+
+@mobile_bp.route("/accounts/manage")
+@mobile_login_required
+def mobile_accounts_manage():
+    """GET /accounts/manage — all companies + approval state (owner admin only)."""
+    if not _is_owner_admin():
+        return _err("forbidden", "هذه العملية تتطلب صلاحيات المدير الرئيسي", 403)
+    items = []
+    for a in db.list_accounts():
+        users = db.list_account_users(a["id"]) if a["id"] else []
+        items.append({
+            "id": a["id"],
+            "name": a["name"],
+            "phone": a["phone"] or "",
+            "status": a["status"] or "active",
+            "pending": bool(a["pending"]),
+            "users": [u["username"] for u in users],
+        })
+    return _ok({"items": items})
+
+
+@mobile_bp.route("/accounts/<int:account_id>/status", methods=["PUT"])
+@mobile_login_required
+def mobile_account_set_status(account_id):
+    """PUT /accounts/{id}/status — approve / suspend a company (owner admin only).
+
+    Body: {"pending": true|false} and/or {"status": "active"|"suspended"}.
+    """
+    if not _is_owner_admin():
+        return _err("forbidden", "هذه العملية تتطلب صلاحيات المدير الرئيسي", 403)
+    if account_id == 1:
+        return _err("invalid_input", "لا يمكنك تعديل حسابك الرئيسي", 400)
+    data = request.get_json() or {}
+    account = db.get_account(account_id)
+    if not account:
+        return _err("not_found", "الشركة غير موجودة", 404)
+    if data.get("pending") is not None:
+        db.set_account_pending(account_id, bool(data["pending"]))
+    if data.get("status") in ("active", "suspended"):
+        db.set_account_status(account_id, data["status"])
+    _audit("تغيير حالة شركة", "account", account_id,
+           f"تم تحديث شركة {account['name']}")
+    return _ok({"account_id": account_id, "approved": True})
 def mobile_register():
     """POST /auth/register → create an account (mirrors register.html).
 
@@ -778,10 +830,10 @@ def mobile_customer_create():
     if db.get_customer_by_name(name):
         return _err("duplicate", "يوجد مشترك بنفس الاسم", 400)
 
-    port_err = _port_validation_error(data)
+    port_err = _cabinet_port_error(data)
     if port_err:
         return _err("invalid_port", port_err, 400)
-    fat_id, port_number = _port_values(data)
+    cabinet_number, port_number = _cabinet_port_values(data)
 
     int_price = _to_int(data.get("package_price"))
     months = max(1, _to_int(data.get("duration_months"), 1) or 1)
@@ -810,8 +862,9 @@ def mobile_customer_create():
             status="active",
             previous_debt=previous_debt,
             notes=str(data.get("notes", "")).strip(),
-            fat_id=fat_id,
+            fat_id=None,
             port_number=port_number,
+            cabinet_number=cabinet_number,
         )
     except Exception as e:
         log.error("Mobile customer add failed: %s", e)
@@ -848,10 +901,10 @@ def mobile_customer_update(customer_id):
     if not customer:
         return _err("not_found", "المشترك غير موجود", 404)
 
-    port_err = _port_validation_error(data, exclude_customer_id=customer_id)
+    port_err = _cabinet_port_error(data, exclude_customer_id=customer_id)
     if port_err:
         return _err("invalid_port", port_err, 400)
-    fat_id, port_number = _port_values(data)
+    cabinet_number, port_number = _cabinet_port_values(data)
 
     int_price = _to_int(data.get("package_price"))
     package_id = _resolve_package_id(str(data.get("package_name", "")).strip())
@@ -871,8 +924,9 @@ def mobile_customer_update(customer_id):
         device_type=str(data.get("device_type", "")).strip(),
         package_id=package_id,
         status=customer["subscription_status"],
-        fat_id=fat_id,
+        fat_id=None,
         port_number=port_number,
+        cabinet_number=cabinet_number,
     )
     # Keep legacy package fields on the customer's invoices consistent.
     db.update_customer_legacy_fields(

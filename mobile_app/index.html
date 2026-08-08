@@ -63,12 +63,8 @@
       <div id="errorBox" class="exe-error"></div>
       <div id="loginCard" class="exe-card">
         <div class="exe-space">
-          <label class="exe-label">الشركة</label>
-          <select id="accountId" class="exe-input" onchange="onAccountChange()"><option value="">جارِ تحميل الشركات...</option></select>
-        </div>
-        <div class="exe-space">
-          <label class="exe-label">المستخدم</label>
-          <select id="username" class="exe-input" onchange="document.getElementById('password').focus()"><option value="">اختر الشركة أولاً...</option></select>
+          <label class="exe-label">اسم المستخدم</label>
+          <input type="text" id="username" dir="ltr" placeholder="اسم المستخدم" class="exe-input" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
         <div class="exe-space">
           <label class="exe-label">كلمة المرور</label>
@@ -110,6 +106,7 @@
       <div class="exe-space"><label class="exe-label">رقم الهاتف (اختياري)</label><input type="text" id="rPhone" class="exe-input" dir="ltr" placeholder="07xxxxxxxxx"></div>
       <div class="exe-space"><label class="exe-label">كلمة المرور *</label><input type="password" id="rPassword" class="exe-input" dir="ltr" placeholder="••••••••"></div>
       <button class="exe-btn" id="regBtn" onclick="doRegister()">إنشاء الشركة</button>
+      <div style="font-size:11px;color:#94a3b8;margin-top:10px;">بعد التسجيل تبقى شركتك بانتظار موافقة المدير الرئيسي — لا يمكن الدخول قبلها.</div>
       <p class="exe-link">لديك شركة؟ <a href="#" onclick="closeSheet('regSheet');return false;" style="color:#6366f1;">تسجيل الدخول</a></p>
     </div>
   </div>
@@ -226,14 +223,11 @@
           <a href="#" onclick="goTo('/view/expenses');return false;" class="menu-row"><span class="mi">💸</span><div class="menu-text"><div class="menu-title">المصاريف</div><div class="menu-sub">مصاريف الشهر</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/tickets');return false;" class="menu-row"><span class="mi">🎫</span><div class="menu-text"><div class="menu-title">التذاكر</div><div class="menu-sub">طلبات الصيانة</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/reminders');return false;" class="menu-row"><span class="mi">⏰</span><div class="menu-text"><div class="menu-title">التذكيرات</div><div class="menu-sub">ديون ومنتهيون</div></div><span class="menu-arrow">‹</span></a>
-          <a href="#" onclick="goTo('/view/cabinets');return false;" class="menu-row"><span class="mi">📟</span><div class="menu-text"><div class="menu-title">الكابينات (FAT)</div><div class="menu-sub">المنافذ الضوئية ومن يشغلها</div></div><span class="menu-arrow">‹</span></a>
-          <a href="#" onclick="goTo('/view/network');return false;" class="menu-row"><span class="mi">📡</span><div class="menu-text"><div class="menu-title">الشبكة</div><div class="menu-sub">لوحة الإشارة وفحص الاتصال</div></div><span class="menu-arrow">‹</span></a>
         </div>
 
         <div class="section-label admin-only">إدارة المدير</div>
         <div class="menu-list admin-only">
-          <a href="#" onclick="goTo('/view/fatentry');return false;" class="menu-row"><span class="mi">🎯</span><div class="menu-text"><div class="menu-title">إدخال المنافذ</div><div class="menu-sub">تعيين الكابينة والمنفذ لكل مشترك</div></div><span class="menu-arrow">‹</span></a>
-          <a href="#" onclick="goTo('/view/tower');return false;" class="menu-row"><span class="mi">🏗️</span><div class="menu-text"><div class="menu-title">البرج</div><div class="menu-sub">MikroTik / OLT / SNMP</div></div><span class="menu-arrow">‹</span></a>
+<a href="#" onclick="goTo('/view/accounts');return false;" class="menu-row owner-only"><span class="mi">🏢</span><div class="menu-text"><div class="menu-title">الشركات</div><div class="menu-sub">موافقة الشركات وإدارتها</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/generator');return false;" class="menu-row"><span class="mi">🏢</span><div class="menu-text"><div class="menu-title">بيانات الشركة</div><div class="menu-sub">الاسم والهاتف والعنوان</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/team');return false;" class="menu-row"><span class="mi">👥</span><div class="menu-text"><div class="menu-title">الفريق</div><div class="menu-sub">المستخدمين والصلاحيات</div></div><span class="menu-arrow">‹</span></a>
           <a href="#" onclick="goTo('/view/audit');return false;" class="menu-row"><span class="mi">📜</span><div class="menu-text"><div class="menu-title">سجل التدقيق</div><div class="menu-sub">آخر الإجراءات</div></div><span class="menu-arrow">‹</span></a>
@@ -314,7 +308,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         <span>الديون</span>
       </a>
-      <a href="#" data-nav="report">📊<span>التقرير</span></a>
+      <a href="#" data-nav="report">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-6"/></svg>
+        <span>التقرير</span>
+      </a>
       <a href="#" data-nav="more">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
         <span>المزيد</span>
@@ -388,31 +385,15 @@
 
 
 
-    <!-- Cabinets (FAT) -->
-    <section id="view-cabinets" class="view">
-      <div class="container">
-        <div class="page-title">الكابينات (FAT)</div>
-        <div class="page-sub">المنافذ الضوئية ومن يشغلها — أدخل رقم الكابينة وعدد المنافذ</div>
-        <div id="cabinetsBox" style="margin-top:14px;"></div>
-        <button class="fab admin-only" onclick="openCabinetSheet(null)">+</button>
-      </div>
-    </section>
 
-    <!-- Fast FAT/Port entry (admin) -->
-    <section id="view-fatentry" class="view">
+
+
+    <!-- Company management (owner admin) -->
+    <section id="view-accounts" class="view">
       <div class="container">
-        <div class="page-title">إدخال المنافذ</div>
-        <div class="page-sub">تعيين الكابينة والمنفذ لكل مشترك — تنقل بالأسهم وEnter للحفظ</div>
-        <div class="chips" style="margin-top:10px;" id="feChips">
-          <button class="chip active" data-fef="unassigned" onclick="feFilter(this,'unassigned')">بدون منفذ</button>
-          <button class="chip" data-fef="all" onclick="feFilter(this,'all')">الكل</button>
-        </div>
-        <div id="feProgress" class="card card-pad" style="margin-top:10px;font-size:13px;color:var(--muted);"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn" style="flex:1;" onclick="feAutoFill()">⚡ توزيع تلقائي</button>
-          <button class="btn-primary" style="flex:1;" onclick="feSaveAll()">حفظ الكل</button>
-        </div>
-        <div id="fatEntryBox" style="margin-top:12px;"></div>
+        <div class="page-title">الشركات</div>
+        <div class="page-sub">الموافقة على الشركات الجديدة وإدارتها</div>
+        <div id="accountsBox" style="margin-top:14px;"></div>
       </div>
     </section>
 
@@ -452,53 +433,7 @@
       </div>
     </section>
 
-    <!-- Network -->
-    <section id="view-network" class="view">
-      <div class="container">
-        <div class="page-title">الشبكة</div>
-        <div class="page-sub">لوحة الإشارة وفحص الاتصال</div>
-        <div class="chips" style="margin-top:10px;" id="netTabs">
-          <button class="chip active" data-ntab="signal" onclick="showNetworkTab('signal')">الإشارة</button>
-          <button class="chip" data-ntab="ping" onclick="showNetworkTab('ping')">فحص</button>
-        </div>
-        <div id="netSignal">
-          <div id="signalUpdated" style="font-size:11px;color:var(--muted);margin-top:10px;"></div>
-          <div id="signalList" style="margin-top:8px;"></div>
-        </div>
-        <div id="netPing" class="hidden">
-          <div class="field" style="margin-top:12px;"><label>عنوان IP</label>
-            <input type="text" id="pingHost" class="input" dir="ltr" placeholder="8.8.8.8"></div>
-          <button class="btn-primary" onclick="doPing()">فحص الاتصال</button>
-          <div id="pingResult" style="margin-top:12px;"></div>
-        </div>
-      </div>
-    </section>
 
-    <!-- Tower -->
-    <section id="view-tower" class="view">
-      <div class="container">
-        <div class="page-title">البرج</div>
-        <div class="page-sub">MikroTik / OLT / SNMP</div>
-        <div class="card card-pad" style="margin-top:14px;">
-          <div class="field"><label>عنوان MikroTik</label><input type="text" id="twHost" class="input" dir="ltr"></div>
-          <div class="field"><label>المنفذ</label><input type="number" id="twPort" class="input" value="8728"></div>
-          <div class="field"><label>اسم المستخدم</label><input type="text" id="twUser" class="input" dir="ltr"></div>
-          <div class="field"><label>كلمة المرور</label><input type="password" id="twPass" class="input" dir="ltr"></div>
-          <div class="field"><label>عنوان OLT</label><input type="text" id="twOltIp" class="input" dir="ltr"></div>
-          <div class="field"><label>SNMP Community للـ OLT</label><input type="text" id="twOltCommunity" class="input" dir="ltr"></div>
-          <div class="field"><label>SNMP Community</label><input type="text" id="twCommunity" class="input" dir="ltr" value="public"></div>
-          <div class="field"><label>منفذ SNMP</label><input type="number" id="twSnmpPort" class="input" value="161"></div>
-          <div class="field"><label>OID ONU RX</label><input type="text" id="twOidRx" class="input" dir="ltr"></div>
-          <div class="field"><label>OID ONU TX</label><input type="text" id="twOidTx" class="input" dir="ltr"></div>
-          <div class="field"><label>OID إشارة Ubnt</label><input type="text" id="twOidUbntSignal" class="input" dir="ltr"></div>
-          <div class="field"><label>OID CCQ Ubnt</label><input type="text" id="twOidUbntCcq" class="input" dir="ltr"></div>
-          <div class="field"><label>OID إشارة MikroTik</label><input type="text" id="twOidMikrotik" class="input" dir="ltr"></div>
-          <button class="btn-primary" onclick="saveTower()">حفظ الإعدادات</button>
-          <button class="btn" style="margin-top:10px;" onclick="testTower()">اختبار الاتصال</button>
-          <div id="towerMsg" style="margin-top:10px;"></div>
-        </div>
-      </div>
-    </section>
 
     <!-- Backup -->
     <section id="view-backup" class="view">
@@ -525,6 +460,8 @@
       <div class="field"><label>الباقة</label><select id="cPackage" class="input" onchange="fillPriceFromPackage()"></select></div>
       <div class="field"><label>سعر الباقة (د.ع)</label><input type="number" id="cPrice" class="input" value="25000" inputmode="numeric"></div>
       <div class="field"><label>مدة الاشتراك (أشهر)</label><input type="number" id="cMonths" class="input" value="1" min="1" inputmode="numeric"></div>
+      <div class="field"><label>رقم الكابينة (FAT)</label><input type="text" id="cCabinet" class="input" placeholder="مثال: 12" inputmode="numeric"></div>
+      <div class="field"><label>رقم المنفذ</label><input type="number" id="cPort" class="input" min="1" inputmode="numeric" placeholder="1 - 16"></div>
       <div class="field"><label>دين سابق (د.ع)</label><input type="number" id="cDebt" class="input" value="0" inputmode="numeric"></div>
       <div class="field"><label>العنوان</label><input type="text" id="cAddress" class="input"></div>
       <div class="field"><label>المنطقة</label><input type="text" id="cRegion" class="input"></div>
@@ -645,7 +582,7 @@
       <div class="field"><label>العنوان</label><input type="text" id="ecAddress" class="input"></div>
       <div class="field"><label>المنطقة</label><input type="text" id="ecRegion" class="input"></div>
       <div class="field"><label>ملاحظات</label><input type="text" id="ecNotes" class="input"></div>
-      <div class="field"><label>الكابينة (FAT)</label><select id="ecFat" class="input"><option value="">بدون كابينة</option></select></div>
+      <div class="field"><label>رقم الكابينة (FAT)</label><input type="text" id="ecCabinet" class="input" placeholder="مثال: 12" inputmode="numeric"></div>
       <div class="field"><label>رقم المنفذ</label><input type="number" id="ecPort" class="input" min="1" max="64" inputmode="numeric" placeholder="1 - 16"></div>
 
       <button class="btn-primary" onclick="saveCustEdit()">حفظ التعديلات</button>

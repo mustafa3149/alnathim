@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     address    TEXT DEFAULT '',
     status     TEXT NOT NULL DEFAULT 'active'
                CHECK(status IN ('active','suspended')),
+    pending    INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now','localtime'))
 );
 
@@ -266,6 +267,9 @@ CREATE TABLE IF NOT EXISTS customers (
     renewal_date       TEXT,
     previous_debt      INTEGER NOT NULL DEFAULT 0,
     notes              TEXT DEFAULT '',
+    fat_id             INTEGER DEFAULT NULL,
+    port_number        INTEGER DEFAULT NULL,
+    cabinet_number     TEXT DEFAULT '',
     account_id         INTEGER DEFAULT NULL,
     created_at         TEXT DEFAULT (datetime('now','localtime'))
 );
@@ -930,6 +934,20 @@ def _ensure_account_columns():
                     f"UPDATE {table} SET account_id = ? WHERE account_id IS NULL",
                     (default_account_id,),
                 )
+        # accounts.pending (approval gate) + customers.cabinet_number
+        acol = _table_cols("accounts")
+        if acol and "pending" not in acol:
+            db.execute("ALTER TABLE accounts ADD COLUMN pending INTEGER NOT NULL DEFAULT 0")
+        ccol = _table_cols("customers")
+        if ccol and "cabinet_number" not in ccol:
+            db.execute("ALTER TABLE customers ADD COLUMN cabinet_number TEXT DEFAULT ''")
+        # backfill cabinet_number from the old cabinets join (fat_number)
+        if ccol and "cabinet_number" in ccol and "fat_id" in ccol:
+            db.execute(
+                "UPDATE customers SET cabinet_number = "
+                "(SELECT cb.fat_number FROM cabinets cb WHERE cb.id = customers.fat_id) "
+                "WHERE cabinet_number = '' AND fat_id IS NOT NULL"
+            )
         db.commit()
     finally:
         db.close()
@@ -968,25 +986,39 @@ def list_account_users(account_id):
     )
 
 
-def create_account(name, phone="", address=""):
+def create_account(name, phone="", address="", pending=0):
     """Create a company account. Returns the new id."""
     return _insert(
-        "INSERT INTO accounts (name, phone, address, status) VALUES (?, ?, ?, 'active')",
-        (name, phone, address),
+        "INSERT INTO accounts (name, phone, address, status, pending) VALUES (?, ?, ?, 'active', ?)",
+        (name, phone, address, 1 if pending else 0),
     )
 
 
 def register_company(name, full_name, username, password, phone=""):
-    """Create a company + its first admin (first registrant becomes manager).
+    """Create a company + its first admin, WAITING for the owner's approval.
 
-    Returns {"account_id", "user_id", "account_name"}. Raises on duplicate.
+    The account is created 'pending' — nobody from this company can log in
+    until the main admin approves it (PUT /accounts/{id}/status). The first
+    registrant becomes the company's manager once approved.
     """
-    account_id = create_account(name, phone=phone)
+    account_id = create_account(name, phone=phone, pending=1)
     user_id = create_user(
         username, password, role="admin",
         full_name=full_name, phone=phone, account_id=account_id,
     )
     return {"account_id": account_id, "user_id": user_id, "account_name": name}
+
+
+def set_account_pending(account_id, pending):
+    """Set the approval flag of an account (1 = awaiting owner approval)."""
+    _execute("UPDATE accounts SET pending = ? WHERE id = ?", (1 if pending else 0, account_id))
+
+
+def set_account_status(account_id, status):
+    """Activate / suspend an account."""
+    if status in ("active", "suspended"):
+        _execute("UPDATE accounts SET status = ? WHERE id = ?", (status, account_id))
+
 
 def seed_default_packages():
     """Insert the standard ISP packages if the table is empty (idempotent)."""
@@ -1566,11 +1598,9 @@ def _customer_select():
         "c.status AS subscription_status, c.is_active, c.subscription_date, "
         "c.renewal_date, c.previous_debt, c.notes, c.created_at, c.updated_at, "
         "c.owner_user_id, c.fat_id, c.port_number, "
-        "cb.fat_number AS cabinet_number, cb.location AS cabinet_location, "
-        "cb.port_count AS cabinet_ports, "
+        "c.cabinet_number AS cabinet_number, '' AS cabinet_location, 0 AS cabinet_ports, "
         "p.name AS package_name, p.price AS package_price "
         "FROM customers c LEFT JOIN packages p ON p.id = c.package_id "
-        "LEFT JOIN cabinets cb ON cb.id = c.fat_id "
     )
 
 
@@ -1694,21 +1724,21 @@ def add_customer(full_name, phone="", phone2="", whatsapp_phone="", address="",
                  mikrotik_password="", nano_ip="", device_type="",
                  subscription_date=None, renewal_date=None, status="active",
                  previous_debt=0, notes="", owner_user_id=None,
-                 fat_id=None, port_number=None):
+                 fat_id=None, port_number=None, cabinet_number=""):
     """Insert a customer. Returns the new id."""
     owner_id = owner_user_id if owner_user_id is not None else current_owner()
     return _insert(
         "INSERT INTO customers (updated_at, full_name, phone, phone2, whatsapp_phone, address, "
         "region, package_id, mikrotik_username, mikrotik_password, nano_ip, "
         "device_type, subscription_date, renewal_date, status, is_active, "
-        "previous_debt, notes, owner_user_id, owner_id, fat_id, port_number, account_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "previous_debt, notes, owner_user_id, owner_id, fat_id, port_number, cabinet_number, account_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             now_str(), full_name, phone, phone2, whatsapp_phone, address,
             region, package_id, mikrotik_username, mikrotik_password, nano_ip,
             device_type, subscription_date or now_str(), renewal_date, status,
             1 if status in ("active",) else 0, previous_debt or 0, notes,
-            owner_user_id, owner_id, fat_id, port_number, current_account(),
+            owner_user_id, owner_id, fat_id, port_number, cabinet_number, current_account(),
         ),
     )
 
@@ -1740,6 +1770,7 @@ def update_customer(customer_id, **fields):
         "owner_user_id": "owner_user_id",
         "fat_id": "fat_id",
         "port_number": "port_number",
+        "cabinet_number": "cabinet_number",
     }
     updates = {}
     for key, value in fields.items():
@@ -1962,6 +1993,37 @@ def next_free_port(cabinet_id):
         if port not in used:
             return port
     return None
+
+
+def validate_cabinet_port(cabinet_number, port_number, exclude_customer_id=None):
+    """Validate a cabinet-number / port assignment (simple, account-scoped).
+
+    The cabinet is just a number the operator types or picks; the only rule is
+    that the same (cabinet, port) must not be assigned to two customers of the
+    same account. Returns (ok: bool, error: str|None).
+    """
+    cabinet_number = str(cabinet_number or "").strip()
+    if not cabinet_number and port_number is None:
+        return True, None  # no assignment yet
+    if not cabinet_number or port_number is None or str(port_number).strip() == "":
+        return False, "أدخل رقم الكابينة والمنفذ معاً"
+    try:
+        port = int(port_number)
+    except (ValueError, TypeError):
+        return False, "رقم المنفذ غير صالح"
+    if port < 1:
+        return False, "رقم المنفذ غير صالح"
+    owner_where, owner_params = _owner_filter("account_id")
+    sql = ("SELECT id FROM customers WHERE cabinet_number = ? COLLATE NOCASE "
+           "AND port_number = ? AND id != ? ")
+    params = [cabinet_number, port, exclude_customer_id or -1]
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params += list(owner_params)
+    row = _fetchone(sql, tuple(params))
+    if row:
+        return False, f"المنفذ {port} في الكابينة {cabinet_number} محجوز مسبقاً"
+    return True, None
 
 
 def bulk_import_customers(rows):
