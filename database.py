@@ -977,13 +977,13 @@ def get_account_by_name(name):
     return _fetchone("SELECT * FROM accounts WHERE name = ? COLLATE NOCASE", (name,))
 
 
-def list_account_users(account_id):
-    """Active usernames of an account (used by the login picker)."""
-    return _fetchall(
-        "SELECT username, full_name FROM users "
-        "WHERE account_id = ? AND status = 'active' ORDER BY full_name",
-        (account_id,),
-    )
+def list_account_users(account_id, only_active=True):
+    """Usernames of an account. only_active=True filters out pending users
+    (used by the login picker); False returns everyone (owner management)."""
+    sql = "SELECT username, full_name, status FROM users WHERE account_id = ? "
+    if only_active:
+        sql += "AND status = 'active' "
+    return _fetchall(sql + "ORDER BY full_name", (account_id,))
 
 
 def create_account(name, phone="", address="", pending=0):
@@ -1003,15 +1003,25 @@ def register_company(name, full_name, username, password, phone=""):
     """
     account_id = create_account(name, phone=phone, pending=1)
     user_id = create_user(
-        username, password, role="admin",
+        username, password, role="admin", status="pending",
         full_name=full_name, phone=phone, account_id=account_id,
     )
     return {"account_id": account_id, "user_id": user_id, "account_name": name}
 
 
 def set_account_pending(account_id, pending):
-    """Set the approval flag of an account (1 = awaiting owner approval)."""
+    """Set the approval flag of an account (1 = awaiting owner approval).
+
+    When approving (pending -> 0) the account's pending users are activated
+    too, so they can finally log in.
+    """
     _execute("UPDATE accounts SET pending = ? WHERE id = ?", (1 if pending else 0, account_id))
+    if not pending:
+        _execute(
+            "UPDATE users SET status = 'active' "
+            "WHERE account_id = ? AND status = 'pending'",
+            (account_id,),
+        )
 
 
 def set_account_status(account_id, status):
@@ -1116,17 +1126,19 @@ def get_user_by_id(user_id):
     return _fetchone("SELECT * FROM users WHERE id = ?", (user_id,))
 
 
-def create_user(username, password, role="agent", full_name="", phone="", account_id=None):
-    """Create a new active user. Raises sqlite3.IntegrityError on duplicate username.
+def create_user(username, password, role="agent", full_name="", phone="", account_id=None,
+                status="active"):
+    """Create a new user. Raises sqlite3.IntegrityError on duplicate username.
 
     account_id defaults to the current request account (None stays unassigned).
+    status: 'active' | 'pending' (pending blocks login until approved).
     """
     if account_id is None:
         account_id = current_account()
     return _insert(
         "INSERT INTO users (username, password_hash, role, full_name, phone, status, account_id) "
-        "VALUES (?, ?, ?, ?, ?, 'active', ?)",
-        (username, generate_password_hash(password), role, full_name, phone, account_id),
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (username, generate_password_hash(password), role, full_name, phone, status, account_id),
     )
 
 

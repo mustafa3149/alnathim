@@ -496,14 +496,17 @@ def mobile_accounts_manage():
         return _err("forbidden", "هذه العملية تتطلب صلاحيات المدير الرئيسي", 403)
     items = []
     for a in db.list_accounts():
-        users = db.list_account_users(a["id"]) if a["id"] else []
+        users = db.list_account_users(a["id"], only_active=False) if a["id"] else []
         items.append({
             "id": a["id"],
             "name": a["name"],
             "phone": a["phone"] or "",
             "status": a["status"] or "active",
             "pending": bool(a["pending"]),
-            "users": [u["username"] for u in users],
+            "users": [
+                {"username": u["username"], "pending": str(u["status"] or "active") == "pending"}
+                for u in users
+            ],
         })
     return _ok({"items": items})
 

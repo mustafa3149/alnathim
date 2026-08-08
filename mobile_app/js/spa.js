@@ -806,23 +806,34 @@ function loadAccountsManage() {
     const items = d.data.items || [];
     if (!items.length) { box.innerHTML = '<div class="empty"><div class="big">🏢</div>لا توجد شركات</div>'; return; }
     const pend = items.filter(a => a.pending);
+    const approved = items.filter(a => !a.pending && a.id !== 1);
+    const usersTxt = a => {
+      const n = (a.users || []).length;
+      const pendN = (a.users || []).filter(u => u.pending).length;
+      return n + ' مستخدم' + (pendN ? ' (' + pendN + ' معلق)' : '');
+    };
     box.innerHTML =
-      (pend.length ? '<div class="section-label">بانتظار الموافقة</div><div class="list-card">' + pend.map(a =>
-        '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
-        '<div class="row-sub">' + esc(a.phone || '') + ' · مستخدمون: ' + toArabicNum(a.users.length) + '</div></div>' +
-        '<div class="row-end"><button class="btn btn-sm" style="color:var(--active);" onclick="approveAccount(' + a.id + ',false)">موافقة</button></div></div>'
-      ).join('') + '</div>' : '<div class="card card-pad" style="color:var(--active);font-size:13px;">لا توجد طلبات معلقة ✅</div>') +
-      '<div class="section-label">الشركات المسجلة</div><div class="list-card">' + items.map(a =>
-        '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
-        '<div class="row-sub">' + (a.pending ? 'بانتظار الموافقة' : (a.status === 'suspended' ? 'موقوفة' : 'نشطة')) + ' · ' + toArabicNum(a.users.length) + ' مستخدم</div></div>' +
-        (a.id !== 1 ? '<div class="row-end"><button class="btn btn-sm" onclick="approveAccount(' + a.id + ',false)">تفعيل</button>' +
-          '<button class="btn btn-sm" style="color:var(--expired);margin-top:6px;" onclick="suspendAccount(' + a.id + ')">إيقاف</button></div>' : '<div class="row-end"><span class="badge badge-ok">الحساب الرئيسي</span></div>') +
-        '</div>').join('') + '</div>';
+      (pend.length
+        ? '<div class="section-label">⚠️ بانتظار موافقتك</div><div class="list-card">' + pend.map(a =>
+            '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
+            '<div class="row-sub">' + esc(a.phone || '') + ' · ' + usersTxt(a) + '</div></div>' +
+            '<div class="row-end"><button class="btn btn-sm" style="color:var(--active);" onclick="approveAccount(' + a.id + ')">✅ موافقة</button></div></div>'
+          ).join('') + '</div>'
+        : '<div class="card card-pad" style="color:var(--active);font-size:13px;">لا توجد طلبات معلقة ✅</div>') +
+      (approved.length
+        ? '<div class="section-label">الشركات النشطة</div><div class="list-card">' + approved.map(a =>
+            '<div class="row"><div class="row-main"><div class="row-title">' + esc(a.name) + '</div>' +
+            '<div class="row-sub">' + (a.status === 'suspended' ? 'موقوفة' : 'نشطة') + ' · ' + usersTxt(a) + '</div></div>' +
+            '<div class="row-end"><button class="btn btn-sm" style="color:var(--expired);" onclick="suspendAccount(' + a.id + ')">إيقاف</button></div></div>'
+          ).join('') + '</div>'
+        : '') +
+      '<div class="card card-pad" style="margin-top:14px;font-size:12px;color:var(--muted);">🏠 ' + esc((items.find(a => a.id === 1) || {}).name || 'الحساب الرئيسي') + ' — الحساب الرئيسي</div>';
   });
 }
-async function approveAccount(id, pending) {
+async function approveAccount(id) {
+  if (!confirm('موافقة على هذه الشركة؟ سيدخل مستخدموها فوراً.')) return;
   const d = await api('/accounts/' + id + '/status', { pending: false }, 'PUT');
-  if (d.ok) { showToast('تمت الموافقة على الشركة ✓'); loadAccountsManage(); }
+  if (d.ok) { showToast('تمت الموافقة — يمكنهم الدخول الآن ✓'); loadAccountsManage(); }
   else showToast((d.error && d.error.message_ar) || 'فشل', 'error');
 }
 async function suspendAccount(id) {
