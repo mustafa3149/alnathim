@@ -1,12 +1,12 @@
-// Runtime simulation: loads js/app.js + every page's inline script with a
-// minimal DOM mock. Asserts (a) every page LOADS without throwing, and
-// (b) the index.html login button performs the full flow.
+// Runtime simulation: loads js/app.js + js/spa.js (the SPA controller) with a
+// minimal DOM mock. Asserts (a) index.html LOADS without throwing, and
+// (b) the index.html login button performs the full flow (success + pending).
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const appJs = fs.readFileSync(path.join(__dirname, 'mobile_app', 'js', 'app.js'), 'utf8');
-const pages = fs.readdirSync(path.join(__dirname, 'mobile_app')).filter(f => f.endsWith('.html'));
+const spaJs = fs.readFileSync(path.join(__dirname, 'mobile_app', 'js', 'spa.js'), 'utf8');
 
 function makeEl(id) {
   return {
@@ -24,6 +24,7 @@ function makeSandbox(withToken) {
     querySelectorAll() { return []; },
     querySelector() { return makeEl('qs'); },
     createElement(t) { return makeEl(t + Math.random()); },
+    addEventListener() {},
     body: { appendChild() {}, style: {} }
   };
   const store = withToken ? { alnathim_token: 'T', alnathim_server: 'https://alnathim.onrender.com' } : {};
@@ -37,7 +38,7 @@ function makeSandbox(withToken) {
   const fetchMock = async () => ({ status: 200, json: async () => ({ ok: true, data: {} }) });
   const intervals = { n: 0 };
   const sb = {
-    window: { location: { pathname: '/index.html', href: '', replace(u) { this.href = u; } }, addEventListener() {}, onNativeResult() {} },
+    window: { location: { pathname: '/index.html', href: '', hash: '', replace(u) { this.href = u; } }, addEventListener() {}, onNativeResult() {} },
     document, localStorage: localStorageMock, fetch: fetchMock,
     console, setTimeout, clearTimeout,
     setInterval: (fn, ms) => { intervals.n++; return { _fake: true, fn, ms }; },
@@ -54,31 +55,27 @@ function makeSandbox(withToken) {
 let pass = 0, fail = 0;
 const check = (cond, msg) => { if (cond) { pass++; console.log('[OK  ] ' + msg); } else { fail++; console.log('[FAIL] ' + msg); } };
 
-// ── 1) Every page must LOAD without throwing (auth pages with a token) ──
-for (const page of pages) {
-  const html = fs.readFileSync(path.join(__dirname, 'mobile_app', page), 'utf8');
-  const inline = (html.match(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/) || [])[1] || '';
-  const isIndex = page === 'index.html';
-  const sb = makeSandbox(!isIndex); // non-index pages need a token for requireAuth()
-  let threw = null;
-  try {
-    vm.runInContext(appJs, sb);
-    vm.runInContext(inline, sb);
-  } catch (e) { threw = e; }
-  check(!threw, `${page} loads without runtime error` + (threw ? ` (${threw.message})` : ''));
-  check(!isIndex || html.includes('js/app.js'), 'index.html includes js/app.js');
-  check(html.includes('js/app.js'), `${page} includes js/app.js`);
-}
-
-// ── 2) index.html: pressing the login button completes the flow ──
+// ── 1) index.html must LOAD without throwing (SPA boots to the login view) ──
 const indexHtml = fs.readFileSync(path.join(__dirname, 'mobile_app', 'index.html'), 'utf8');
 const indexInline = (indexHtml.match(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/) || [])[1] || '';
+const sb0 = makeSandbox(false);
+let threw0 = null;
+try {
+  vm.runInContext(appJs, sb0);
+  vm.runInContext(spaJs, sb0);
+  vm.runInContext(indexInline, sb0);
+} catch (e) { threw0 = e; }
+check(!threw0, 'index.html loads without runtime error' + (threw0 ? ` (${threw0.message})` : ''));
+check(indexHtml.includes('js/app.js') && indexHtml.includes('js/spa.js'), 'index.html includes js/app.js + js/spa.js');
+
+// ── 2) index.html: pressing the login button completes the flow ──
 const sb = makeSandbox(false);
 let loginUrl = '';
 vm.runInContext(appJs, sb);
+vm.runInContext(spaJs, sb);
 vm.runInContext(indexInline, sb);
 sb.fetch = async (url, opts) => {
-  loginUrl = url;
+  if (!loginUrl) loginUrl = url; // the FIRST request is the login POST
   if (url.includes('/auth/me')) return { status: 200, json: async () => ({ ok: false, error: { code: 'unauthorized' } }) };
   return { status: 200, json: async () => ({ ok: true, data: { token: 'TEST_TOKEN', user: { username: 'admin' } } }) };
 };
@@ -91,11 +88,12 @@ sb.fetch = async (url, opts) => {
   await sb.doLogin();
   check(loginUrl === 'https://alnathim.onrender.com/api/mobile/v1/auth/login', 'login POST hits the mobile auth endpoint');
   check(sb.localStorage.getItem('alnathim_token') === 'TEST_TOKEN', 'token saved to localStorage');
-  check(sb.window.location.href === 'dashboard.html', 'redirects to dashboard');
+  check(sb.document.getElementById('loginView').classList.contains('hidden') === true, 'SPA enters the app instantly (no page redirect)');
 
   // ── 3) pending state → waiting card + polling starts ──
   const sb2 = makeSandbox(false);
   vm.runInContext(appJs, sb2);
+  vm.runInContext(spaJs, sb2);
   vm.runInContext(indexInline, sb2);
   sb2.fetch = async () => ({ status: 403, json: async () => ({ ok: false, error: { code: 'pending', message_ar: 'بانتظار موافقة المدير' } }) });
   await new Promise(r => setTimeout(r, 50));
@@ -109,4 +107,3 @@ sb.fetch = async (url, opts) => {
   console.log('\nRuntime page simulation: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();
-

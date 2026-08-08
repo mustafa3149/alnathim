@@ -138,6 +138,48 @@ async function warmupCache() {
       if (d.ok && d.data !== undefined) cacheSet(key, d.data);
     } catch (e) {}
   }));
+  // Background warm-up: pull every customer's profile + current invoice +
+  // history into the cache so tapping any customer opens INSTANTLY with all
+  // details already on the phone (date, package, invoice, history...).
+  warmCustomerDetails();
+}
+
+// True when a cache key exists and is newer than maxAgeMs.
+function cacheFresh(key, maxAgeMs) {
+  try {
+    const raw = localStorage.getItem('alnathim_cache_' + key);
+    if (!raw) return false;
+    const o = JSON.parse(raw);
+    return !!(o && o.ts && (Date.now() - o.ts) < maxAgeMs);
+  } catch (e) { return false; }
+}
+
+// Fetch all customer profiles + current invoice + history in the background
+// (limited concurrency, never blocks the UI) and cache them per customer.
+async function warmCustomerDetails() {
+  const custs = cacheGet('customers');
+  const items = (custs && (custs.items || custs)) || [];
+  if (!items.length) return;
+  const TTL = 10 * 60 * 1000; // 10 minutes
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const id = items[idx++].id;
+      if (!cacheFresh('customer_' + id, TTL)) {
+        const d = await api('/customers/' + id, null, null, 15000);
+        if (d.ok && d.data && d.data.customer) cacheSet('customer_' + id, d.data.customer);
+      }
+      if (!cacheFresh('cinv_' + id, TTL)) {
+        const inv = await api('/payments/current-invoice/' + id, null, null, 15000);
+        if (inv.ok && inv.data) cacheSet('cinv_' + id, inv.data);
+      }
+      if (!cacheFresh('chist_' + id, TTL)) {
+        const h = await api('/customers/' + id + '/history', null, null, 15000);
+        if (h.ok && h.data) cacheSet('chist_' + id, h.data);
+      }
+    }
+  }
+  await Promise.all([worker(), worker(), worker()]);
 }
 
 // ── Silent background load (Blood-style: never block the page) ──
@@ -229,26 +271,69 @@ function showToast(msg, type) {
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast';
-    t.style.cssText = 'position:fixed;top:calc(70px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-6px);z-index:99999;display:flex;align-items:center;gap:8px;max-width:88%;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;box-shadow:0 12px 32px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.16);transition:opacity .25s, transform .25s;opacity:0;pointer-events:none;';
     document.body.appendChild(t);
   }
   const err = type === 'error';
-  t.style.background = err ? 'linear-gradient(90deg,#b91c1c,#ef4444)' : 'linear-gradient(90deg,#15803d,#22c55e)';
-  t.style.color = '#fff';
-  t.innerHTML = '<span class="toast-dot"></span>' + esc(msg);
+  t.className = err ? 'toast toast-error' : 'toast toast-ok';
+  t.innerHTML = '<span class="toast-icon"></span><span>' + esc(msg) + '</span>';
   clearTimeout(t._timer);
-  t.style.opacity = '1';
-  t.style.transform = 'translateX(-50%) translateY(0)';
-  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3500);
+  t.classList.add('show');
+  t._timer = setTimeout(() => { t.classList.remove('show'); }, 3200);
 }
 
 // ── Bottom-sheet modal helpers ────────────────────────────────
+// Show/clear an inline error INSIDE a sheet (right in front of the user).
+function sheetError(id, msg) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.textContent = msg || '';
+    el.style.display = msg ? 'block' : 'none';
+  }
+}
+function clearSheetErrors() {
+  document.querySelectorAll('.sheet-error').forEach(e => {
+    e.textContent = ''; e.style.display = 'none';
+  });
+}
 function openSheet(id) {
   const el = document.getElementById(id);
-  if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  if (el) {
+    clearSheetErrors();
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    attachSheetDrag(el);
+  }
 }
 function closeSheet(id) {
   const el = document.getElementById(id);
   if (el) { el.classList.remove('open'); document.body.style.overflow = ''; }
+}
+// Swipe the sheet DOWN to dismiss (bottom-sheet UX) — the drag handle and the
+// whole sheet respond, so closing feels natural like native apps.
+let _sheetDrag = null;
+function attachSheetDrag(overlay) {
+  const sheet = overlay.querySelector('.sheet');
+  if (!sheet || sheet.dataset.drag) return;
+  sheet.dataset.drag = '1';
+  sheet.addEventListener('touchstart', e => {
+    if (sheet.scrollTop > 0) return; // don't hijack scrolling the sheet body
+    _sheetDrag = {id: overlay.id, startY: e.touches[0].clientY, dy: 0};
+  }, {passive: true});
+  sheet.addEventListener('touchmove', e => {
+    if (!_sheetDrag || _sheetDrag.id !== overlay.id) return;
+    _sheetDrag.dy = e.touches[0].clientY - _sheetDrag.startY;
+    if (_sheetDrag.dy > 0) {
+      sheet.style.transition = 'none';
+      sheet.style.transform = 'translateY(' + Math.min(_sheetDrag.dy, 180) + 'px)';
+    }
+  }, {passive: true});
+  sheet.addEventListener('touchend', () => {
+    if (!_sheetDrag || _sheetDrag.id !== overlay.id) return;
+    const dy = _sheetDrag.dy || 0;
+    _sheetDrag = null;
+    sheet.style.transition = '';
+    sheet.style.transform = '';
+    if (dy > 80) closeSheet(overlay.id);
+  }, {passive: true});
 }
 

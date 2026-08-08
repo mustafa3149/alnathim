@@ -2088,8 +2088,10 @@ def validate_cabinet_port(cabinet_number, port_number, exclude_customer_id=None)
     cabinet_number = str(cabinet_number or "").strip()
     if not cabinet_number and port_number is None:
         return True, None  # no assignment yet
+    # The operator enters whatever they want: cabinet alone, port alone, or both.
+    # The pair-uniqueness rule below only applies when BOTH are provided.
     if not cabinet_number or port_number is None or str(port_number).strip() == "":
-        return False, "أدخل رقم الكابينة والمنفذ معاً"
+        return True, None
     try:
         port = int(port_number)
     except (ValueError, TypeError):
@@ -2395,7 +2397,18 @@ def total_unpaid_debt():
 
 
 def debts_summary():
-    """This account's per-customer unpaid totals for the debts page."""
+    """This account's per-customer unpaid totals for the debts page.
+
+    Two groups are included:
+      1) customers with an existing unpaid invoice (their real debt), and
+      2) ACTIVE customers who have NO invoice for the current month — they
+         haven't paid this month yet, so they count as owing their package
+         price (a freshly registered customer appears here immediately).
+    """
+    now = datetime.now()
+    rows = []
+
+    # 1) Customers with unpaid invoices.
     owner_where, owner_params = _owner_filter("i.account_id")
     sql = (
         "SELECT c.id AS id, c.full_name AS name, c.phone, c.region, "
@@ -2409,8 +2422,30 @@ def debts_summary():
     if owner_where:
         sql += "AND " + owner_where + " "
     sql += "GROUP BY c.id HAVING SUM(i.total_amount - i.paid_amount) > 0 "
-    sql += "ORDER BY SUM(i.total_amount - i.paid_amount) DESC"
-    return _fetchall(sql, owner_params)
+    rows = list(_fetchall(sql, owner_params))
+
+    # 2) Active customers with no invoice for the current month = unpaid now.
+    mwhere, mparams = _owner_filter("c.account_id")
+    sql2 = (
+        "SELECT c.id AS id, c.full_name AS name, c.phone, c.region, "
+        "p.name AS package_name, p.price AS package_price, "
+        "COALESCE(p.price, 0) AS total_debt, 1 AS unpaid_count "
+        "FROM customers c LEFT JOIN packages p ON p.id = c.package_id "
+        "WHERE c.is_active = 1 AND c.status = 'active' "
+        "AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.customer_id = c.id "
+        "AND i.month = ? AND i.year = ?) "
+    )
+    params2 = [now.month, now.year]
+    if mwhere:
+        sql2 += "AND " + mwhere + " "
+        params2 += list(mparams)
+    seen = {r["id"] for r in rows}
+    for r in _fetchall(sql2, tuple(params2)):
+        if r["id"] not in seen:
+            rows.append(r)
+
+    rows.sort(key=lambda r: -(r["total_debt"] or 0))
+    return rows
 
 
 # ── Payments ────────────────────────────────────────────────

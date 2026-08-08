@@ -79,10 +79,7 @@ function applyCustomer(id) {
 }
 function goBack() { history.back(); }
 function closeSheets() {
-  ['addSheet', 'paySheet', 'renewSheet', 'regSheet'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('open');
-  });
+  document.querySelectorAll('.sheet-overlay.open').forEach(el => el.classList.remove('open'));
   document.body.style.overflow = '';
 }
 
@@ -105,7 +102,7 @@ function loadDashboard() {
       expBox.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"><circle cx="12" cy="12" r="9"/></svg></div>لا أحد ينتهي هذا الأسبوع</div>';
     } else {
       expBox.innerHTML = '<div class="list-card">' + exp.map(e =>
-        '<a class="row" href="customer-detail.html?id=' + e.id + '">' +
+        '<a class="row" href="#/customer/' + e.id + '">' +
           stateDot('expired') +
           '<div class="row-main">' +
             '<div class="row-title">' + esc(e.name) + '</div>' +
@@ -172,7 +169,7 @@ function renderFiltered() {
   box.innerHTML = '<div class="list-card">' + list.map(c => {
     const st = customerState(c);
     const debt = debtMap[c.id] || 0;
-    return '<a class="row" href="customer-detail.html?id=' + c.id + '">' +
+    return '<a class="row" href="#/customer/' + c.id + '">' +
       stateDot(st) +
       '<div class="row-main">' +
         '<div class="row-title">' + esc(c.name) + '</div>' +
@@ -209,7 +206,7 @@ async function loadCustomers() {
 
 async function addCustomer() {
   const name = document.getElementById('cName').value.trim();
-  if (!name) { showToast('أدخل اسم المشترك', 'error'); return; }
+  if (!name) { sheetError('addCustError', 'أدخل اسم المشترك'); return; }
   const body = {
     name: name,
     phone: document.getElementById('cPhone').value.trim(),
@@ -225,7 +222,7 @@ async function addCustomer() {
   };
   const btn = document.getElementById('addCustBtn');
   btn.textContent = 'جاري الحفظ...'; btn.disabled = true;
-  const d = await api('/customers', body);
+  const d = await api('/customers', body, null, 25000);
   btn.textContent = 'حفظ المشترك'; btn.disabled = false;
   if (d.ok) {
     closeSheet('addSheet');
@@ -237,7 +234,7 @@ async function addCustomer() {
     document.getElementById('cDebt').value = '0';
     loadCustomers();
   } else {
-    showToast((d.error && d.error.message_ar) || 'فشل الإضافة', 'error');
+    sheetError('addCustError', (d.error && d.error.message_ar) || 'فشل الإضافة');
   }
 }
 
@@ -328,7 +325,7 @@ function renderDebts(data) {
         '</div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">' +
-        '<a class="btn" style="text-decoration:none;font-size:13px;" href="customer-detail.html?id=' + x.customer_id + '">تسديد</a>' +
+        '<a class="btn" style="text-decoration:none;font-size:13px;" href="#/customer/' + x.customer_id + '">تسديد</a>' +
         (wa ? '<a class="wa-btn" style="margin-top:0;text-decoration:none;" href="https://wa.me/' + wa + '?text=' + encodeURIComponent('عزيزي ' + x.name + '، لديك مبلغ مستحق ' + (x.total_debt || 0) + ' د.ع — يرجى التسديد.') + '">واتساب تذكير</a>' : '') +
       '</div>' +
     '</div>';
@@ -496,64 +493,80 @@ function renderCustomer(c) {
 }
 
 function loadInvoice(c) {
-  api('/payments/current-invoice/' + c.id).then(d => {
-    const box = document.getElementById('invBox');
-    if (!box) return;
-    if (!d.ok || !d.data || !d.data.invoice) {
-      box.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:6px 0;">لا توجد فاتورة لهذا الشهر</div>' +
-        '<button class="btn-primary" style="margin-top:12px;" onclick="openPaySheet()">إنشاء وتسديد</button>';
-      currentInvoice = null;
-      return;
+  const cached = cacheGet('cinv_' + c.id);
+  if (cached) renderInvoiceInto(c, cached);
+  api('/payments/current-invoice/' + c.id, null, null, 20000).then(d => {
+    if (d.ok && d.data) {
+      cacheSet('cinv_' + c.id, d.data);
+      renderInvoiceInto(c, d.data);
     }
-    const inv = d.data.invoice;
-    currentInvoice = inv;
-    const remaining = (inv.total_amount || 0) - (inv.paid_amount || 0);
-    box.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-        '<div><div style="font-size:12px;color:var(--muted);">' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + ' · ' + esc(inv.package_name || '') + '</div>' +
-        '<div style="font-size:18px;font-weight:800;margin-top:2px;">' + formatDinar(inv.total_amount || 0) + '</div></div>' +
-        '<div style="text-align:left;"><div class="badge ' + (remaining <= 0 ? 'badge-ok' : 'badge-bad') + '">' + (remaining <= 0 ? 'مدفوعة ✓' : 'متبقي') + '</div>' +
-        (remaining > 0 ? '<div style="font-size:13px;font-weight:800;color:var(--expired);margin-top:4px;">' + formatDinar(remaining) + '</div>' : '') + '</div>' +
-      '</div>' +
-      (remaining > 0
-        ? '<button class="btn-primary" style="margin-top:14px;" onclick="openPaySheet()">تسديد (' + formatDinar(remaining) + ')</button>'
-        : '<div style="text-align:center;color:var(--active);font-size:13px;font-weight:700;margin-top:12px;">مكتملة ✓</div>') +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">' +
-        '<button class="btn" onclick="openRenewSheet()">تجديد</button>' +
-        '<button class="btn" onclick="toggleCustomer()">' + (c.is_active ? 'إيقاف' : 'تفعيل') + '</button>' +
-      '</div>';
   });
 }
 
+function renderInvoiceInto(c, data) {
+  const box = document.getElementById('invBox');
+  if (!box) return;
+  if (!data || !data.invoice) {
+    box.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:6px 0;">لا توجد فاتورة لهذا الشهر</div>' +
+      '<button class="btn-primary" style="margin-top:12px;" onclick="openPaySheet()">إنشاء وتسديد</button>';
+    currentInvoice = null;
+    return;
+  }
+  const inv = data.invoice;
+  currentInvoice = inv;
+  const remaining = (inv.total_amount || 0) - (inv.paid_amount || 0);
+  box.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+      '<div><div style="font-size:12px;color:var(--muted);">' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + ' · ' + esc(inv.package_name || '') + '</div>' +
+      '<div style="font-size:18px;font-weight:800;margin-top:2px;">' + formatDinar(inv.total_amount || 0) + '</div></div>' +
+      '<div style="text-align:left;"><div class="badge ' + (remaining <= 0 ? 'badge-ok' : 'badge-bad') + '">' + (remaining <= 0 ? 'مدفوعة ✓' : 'متبقي') + '</div>' +
+      (remaining > 0 ? '<div style="font-size:13px;font-weight:800;color:var(--expired);margin-top:4px;">' + formatDinar(remaining) + '</div>' : '') + '</div>' +
+    '</div>' +
+    (remaining > 0
+      ? '<button class="btn-primary" style="margin-top:14px;" onclick="openPaySheet()">تسديد (' + formatDinar(remaining) + ')</button>'
+      : '<div style="text-align:center;color:var(--active);font-size:13px;font-weight:700;margin-top:12px;">مكتملة ✓</div>') +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">' +
+      '<button class="btn" onclick="openRenewSheet()">تجديد</button>' +
+      '<button class="btn" onclick="toggleCustomer()">' + (c.is_active ? 'إيقاف' : 'تفعيل') + '</button>' +
+    '</div>';
+}
+
 function loadHistory(c) {
-  api('/customers/' + c.id + '/history').then(d => {
-    const box = document.getElementById('historyBox');
-    if (!box) return;
-    if (!d.ok) return;
-    const invs = d.data.invoices || [];
-    const pays = d.data.payments || [];
-    let h = '';
-    if (pays.length) {
-      h += '<div class="section-label" style="margin:8px 0;">الدفعات</div><div class="list-card">';
-      h += pays.map(p =>
-        '<div class="row"><div class="row-main"><div class="row-title">' + (p.customer_name ? esc(p.customer_name) : '') + '</div>' +
-        '<div class="row-sub">' + esc(p.payment_date || '') + ' · ' + esc(p.payment_method || '') + (p.collected_by_name ? ' · استلمه: ' + esc(p.collected_by_name) : '') + '</div></div>' +
-        '<div class="row-end" style="font-weight:800;color:var(--active);">' + formatDinar(p.amount || 0) + '</div></div>'
-      ).join('');
-      h += '</div>';
+  const cached = cacheGet('chist_' + c.id);
+  if (cached) renderHistoryInto(cached);
+  api('/customers/' + c.id + '/history', null, null, 20000).then(d => {
+    if (d.ok && d.data) {
+      cacheSet('chist_' + c.id, d.data);
+      renderHistoryInto(d.data);
     }
-    if (invs.length) {
-      h += '<div class="section-label" style="margin:8px 0;">الفواتير</div><div class="list-card">';
-      h += invs.map(inv =>
-        '<div class="row"><div class="row-main"><div class="row-title">' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + ' · ' + esc(inv.package_name || '') + '</div>' +
-        '<div class="row-sub">' + (inv.is_paid ? 'مدفوعة ✓' : 'متبقي ' + formatDinar((inv.total_amount || 0) - (inv.paid_amount || 0))) + '</div></div>' +
-        '<div class="row-end" style="font-weight:700;">' + formatDinar(inv.total_amount || 0) + '</div></div>'
-      ).join('');
-      h += '</div>';
-    }
-    if (!h) h = '<div class="empty">لا يوجد سجل بعد</div>';
-    box.innerHTML = h;
   });
+}
+
+function renderHistoryInto(data) {
+  const box = document.getElementById('historyBox');
+  if (!box) return;
+  const invs = (data && data.invoices) || [];
+  const pays = (data && data.payments) || [];
+  let h = '';
+  if (pays.length) {
+    h += '<div class="section-label" style="margin:8px 0;">الدفعات</div><div class="list-card">';
+    h += pays.map(p =>
+      '<div class="row"><div class="row-main"><div class="row-title">' + esc(p.payment_date || '') + ' · ' + esc(p.payment_method || '') + '</div></div>' +
+      '<div class="row-end" style="font-weight:800;color:var(--active);">' + formatDinar(p.amount || 0) + '</div></div>'
+    ).join('');
+    h += '</div>';
+  }
+  if (invs.length) {
+    h += '<div class="section-label" style="margin:8px 0;">الفواتير</div><div class="list-card">';
+    h += invs.map(inv =>
+      '<div class="row"><div class="row-main"><div class="row-title">' + toArabicNum(inv.month) + '/' + toArabicNum(inv.year) + ' · ' + esc(inv.package_name || '') + '</div>' +
+      '<div class="row-sub">' + (inv.is_paid ? 'مدفوعة ✓' : 'متبقي ' + formatDinar((inv.total_amount || 0) - (inv.paid_amount || 0))) + '</div></div>' +
+      '<div class="row-end" style="font-weight:700;">' + formatDinar(inv.total_amount || 0) + '</div></div>'
+    ).join('');
+    h += '</div>';
+  }
+  if (!h) h = '<div class="empty">لا يوجد سجل بعد</div>';
+  box.innerHTML = h;
 }
 
 // ── Quick pay ──
@@ -582,14 +595,16 @@ async function submitPay() {
   const d = await api('/quick-pay/' + currentCustomerId, {
     amount: amount,
     payment_method: document.getElementById('payMethod').value
-  });
+  }, null, 30000);
   btn.textContent = 'تأكيد الدفع'; btn.disabled = false;
   if (d.ok) {
     closeSheet('paySheet');
     showToast('تم استلام ' + formatDinar(d.data.amount) + ' ✓');
+    cacheClear('debts'); cacheClear('dashboard'); cacheClear('payments');
     loadCustomer();
   } else {
-    showToast((d.error && d.error.message_ar) || 'فشل الدفع', 'error');
+    // Show the error INSIDE the payment sheet — never in the background.
+    sheetError('payError', (d.error && d.error.message_ar) || 'فشل الدفع — حاول مجدداً');
   }
 }
 
@@ -609,21 +624,22 @@ async function submitRenew() {
   const btn = document.getElementById('renewBtn');
   btn.textContent = 'جاري التجديد...'; btn.disabled = true;
   if (newPkg && newPkg !== (cust && cust.package_name)) {
-    const u = await api('/customers/' + currentCustomerId, { package_name: newPkg, package_price: newPrice }, 'PUT');
+    const u = await api('/customers/' + currentCustomerId, { package_name: newPkg, package_price: newPrice }, 'PUT', 20000);
     if (!u.ok) {
       btn.textContent = 'تأكيد التجديد'; btn.disabled = false;
-      showToast((u.error && u.error.message_ar) || 'فشل تحديث الباقة', 'error');
+      sheetError('renewError', (u.error && u.error.message_ar) || 'فشل تحديث الباقة');
       return;
     }
   }
-  const d = await api('/customers/' + currentCustomerId + '/renew', {months: months});
+  const d = await api('/customers/' + currentCustomerId + '/renew', {months: months}, null, 30000);
   btn.textContent = 'تأكيد التجديد'; btn.disabled = false;
   if (d.ok) {
     closeSheet('renewSheet');
     showToast('تم التجديد ' + toArabicNum(months) + ' شهر ✓');
+    cacheClear('customers'); cacheClear('debts'); cacheClear('dashboard');
     loadCustomer();
   } else {
-    showToast((d.error && d.error.message_ar) || 'فشل التجديد', 'error');
+    sheetError('renewError', (d.error && d.error.message_ar) || 'فشل التجديد — حاول مجدداً');
   }
 }
 
@@ -931,7 +947,7 @@ function loadReminders() {
           '<div style="font-size:11px;font-weight:800;color:var(--expired);margin-top:2px;">دين ' + formatDinar(r.total_debt || 0) + '</div>' +
         '</div>' +
         '<div class="row-end">' +
-          '<a href="customer-detail.html?id=' + r.customer_id + '" class="btn btn-sm" style="text-decoration:none;">عرض</a>' +
+          '<a href="#/customer/' + r.customer_id + '" class="btn btn-sm" style="text-decoration:none;">عرض</a>' +
           (wa ? '<a href="https://wa.me/' + wa + '" class="btn btn-sm" style="text-decoration:none;margin-top:6px;color:var(--active);">واتساب</a>' : '') +
         '</div>' +
       '</div>';
@@ -1684,9 +1700,14 @@ async function saveCustEdit() {
     notes: document.getElementById('ecNotes').value.trim(),
     cabinet_number: document.getElementById('ecCabinet') ? document.getElementById('ecCabinet').value.trim() : '',
     port_number: document.getElementById('ecPort') ? (document.getElementById('ecPort').value || null) : null
-  }, 'PUT');
-  if (d.ok) { closeSheet('editCustSheet'); showToast('تم الحفظ ✓'); loadCustomer(); }
-  else showToast((d.error && d.error.message_ar) || 'فشل الحفظ', 'error');
+  }, 'PUT', 25000);
+  if (d.ok) {
+    closeSheet('editCustSheet');
+    cacheClear('customers'); cacheClear('customer_' + currentCustomerId);
+    showToast('تم الحفظ ✓');
+    loadCustomer();
+  }
+  else sheetError('editCustError', (d.error && d.error.message_ar) || 'فشل الحفظ — حاول مجدداً');
 }
 async function deleteCustomer() {
   if (!confirm('حذف هذا المشترك نهائياً؟ لا يمكن التراجع.')) return;

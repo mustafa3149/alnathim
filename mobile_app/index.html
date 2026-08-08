@@ -34,8 +34,8 @@
     .exe-waiting-cancel { width:100%; margin-top:18px; padding:11px; font-size:13px; font-weight:700; font-family:inherit; background:rgba(30,41,59,.8); border:1px solid #334155; color:#94a3b8; border-radius:12px; cursor:pointer; }
     /* SPA: instant section switching */
     .view{display:none}
-    .view.active{display:block;animation:viewIn .18s ease}
-    @keyframes viewIn{from{opacity:0}to{opacity:1}}
+    .view.active{display:block;animation:viewIn .2s ease}
+    @keyframes viewIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     #loginView{min-height:100vh}
     .back-btn{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:4px;line-height:1}
     body:has(#appShell.hidden){padding-bottom:0}
@@ -48,7 +48,7 @@
     .menu-row .menu-sub{font-size:11px;color:var(--muted);margin-top:2px;}
     body{padding-bottom:calc(88px + env(safe-area-inset-bottom));}
     .bottom-nav{padding-bottom:env(safe-area-inset-bottom);}
-    .view.active{animation:viewIn .18s ease;}
+    .view.active{animation:viewIn .2s ease;}
   </style>
 </head>
 <body class="page-enter">
@@ -257,6 +257,7 @@
         <div class="sheet-grab"></div>
         <button class="sheet-close" onclick="closeSheet('paySheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div class="sheet-title">تسديد فاتورة الشهر</div>
+        <div class="sheet-error" id="payError" style="display:none"></div>
         <div id="payInvoiceBox" style="margin-bottom:12px;"></div>
         <div class="seg" id="amountSeg">
           <button data-v="25000" onclick="pickAmount(this,25000)">٢٥٬٠٠٠</button>
@@ -284,6 +285,7 @@
         <div class="sheet-grab"></div>
         <button class="sheet-close" onclick="closeSheet('renewSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div class="sheet-title">تجديد الاشتراك</div>
+        <div class="sheet-error" id="renewError" style="display:none"></div>
         <div class="field"><label>الباقة</label><select id="renewPackage" class="input"></select></div>
       <div class="field"><label>عدد الأشهر</label><input type="number" id="renewMonths" class="input" value="1" min="1" inputmode="numeric"></div>
         <button class="btn-primary" id="renewBtn" onclick="submitRenew()">تأكيد التجديد</button>
@@ -454,6 +456,7 @@
       <div class="sheet-grab"></div>
       <button class="sheet-close" onclick="closeSheet('addSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">إضافة مشترك جديد</div>
+      <div class="sheet-error" id="addCustError" style="display:none"></div>
       <div class="field"><label>الاسم *</label><input type="text" id="cName" class="input" placeholder="اسم المشترك"></div>
       <div class="field"><label>الهاتف</label><input type="text" id="cPhone" class="input" dir="ltr" placeholder="07xxxxxxxxx"></div>
       <div class="field"><label>الباقة</label><select id="cPackage" class="input" onchange="fillPriceFromPackage()"></select></div>
@@ -557,6 +560,7 @@
       <div class="sheet-grab"></div>
       <button class="sheet-close" onclick="closeSheet('cabinetSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title" id="cabTitle">إضافة كابينة</div>
+      <div class="sheet-error" id="cabError" style="display:none"></div>
       <div class="field"><label>رقم الكابينة (FAT) *</label><input type="text" id="cabNumber" class="input" placeholder="مثال: FAT-12"></div>
       <div class="field"><label>عدد المنافذ</label><input type="number" id="cabPorts" class="input" value="16" min="1" max="64" inputmode="numeric"></div>
       <div class="field"><label>الموقع / المنطقة</label><input type="text" id="cabLocation" class="input"></div>
@@ -571,6 +575,7 @@
       <div class="sheet-grab"></div>
       <button class="sheet-close" onclick="closeSheet('editCustSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">تعديل المشترك</div>
+      <div class="sheet-error" id="editCustError" style="display:none"></div>
       <div class="field"><label>الاسم *</label><input type="text" id="ecName" class="input"></div>
       <div class="field"><label>الهاتف</label><input type="text" id="ecPhone" class="input" dir="ltr"></div>
       <div class="field"><label>الباقة</label><select id="ecPkg" class="input"></select></div>
@@ -595,6 +600,7 @@
       <div class="sheet-grab"></div>
       <button class="sheet-close" onclick="closeSheet('payEditSheet')"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-title">تعديل دفعة</div>
+      <div class="sheet-error" id="payEditError" style="display:none"></div>
       <div class="field"><label>المبلغ (د.ع)</label><input type="number" id="peAmount" class="input" inputmode="numeric"></div>
       <div class="field"><label>التاريخ</label><input type="date" id="peDate" class="input" dir="ltr"></div>
       <div class="field"><label>طريقة الدفع</label>

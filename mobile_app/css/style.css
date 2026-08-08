@@ -225,7 +225,7 @@ table tr:last-child td { border-bottom:none; }
 }
 .sheet-overlay.open { display:flex; animation:fadeIn .18s ease; }
 .sheet {
-  width:100%; max-width:520px; max-height:88vh; overflow-y:auto;
+  position:relative; width:100%; max-width:520px; max-height:88vh; overflow-y:auto;
   background:var(--bg); border:1px solid var(--border-2);
   border-bottom:none; border-radius:20px 20px 0 0; padding:20px 18px 34px;
   animation:slideUp .22s ease;
@@ -235,7 +235,29 @@ table tr:last-child td { border-bottom:none; }
 .sheet-close {
   position:absolute; top:18px; left:18px; border:none; background:var(--surface-2);
   color:var(--muted); width:32px; height:32px; border-radius:999px; font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
 }
+.sheet-close svg { width:13px; height:13px; }
+/* Inline error shown INSIDE a sheet — always in front of the user */
+.sheet-error {
+  background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.45);
+  color:var(--expired); padding:10px 14px; border-radius:12px;
+  font-size:12px; font-weight:700; margin-bottom:14px; text-align:right;
+}
+
+/* ── Toast (clean pill, bottom above the nav) ── */
+#toast {
+  position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(16px); z-index:200000;
+  display:flex; align-items:center; gap:9px; max-width:90%; width:auto;
+  padding:13px 18px; border-radius:14px; font-size:14px; font-weight:800;
+  opacity:0; pointer-events:none;
+  transition:opacity .25s ease, transform .25s ease;
+}
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.toast-ok { background:linear-gradient(90deg,#15803d,#16a34a); color:#fff; box-shadow:0 10px 30px rgba(22,163,74,.35); }
+.toast-error { background:linear-gradient(90deg,#b91c1c,#ef4444); color:#fff; box-shadow:0 10px 30px rgba(239,68,68,.35); }
+#toast .toast-icon { width:9px; height:9px; border-radius:9999px; background:rgba(255,255,255,.9); flex-shrink:0; }
 
 /* ── Segmented amount buttons ── */
 .seg { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; }
