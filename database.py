@@ -15,6 +15,7 @@ by the caller (usually via `with get_db() as db:` or try/finally).
 
 import os
 import sqlite3
+import threading
 from datetime import date, datetime
 
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -121,6 +122,41 @@ def _insert(sql, params=()):
         db.close()
 
 
+
+# ── Per-account isolation (each account sees only its own data) ──
+
+_owner_ctx = threading.local()
+
+
+def set_current_owner(user_id, role="admin"):
+    """Scope DB queries in this request to the calling account.
+
+    role controls visibility:
+      - 'admin' (master account) sees everything (no filtering).
+      - any other role (e.g. 'agent') sees only its own rows through
+        _owner_filter().
+    Passing user_id=None clears the scope (no filtering — web/offline mode).
+    """
+    _owner_ctx.owner_id = user_id
+    _owner_ctx.role = role
+
+
+def current_owner():
+    """Return the request-scoped owner id (None = no isolation)."""
+    return getattr(_owner_ctx, "owner_id", None)
+
+
+def _owner_filter(col="owner_id"):
+    """Return (sql_where, params) scoping a query to the current owner.
+
+    Admin (master) accounts and un-scoped callers see everything; other
+    roles (agents) see only rows where `col` equals their owner id.
+    """
+    owner = current_owner()
+    role = getattr(_owner_ctx, "role", "admin")
+    if owner is None or role == "admin":
+        return "", ()
+    return col + " = ?", (owner,)
 # ── Timestamps ──────────────────────────────────────────────
 
 def now_str():
@@ -182,6 +218,17 @@ CREATE TABLE IF NOT EXISTS customers (
     previous_debt      INTEGER NOT NULL DEFAULT 0,
     notes              TEXT DEFAULT '',
     created_at         TEXT DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS cabinets (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    fat_number TEXT NOT NULL UNIQUE,
+    port_count INTEGER NOT NULL DEFAULT 16 CHECK(port_count BETWEEN 1 AND 64),
+    location   TEXT DEFAULT '',
+    region     TEXT DEFAULT '',
+    notes      TEXT DEFAULT '',
+    owner_id   INTEGER DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
@@ -669,8 +716,95 @@ def init_db():
     seed_default_settings()
     seed_generator_info()
 
+    # Per-account isolation migration
+    _ensure_owner_columns()
+    _assign_existing_to_superadmin()
+
+    # FTTH FAT/Port + payment-collector migration
+    _ensure_fat_columns()
+
 
 # ── Seeds ───────────────────────────────────────────────────
+
+def _ensure_owner_columns():
+    """Add owner_id to business tables for per-account isolation (in place)."""
+    tables = {
+        "customers": "ALTER TABLE customers ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "invoices": "ALTER TABLE invoices ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "payments": "ALTER TABLE payments ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "expenses": "ALTER TABLE expenses ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "maintenance_tickets": "ALTER TABLE maintenance_tickets ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "packages": "ALTER TABLE packages ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "network_links": "ALTER TABLE network_links ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "signal_cache": "ALTER TABLE signal_cache ADD COLUMN owner_id INTEGER DEFAULT NULL",
+        "generator_info": "ALTER TABLE generator_info ADD COLUMN owner_id INTEGER DEFAULT NULL",
+    }
+    for table, ddl in tables.items():
+        cols = _table_cols(table)
+        if cols and "owner_id" not in cols:
+            db = get_db()
+            try:
+                db.execute(ddl)
+                db.commit()
+            except sqlite3.OperationalError:
+                pass
+            finally:
+                db.close()
+
+
+def _assign_existing_to_superadmin():
+    """Give existing rows to the superadmin so the owner keeps their data."""
+    owner = get_user_by_username((SUPERADMIN_USERNAME or "").strip() or DEFAULT_ADMIN_USERNAME)
+    if not owner:
+        return
+    oid = owner["id"]
+    db = get_db()
+    try:
+        for table in ("customers", "invoices", "payments", "expenses",
+                      "maintenance_tickets", "packages", "network_links",
+                      "signal_cache", "generator_info"):
+            cols = _table_cols(table)
+            if cols and "owner_id" in cols:
+                db.execute(f"UPDATE {table} SET owner_id = ? WHERE owner_id IS NULL", (oid,))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _ensure_fat_columns():
+    """Add FTTH FAT/port + payment-collector columns (in place, idempotent).
+
+    customers  += fat_id, port_number
+    payments   += collected_by, collected_by_name
+    """
+    for table, cols in (
+        ("customers", (
+            ("fat_id", "ALTER TABLE customers ADD COLUMN fat_id INTEGER DEFAULT NULL"),
+            ("port_number", "ALTER TABLE customers ADD COLUMN port_number INTEGER DEFAULT NULL"),
+        )),
+        ("payments", (
+            ("collected_by", "ALTER TABLE payments ADD COLUMN collected_by INTEGER DEFAULT NULL"),
+            ("collected_by_name", "ALTER TABLE payments ADD COLUMN collected_by_name TEXT DEFAULT ''"),
+        )),
+    ):
+        present = _table_cols(table)
+        for col, ddl in cols:
+            if present and col not in present:
+                db = get_db()
+                try:
+                    db.execute(ddl)
+                    db.commit()
+                except sqlite3.OperationalError:
+                    pass  # column may already exist in a concurrent boot
+                finally:
+                    db.close()
+    # Fast lookup for port-uniqueness checks / occupancy views.
+    db = get_db()
+    try:
+        db.execute("CREATE INDEX IF NOT EXISTS idx_customers_fat_port ON customers(fat_id, port_number)")
+        db.commit()
+    finally:
+        db.close()
 
 def seed_default_packages():
     """Insert the standard ISP packages if the table is empty (idempotent)."""
@@ -1163,7 +1297,7 @@ def update_generator_info(owner_name=None, phone=None, address=None, footer_note
 # ── Packages ────────────────────────────────────────────────
 
 def list_packages():
-    """Return all packages ordered by id."""
+    """Return all packages ordered by id (shared company data)."""
     return _fetchall("SELECT id, name, speed, price FROM packages ORDER BY id")
 
 
@@ -1180,8 +1314,8 @@ def get_package_by_name(name):
 def add_package(name, price, speed=""):
     """Insert a new package. Returns the new id."""
     return _insert(
-        "INSERT INTO packages (name, speed, price) VALUES (?, ?, ?)",
-        (name, speed, price),
+        "INSERT INTO packages (name, speed, price, owner_id) VALUES (?, ?, ?, ?)",
+        (name, speed, price, current_owner()),
     )
 
 
@@ -1201,12 +1335,20 @@ def update_package(package_id, name=None, price=None, speed=None):
     if not fields:
         return
     values.append(package_id)
-    _execute(f"UPDATE packages SET {', '.join(fields)} WHERE id = ?", tuple(values))
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = f"UPDATE packages SET {', '.join(fields)} WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple(values + list(owner_params)))
 
 
 def delete_package(package_id):
-    """Delete a package by id."""
-    _execute("DELETE FROM packages WHERE id = ?", (package_id,))
+    """Delete a package by id (owner-scoped)."""
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = "DELETE FROM packages WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([package_id] + list(owner_params)))
 
 
 # ── Customers ───────────────────────────────────────────────
@@ -1219,13 +1361,17 @@ def _customer_select():
         "c.mikrotik_password AS password, c.nano_ip AS ip_address, c.device_type, "
         "c.status AS subscription_status, c.is_active, c.subscription_date, "
         "c.renewal_date, c.previous_debt, c.notes, c.created_at, c.updated_at, "
-        "c.owner_user_id, p.name AS package_name, p.price AS package_price "
+        "c.owner_user_id, c.fat_id, c.port_number, "
+        "cb.fat_number AS cabinet_number, cb.location AS cabinet_location, "
+        "cb.port_count AS cabinet_ports, "
+        "p.name AS package_name, p.price AS package_price "
         "FROM customers c LEFT JOIN packages p ON p.id = c.package_id "
+        "LEFT JOIN cabinets cb ON cb.id = c.fat_id "
     )
 
 
 def list_customers():
-    """Return all customers with package join (legacy aliases)."""
+    """Return all customers with package + cabinet join (legacy aliases)."""
     return _fetchall(_customer_select() + "ORDER BY c.created_at DESC, c.id DESC")
 
 
@@ -1295,7 +1441,7 @@ def query_customers(search="", status="all", region="", debt=False,
 
 
 def get_customer(customer_id):
-    """Return a single customer with package join, or None."""
+    """Return a customer with package + cabinet join, or None."""
     return _fetchone(_customer_select() + "WHERE c.id = ?", (customer_id,))
 
 
@@ -1319,20 +1465,22 @@ def add_customer(full_name, phone="", phone2="", whatsapp_phone="", address="",
                  region="", package_id=None, mikrotik_username="",
                  mikrotik_password="", nano_ip="", device_type="",
                  subscription_date=None, renewal_date=None, status="active",
-                 previous_debt=0, notes="", owner_user_id=None):
+                 previous_debt=0, notes="", owner_user_id=None,
+                 fat_id=None, port_number=None):
     """Insert a customer. Returns the new id."""
+    owner_id = owner_user_id if owner_user_id is not None else current_owner()
     return _insert(
         "INSERT INTO customers (updated_at, full_name, phone, phone2, whatsapp_phone, address, "
         "region, package_id, mikrotik_username, mikrotik_password, nano_ip, "
         "device_type, subscription_date, renewal_date, status, is_active, "
-        "previous_debt, notes, owner_user_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "previous_debt, notes, owner_user_id, owner_id, fat_id, port_number) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             now_str(), full_name, phone, phone2, whatsapp_phone, address,
             region, package_id, mikrotik_username, mikrotik_password, nano_ip,
             device_type, subscription_date or now_str(), renewal_date, status,
             1 if status in ("active",) else 0, previous_debt or 0, notes,
-            owner_user_id,
+            owner_user_id, owner_id, fat_id, port_number,
         ),
     )
 
@@ -1362,6 +1510,8 @@ def update_customer(customer_id, **fields):
         "previous_debt": "previous_debt",
         "notes": "notes",
         "owner_user_id": "owner_user_id",
+        "fat_id": "fat_id",
+        "port_number": "port_number",
     }
     updates = {}
     for key, value in fields.items():
@@ -1424,6 +1574,8 @@ def toggle_customer(customer_id):
 
 def delete_customer(customer_id):
     """Delete a customer (cascades invoices/payments/extras/tickets)."""
+    _execute("UPDATE payments SET customer_id = NULL WHERE customer_id = ?", (customer_id,))
+    _execute("UPDATE expenses SET subscriber_id = NULL WHERE subscriber_id = ?", (customer_id,))
     _execute("DELETE FROM customers WHERE id = ?", (customer_id,))
 
 
@@ -1450,6 +1602,204 @@ def customer_stats():
         "expired": row["expired"] or 0,
         "suspended": row["suspended"] or 0,
     }
+
+
+# ── FTTH Cabinets (FAT) ─────────────────────────────────────
+
+def list_cabinets():
+    """All cabinets with live occupancy (used/free ports), newest first."""
+    return _fetchall(
+        "SELECT cb.*, "
+        "(SELECT COUNT(*) FROM customers c WHERE c.fat_id = cb.id) AS used_ports "
+        "FROM cabinets cb ORDER BY cb.fat_number"
+    )
+
+
+def get_cabinet(cabinet_id):
+    """Return a cabinet row by id, or None."""
+    return _fetchone("SELECT * FROM cabinets WHERE id = ?", (cabinet_id,))
+
+
+def get_cabinet_by_number(fat_number):
+    """Return a cabinet by its FAT number (case-insensitive), or None."""
+    return _fetchone("SELECT * FROM cabinets WHERE fat_number = ? COLLATE NOCASE", (fat_number,))
+
+
+def add_cabinet(fat_number, port_count=16, location="", region="", notes=""):
+    """Insert a cabinet. Returns the new id."""
+    return _insert(
+        "INSERT INTO cabinets (fat_number, port_count, location, region, notes, owner_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (fat_number, port_count, location, region, notes, current_owner()),
+    )
+
+
+def update_cabinet(cabinet_id, **fields):
+    """Update allowed cabinet fields in one safe statement."""
+    updates = {}
+    if fields.get("fat_number") is not None:
+        updates["fat_number"] = str(fields["fat_number"]).strip()
+    if fields.get("port_count") is not None:
+        updates["port_count"] = _clamp_int(fields["port_count"], 1, 64, 16)
+    if fields.get("location") is not None:
+        updates["location"] = str(fields["location"]).strip()
+    if fields.get("region") is not None:
+        updates["region"] = str(fields["region"]).strip()
+    if fields.get("notes") is not None:
+        updates["notes"] = str(fields["notes"]).strip()
+    if not updates:
+        return
+    cols = ", ".join(f"{k} = ?" for k in updates)
+    _execute(f"UPDATE cabinets SET {cols} WHERE id = ?", (*updates.values(), cabinet_id))
+
+
+def delete_cabinet(cabinet_id):
+    """Delete a cabinet after un-assigning its customers (admin only)."""
+    _execute("UPDATE customers SET fat_id = NULL, port_number = NULL WHERE fat_id = ?", (cabinet_id,))
+    _execute("DELETE FROM cabinets WHERE id = ?", (cabinet_id,))
+
+
+def _clamp_int(value, lo, hi, default):
+    try:
+        v = int(float(value))
+    except (ValueError, TypeError):
+        return default
+    return max(lo, min(hi, v))
+
+
+def validate_port(fat_id, port_number, exclude_customer_id=None):
+    """Validate a FAT/port assignment. Returns (ok: bool, error: str|None).
+
+    Rules enforced:
+      1. the cabinet must exist;
+      2. the port must be within 1..port_count of that cabinet;
+      3. the port must not already be assigned to another customer.
+    This is what prevents "Port 20 on a 16-port splitter" mistakes.
+    """
+    if fat_id is None and port_number is None:
+        return True, None  # no assignment yet — allowed
+    if fat_id is None or port_number is None:
+        return False, "يجب تحديد الكابينة والمنفذ معاً"
+    cab = get_cabinet(fat_id)
+    if not cab:
+        return False, "الكابينة غير موجودة"
+    try:
+        port = int(port_number)
+    except (ValueError, TypeError):
+        return False, "رقم المنفذ غير صالح"
+    port_count = _clamp_int(cab["port_count"], 1, 64, 16)
+    if port < 1 or port > port_count:
+        return False, f"المنفذ يجب أن يكون بين 1 و {port_count}"
+    row = _fetchone(
+        "SELECT id FROM customers WHERE fat_id = ? AND port_number = ? AND id != ? LIMIT 1",
+        (fat_id, port, exclude_customer_id or -1),
+    )
+    if row:
+        return False, f"المنفذ {port} محجوز مسبقاً في هذه الكابينة"
+    return True, None
+
+
+def next_free_port(cabinet_id):
+    """Smallest unused port number in a cabinet, or None when full."""
+    cab = get_cabinet(cabinet_id)
+    if not cab:
+        return None
+    used = {
+        r["port_number"]
+        for r in _fetchall(
+            "SELECT port_number FROM customers WHERE fat_id = ? AND port_number IS NOT NULL",
+            (cabinet_id,),
+        )
+    }
+    for port in range(1, _clamp_int(cab["port_count"], 1, 64, 16) + 1):
+        if port not in used:
+            return port
+    return None
+
+
+def bulk_import_customers(rows):
+    """Bulk-create/update subscribers imported from the legacy system.
+
+    Each row is a dict with optional keys: full_name, phone, mikrotik_username,
+    mikrotik_password, fat_number, port_number. Existing customers are matched
+    by mikrotik_username first, then by full_name (existing rows get updated,
+    new ones are created). FAT/port may be empty — the fast-entry UI assigns
+    them afterwards. Returns {"added", "updated", "errors"}.
+    """
+    added = updated = 0
+    errors = []
+    for idx, r in enumerate(rows or []):
+        name = str(r.get("full_name") or r.get("name") or "").strip()
+        username = str(r.get("mikrotik_username") or r.get("username") or "").strip()
+        password = str(r.get("mikrotik_password") or r.get("password") or "").strip()
+        phone = str(r.get("phone") or "").strip()
+        if not name:
+            errors.append({"row": idx + 1, "reason": "الاسم فارغ"})
+            continue
+
+        existing = None
+        if username:
+            existing = _fetchone(
+                "SELECT id FROM customers WHERE mikrotik_username = ? COLLATE NOCASE", (username,)
+            )
+        if not existing:
+            existing = _fetchone("SELECT id FROM customers WHERE full_name = ? COLLATE NOCASE", (name,))
+
+        fat_id, port_number = None, None
+        fat_num = str(r.get("fat_number") or "").strip()
+        if fat_num:
+            cab = get_cabinet_by_number(fat_num)
+            if cab:
+                fat_id = cab["id"]
+                try:
+                    port_number = int(r.get("port_number"))
+                except (ValueError, TypeError):
+                    port_number = None
+                if port_number is not None:
+                    ok, _err_msg = validate_port(
+                        fat_id, port_number,
+                        exclude_customer_id=existing["id"] if existing else None,
+                    )
+                    if not ok:
+                        fat_id, port_number = None, None
+
+        if existing:
+            updates = {}
+            if username:
+                updates["mikrotik_username"] = username
+            if password:
+                updates["mikrotik_password"] = password
+            if phone:
+                updates["phone"] = phone
+            if fat_id is not None:
+                updates["fat_id"] = fat_id
+                updates["port_number"] = port_number
+            if updates:
+                update_customer(existing["id"], **updates)
+            updated += 1
+        else:
+            add_customer(
+                full_name=name, phone=phone,
+                mikrotik_username=username, mikrotik_password=password,
+                fat_id=fat_id, port_number=port_number,
+            )
+            added += 1
+    return {"added": added, "updated": updated, "errors": errors}
+
+
+# ── Payment collector report (who collected what) ────────────
+
+def report_by_collector(month, year):
+    """Per-staff payment totals for a month/year (accountability report)."""
+    return _fetchall(
+        "SELECT collected_by, collected_by_name, COUNT(*) AS payment_count, "
+        "COALESCE(SUM(amount), 0) AS total "
+        "FROM payments "
+        "WHERE strftime('%m', payment_date) = ? AND strftime('%Y', payment_date) = ? "
+        "GROUP BY collected_by, collected_by_name "
+        "ORDER BY total DESC",
+        (f"{month:02d}", str(year)),
+    )
 
 
 # ── Invoices ────────────────────────────────────────────────
@@ -1511,11 +1861,12 @@ def add_invoice(customer_id, month, year, package_name="", package_price=0,
     """Insert an invoice. Returns the new id."""
     return _insert(
         "INSERT INTO invoices (customer_id, month, year, package_name, package_price, "
-        "total_amount, paid_amount, is_paid, previous_debt) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "total_amount, paid_amount, is_paid, previous_debt, owner_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             customer_id, month, year, package_name, package_price,
             total_amount, paid_amount, 1 if is_paid else 0, previous_debt,
+            current_owner(),
         ),
     )
 
@@ -1531,22 +1882,36 @@ def update_invoice(invoice_id, **fields):
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    _execute(f"UPDATE invoices SET {cols} WHERE id = ?", (*updates.values(), invoice_id))
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = f"UPDATE invoices SET {cols} WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([*updates.values(), invoice_id] + list(owner_params)))
 
 
 def delete_invoice(invoice_id):
-    """Delete an invoice (cascades payments/extras)."""
-    _execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+    """Delete an invoice (cascades payments/extras) — owner-scoped."""
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = "DELETE FROM invoices WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([invoice_id] + list(owner_params)))
 
 
 def invoices_for_month(month, year):
-    """All invoices for a month/year (for billing/generate/rollover)."""
-    return _fetchall("SELECT * FROM invoices WHERE month = ? AND year = ?", (month, year))
+    """All invoices for a month/year (billing/generate/rollover)."""
+    return _fetchall(
+        "SELECT * FROM invoices WHERE month = ? AND year = ?",
+        (month, year),
+    )
 
 
 def count_invoices(month, year):
     """Count invoices for a month/year."""
-    row = _fetchone("SELECT COUNT(*) AS n FROM invoices WHERE month = ? AND year = ?", (month, year))
+    row = _fetchone(
+        "SELECT COUNT(*) AS n FROM invoices WHERE month = ? AND year = ?",
+        (month, year),
+    )
     return row["n"] if row else 0
 
 
@@ -1622,29 +1987,39 @@ def debts_summary():
 # ── Payments ────────────────────────────────────────────────
 
 def get_payment(payment_id):
-    """Return a payment row by id, or None."""
-    return _fetchone("SELECT * FROM payments WHERE id = ?", (payment_id,))
+    """Return a payment row by id, or None (agent: own collections only)."""
+    owner_where, owner_params = _owner_filter("collected_by")
+    sql = "SELECT * FROM payments WHERE id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([payment_id] + list(owner_params)))
 
 
 def get_payment_details(payment_id):
     """Payment JOIN customer+package row for the receipt templates, or None."""
-    return _fetchone(_payment_select() + "WHERE pay.id = ?", (payment_id,))
+    owner_where, owner_params = _owner_filter("pay.collected_by")
+    sql = _payment_select() + "WHERE pay.id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchone(sql, tuple([payment_id] + list(owner_params)))
 
 
 def list_invoice_payments(invoice_id):
-    """All payments for an invoice, newest first."""
-    return _fetchall(
-        "SELECT * FROM payments WHERE invoice_id = ? ORDER BY payment_date DESC, id DESC",
-        (invoice_id,),
-    )
+    """All payments for an invoice, newest first (agent: own only)."""
+    owner_where, owner_params = _owner_filter("collected_by")
+    sql = "SELECT * FROM payments WHERE invoice_id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchall(sql + "ORDER BY payment_date DESC, id DESC", tuple([invoice_id] + list(owner_params)))
 
 
 def list_customer_payments(customer_id):
-    """All payments for a customer, newest first."""
-    return _fetchall(
-        "SELECT * FROM payments WHERE customer_id = ? ORDER BY payment_date DESC, id DESC",
-        (customer_id,),
-    )
+    """All payments for a customer, newest first (agent: own only)."""
+    owner_where, owner_params = _owner_filter("collected_by")
+    sql = "SELECT * FROM payments WHERE customer_id = ? "
+    if owner_where:
+        sql += "AND " + owner_where + " "
+    return _fetchall(sql + "ORDER BY payment_date DESC, id DESC", tuple([customer_id] + list(owner_params)))
 
 
 def _payment_select():
@@ -1665,6 +2040,10 @@ def list_recent_payments(search="", method="", limit=200):
     """Recent payments, optionally filtered by customer name / method."""
     sql = _payment_select() + "WHERE 1 = 1 "
     params = []
+    owner_where, owner_params = _owner_filter("pay.collected_by")
+    if owner_where:
+        sql += "AND " + owner_where + " "
+        params.append(owner_params[0])
     if search:
         sql += "AND c.full_name LIKE ? "
         params.append(f"%{search}%")
@@ -1676,12 +2055,22 @@ def list_recent_payments(search="", method="", limit=200):
     return _fetchall(sql, tuple(params))
 
 
-def add_payment(invoice_id, customer_id, amount, payment_date, payment_method="نقدي", notes=""):
-    """Insert a payment. Returns the new id."""
+def add_payment(invoice_id, customer_id, amount, payment_date, payment_method="نقدي", notes="",
+                collected_by=None, collected_by_name=""):
+    """Insert a payment. Returns the new id.
+
+    collected_by / collected_by_name record WHICH staff member received the
+    cash — the core of the payment-accountability module. When omitted,
+    collected_by defaults to the current request owner (web keeps it NULL).
+    """
+    if collected_by is None:
+        collected_by = current_owner()
     return _insert(
-        "INSERT INTO payments (invoice_id, customer_id, amount, payment_date, payment_method, notes) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (invoice_id, customer_id, amount, payment_date, payment_method, notes),
+        "INSERT INTO payments (invoice_id, customer_id, amount, payment_date, payment_method, "
+        "notes, owner_id, collected_by, collected_by_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (invoice_id, customer_id, amount, payment_date, payment_method, notes,
+         current_owner(), collected_by, collected_by_name),
     )
 
 
@@ -1703,17 +2092,22 @@ def delete_payment(payment_id):
 
 
 def total_payments():
-    """Sum of all payments."""
-    row = _fetchone("SELECT COALESCE(SUM(amount), 0) AS s FROM payments")
+    """Sum of all payments (agent: own collections only)."""
+    owner_where, owner_params = _owner_filter("collected_by")
+    sql = "SELECT COALESCE(SUM(amount), 0) AS s FROM payments"
+    if owner_where:
+        sql += " WHERE " + owner_where
+    row = _fetchone(sql, owner_params)
     return row["s"] or 0
 
 
 def total_payments_today():
-    """Sum of today's payments."""
-    row = _fetchone(
-        "SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE payment_date = ?",
-        (today_str(),),
-    )
+    """Sum of today's payments (agent: own collections only)."""
+    owner_where, owner_params = _owner_filter("collected_by")
+    sql = "SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE payment_date = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    row = _fetchone(sql, tuple([today_str()] + list(owner_params)))
     return row["s"] or 0
 
 
@@ -1740,9 +2134,9 @@ def list_expenses(month, year, search="", category=""):
 def add_expense(expense_date, category, amount, description="", recipient_name="", subscriber_id=None):
     """Insert an expense. Returns the new id."""
     return _insert(
-        "INSERT INTO expenses (expense_date, category, amount, description, recipient_name, subscriber_id) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (expense_date, category, amount, description, recipient_name, subscriber_id),
+        "INSERT INTO expenses (expense_date, category, amount, description, recipient_name, subscriber_id, owner_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (expense_date, category, amount, description, recipient_name, subscriber_id, current_owner()),
     )
 
 
@@ -1755,12 +2149,20 @@ def update_expense(expense_id, **fields):
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    _execute(f"UPDATE expenses SET {cols} WHERE id = ?", (*updates.values(), expense_id))
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = f"UPDATE expenses SET {cols} WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([*updates.values(), expense_id] + list(owner_params)))
 
 
 def delete_expense(expense_id):
-    """Delete an expense by id."""
-    _execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    """Delete an expense by id (owner-scoped)."""
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = "DELETE FROM expenses WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([expense_id] + list(owner_params)))
 
 
 def get_expense(expense_id):
@@ -1860,9 +2262,9 @@ def list_tickets(status="all", search=""):
 def add_ticket(customer_id, issue_description):
     """Insert a maintenance ticket. Returns the new id."""
     return _insert(
-        "INSERT INTO maintenance_tickets (customer_id, issue_description, status) "
-        "VALUES (?, ?, 'pending')",
-        (customer_id, issue_description),
+        "INSERT INTO maintenance_tickets (customer_id, issue_description, status, owner_id) "
+        "VALUES (?, ?, 'pending', ?)",
+        (customer_id, issue_description, current_owner()),
     )
 
 
@@ -1873,33 +2275,43 @@ def get_ticket(ticket_id):
 
 def update_ticket(ticket_id, customer_id, issue_description):
     """Update a maintenance ticket's customer + description."""
-    _execute(
-        "UPDATE maintenance_tickets SET customer_id = ?, issue_description = ? WHERE id = ?",
-        (customer_id, issue_description, ticket_id),
-    )
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = "UPDATE maintenance_tickets SET customer_id = ?, issue_description = ? WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([customer_id, issue_description, ticket_id] + list(owner_params)))
 
 
 def toggle_ticket(ticket_id):
     """Toggle a ticket's resolved/pending status in one statement."""
     db = get_db()
     try:
+        owner_where, owner_params = _owner_filter("owner_id")
+        where_sql = "WHERE id = ?" + ((" AND " + owner_where) if owner_where else "")
         db.execute(
             "UPDATE maintenance_tickets SET "
             "status = CASE WHEN status = 'pending' THEN 'resolved' ELSE 'pending' END, "
             "resolved_at = CASE WHEN status = 'pending' THEN ? ELSE NULL END "
-            "WHERE id = ?",
-            (now_str(), ticket_id),
+            + where_sql,
+            tuple([now_str(), ticket_id] + list(owner_params)),
         )
         db.commit()
-        row = db.execute("SELECT status FROM maintenance_tickets WHERE id = ?", (ticket_id,)).fetchone()
+        row = db.execute(
+            "SELECT status FROM maintenance_tickets " + where_sql,
+            tuple([ticket_id] + list(owner_params)),
+        ).fetchone()
         return row["status"] if row else None
     finally:
         db.close()
 
 
 def delete_ticket(ticket_id):
-    """Delete a ticket by id."""
-    _execute("DELETE FROM maintenance_tickets WHERE id = ?", (ticket_id,))
+    """Delete a ticket by id (owner-scoped)."""
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = "DELETE FROM maintenance_tickets WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([ticket_id] + list(owner_params)))
 
 
 # ── Signal Cache (Phase 14.6) ───────────────────────────────
@@ -1955,16 +2367,12 @@ def list_signal_cache():
 
 def list_network_links():
     """Return all network links (sectors/links), newest first."""
-    return _fetchall(
-        "SELECT * FROM network_links ORDER BY id DESC"
-    )
+    return _fetchall("SELECT * FROM network_links ORDER BY id DESC")
 
 
 def get_network_link(link_id):
     """Return a network link row by id, or None."""
-    return _fetchone(
-        "SELECT * FROM network_links WHERE id = ?", (link_id,)
-    )
+    return _fetchone("SELECT * FROM network_links WHERE id = ?", (link_id,))
 
 
 def add_network_link(name, ip="", link_type="MikroTik", location="", notes="",
@@ -1983,9 +2391,9 @@ def add_network_link(name, ip="", link_type="MikroTik", location="", notes="",
     """
     return _insert(
         "INSERT INTO network_links (name, ip, link_type, location, notes, "
-        "username, password, community) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, ip, link_type, location, notes, username, password, community),
+        "username, password, community, owner_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (name, ip, link_type, location, notes, username, password, community, current_owner()),
     )
 
 
@@ -2013,26 +2421,42 @@ def update_network_link(link_id, name=None, ip=None, link_type=None,
     if not updates:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
-    _execute(f"UPDATE network_links SET {cols} WHERE id = ?", (*updates.values(), link_id))
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = f"UPDATE network_links SET {cols} WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([*updates.values(), link_id] + list(owner_params)))
 
 
 def delete_network_link(link_id):
-    """Delete a network link by id."""
-    _execute("DELETE FROM network_links WHERE id = ?", (link_id,))
+    """Delete a network link by id (owner-scoped)."""
+    owner_where, owner_params = _owner_filter("owner_id")
+    sql = "DELETE FROM network_links WHERE id = ?"
+    if owner_where:
+        sql += " AND " + owner_where
+    _execute(sql, tuple([link_id] + list(owner_params)))
 
 
 # ── Dashboard KPIs ──────────────────────────────────────────
 
 def dashboard_stats(month, year):
-    """Aggregate KPIs for the dashboard."""
+    """Aggregate KPIs for the dashboard.
+
+    Company counts (customers / packages / invoices) are shared. Payment
+    sums are scoped to the caller: agents see their own collections,
+    admins see the whole company.
+    """
+    pay_where, pay_params = _owner_filter("collected_by")
+    pw = (" AND " + pay_where) if pay_where else ""
     row = _fetchone(
         "SELECT "
         "(SELECT COUNT(*) FROM customers WHERE is_active = 1 AND status = 'active') AS active_customers, "
         "(SELECT COUNT(*) FROM packages) AS total_packages, "
         "(SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE month = ? AND year = ?) AS expected_income, "
-        "(SELECT COALESCE(SUM(paid_amount), 0) FROM invoices WHERE month = ? AND year = ?) AS collected, "
+        "(SELECT COALESCE(SUM(amount), 0) FROM payments "
+        " WHERE strftime('%m', payment_date) = ? AND strftime('%Y', payment_date) = ?" + pw + ") AS collected, "
         "(SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM invoices WHERE is_paid = 0) AS total_debt",
-        (month, year, month, year),
+        tuple([month, year, f"{month:02d}", str(year)] + list(pay_params)),
     )
     return {
         "active_customers": row["active_customers"] or 0,
@@ -2044,22 +2468,19 @@ def dashboard_stats(month, year):
 
 
 def customers_expiring_between(start_dt, end_dt):
-    """Active customers whose renewal_date falls in [start, end]."""
+    """All customers expiring in [start, end]."""
     return _fetchall(
         _customer_select()
         + "WHERE c.is_active = 1 AND c.status = 'active' AND c.renewal_date IS NOT NULL "
-        + "AND c.renewal_date >= ? AND c.renewal_date <= ? "
-        + "ORDER BY c.renewal_date ASC",
+        + "AND c.renewal_date >= ? AND c.renewal_date <= ? ORDER BY c.renewal_date ASC",
         (start_dt, end_dt),
     )
 
 
 def customers_with_debt_or_expired():
-    """Customers with unpaid debt OR whose renewal already passed."""
+    """All customers with unpaid debt OR whose renewal passed."""
     rows = _fetchall(
-        _customer_select()
-        + "WHERE c.is_active = 1 "
-        + "ORDER BY c.full_name"
+        _customer_select() + "WHERE c.is_active = 1 ORDER BY c.full_name"
     )
     result = []
     for c in rows:

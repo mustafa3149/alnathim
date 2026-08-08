@@ -3,126 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>الناظم — دخول</title>
+  <title>الناظم</title>
   <link rel="stylesheet" href="css/style.css">
   <style>
-    /* ═══════════════════════════════════════════════════════
-       EXE-STYLE LOGIN — rebuilt from 0 to match the desktop
-       launcher (templates/login.html): slate dark card,
-       indigo→purple gradient button, blurred backdrop.
-       ═══════════════════════════════════════════════════════ */
+    /* EXE-STYLE LOGIN — matches the desktop launcher (templates/login.html) */
     .exe-login { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px 18px; }
     .exe-wrap { width:100%; max-width:380px; }
-
     .exe-logo { text-align:center; margin-bottom:28px; }
     .exe-logo img { width:64px; height:64px; border-radius:16px; box-shadow:0 10px 30px rgba(99,102,241,.25); }
     .exe-logo h1 { font-size:24px; font-weight:800; margin-top:10px; color:var(--text); }
     .exe-logo p { font-size:13px; color:var(--muted); margin-top:3px; font-family:'Tajawal','Cairo',sans-serif; }
-
-    .exe-card {
-      background:rgba(30,41,59,.72);
-      border:1px solid rgba(51,65,85,.6);
-      border-radius:16px;
-      backdrop-filter:blur(14px);
-      -webkit-backdrop-filter:blur(14px);
-      padding:24px;
-      box-shadow:0 25px 60px rgba(0,0,0,.5);
-      margin-bottom:16px;
-    }
+    .exe-card { background:rgba(30,41,59,.72); border:1px solid rgba(51,65,85,.6); border-radius:16px; backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); padding:24px; box-shadow:0 25px 60px rgba(0,0,0,.5); margin-bottom:16px; }
     .exe-label { font-size:12px; font-weight:600; color:#94a3b8; display:block; margin-bottom:6px; }
-    .exe-input {
-      width:100%; padding:13px 16px; font-size:14px; font-family:inherit;
-      background:#0f172a; border:1px solid #334155; color:#f8fafc;
-      border-radius:12px; outline:none; transition:all .15s ease;
-    }
+    .exe-input { width:100%; padding:13px 16px; font-size:14px; font-family:inherit; background:#0f172a; border:1px solid #334155; color:#f8fafc; border-radius:12px; outline:none; transition:all .15s ease; }
     .exe-input::placeholder { color:#475569; }
     .exe-input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.25); }
     .exe-space { margin-bottom:16px; }
-
-    .exe-btn {
-      width:100%; padding:14px; font-size:15px; font-weight:800; font-family:inherit; color:#fff;
-      border:none; border-radius:12px; cursor:pointer;
-      background:linear-gradient(90deg,#6366f1,#a855f7);
-      box-shadow:0 10px 30px rgba(99,102,241,.35);
-      transition:all .15s ease;
-    }
+    .exe-btn { width:100%; padding:14px; font-size:15px; font-weight:800; font-family:inherit; color:#fff; border:none; border-radius:12px; cursor:pointer; background:linear-gradient(90deg,#6366f1,#a855f7); box-shadow:0 10px 30px rgba(99,102,241,.35); transition:all .15s ease; }
     .exe-btn:active { transform:scale(.97); opacity:.9; }
-
     .exe-hint { text-align:center; font-size:12px; color:var(--muted); margin-top:10px; display:none; }
     .exe-link { text-align:center; font-size:13px; color:var(--muted); margin-top:14px; }
     .exe-link a { color:#22c55e; font-weight:700; text-decoration:none; }
-
-    .exe-error {
-      background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.4);
-      color:#fca5a5; padding:11px 14px; border-radius:12px;
-      font-size:12px; font-weight:600; margin-bottom:14px; display:none;
-    }
-
-    /* Waiting card — exact EXE look with spinning icon */
+    .exe-error { background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:11px 14px; border-radius:12px; font-size:12px; font-weight:600; margin-bottom:14px; display:none; }
     .exe-waiting { text-align:center; padding:8px 4px; }
-    .exe-spinner {
-      width:56px; height:56px; margin:0 auto 16px; border-radius:9999px;
-      background:rgba(99,102,241,.2);
-      display:flex; align-items:center; justify-content:center;
-    }
+    .exe-spinner { width:56px; height:56px; margin:0 auto 16px; border-radius:9999px; background:rgba(99,102,241,.2); display:flex; align-items:center; justify-content:center; }
     .exe-spinner svg { width:28px; height:28px; color:#a5b4fc; animation:exe-spin 1s linear infinite; }
     @keyframes exe-spin { to { transform:rotate(360deg); } }
     .exe-waiting-title { font-size:14px; font-weight:800; color:var(--text); line-height:1.8; }
     .exe-waiting-sub { font-size:11px; color:var(--muted); margin-top:6px; }
-    .exe-waiting-cancel {
-      width:100%; margin-top:18px; padding:11px; font-size:13px; font-weight:700; font-family:inherit;
-      background:rgba(30,41,59,.8); border:1px solid #334155; color:#94a3b8;
-      border-radius:12px; cursor:pointer;
+    .exe-waiting-cancel { width:100%; margin-top:18px; padding:11px; font-size:13px; font-weight:700; font-family:inherit; background:rgba(30,41,59,.8); border:1px solid #334155; color:#94a3b8; border-radius:12px; cursor:pointer; }
+    /* SPA: instant section switching */
+    .view{display:none}
+    .view.active{display:block;animation:viewIn .18s ease}
+    @keyframes viewIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    #loginView{min-height:100vh}
+    .back-btn{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:4px;line-height:1}
+    body:has(#appShell.hidden){padding-bottom:0}
+    /* More menu polish */
+    .mi{
+      width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+      font-size:17px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border);
     }
+    .menu-row .menu-title{font-size:14px;font-weight:700;}
+    .menu-row .menu-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+    body{padding-bottom:calc(88px + env(safe-area-inset-bottom));}
+    .bottom-nav{padding-bottom:env(safe-area-inset-bottom);}
+    .view.active{animation:viewIn .2s cubic-bezier(.22,1,.36,1);}
   </style>
-<body class="exe-login page-enter">
-  <div class="exe-wrap">
-
-    <div class="exe-logo">
-      <img src="assets/icon.svg" alt="الناظم">
-      <h1>الناظم</h1>
-      <p>نظام إدارة أبراج الإنترنت</p>
-    </div>
-
-    <div id="errorBox" class="exe-error"></div>
-
-    <!-- ── Login card (EXE design) ── -->
-    <div id="loginCard" class="exe-card">
-      <div class="exe-space">
-        <label class="exe-label">اسم المستخدم</label>
-        <input type="text" id="username" dir="ltr" placeholder="اسم المستخدم" class="exe-input" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+</head>
+<body class="page-enter">
+  <!-- ── Login view (EXE design) ── -->
+  <div id="loginView" class="exe-login">
+    <div class="exe-wrap">
+      <div class="exe-logo">
+        <img src="assets/icon.svg" alt="الناظم">
+        <h1>الناظم</h1>
+        <p>نظام إدارة أبراج الإنترنت</p>
       </div>
-      <div class="exe-space">
-        <label class="exe-label">كلمة المرور</label>
-        <input type="password" id="password" dir="ltr" placeholder="••••••••" class="exe-input" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="errorBox" class="exe-error"></div>
+      <div id="loginCard" class="exe-card">
+        <div class="exe-space">
+          <label class="exe-label">اسم المستخدم</label>
+          <input type="text" id="username" dir="ltr" placeholder="اسم المستخدم" class="exe-input" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div class="exe-space">
+          <label class="exe-label">كلمة المرور</label>
+          <input type="password" id="password" dir="ltr" placeholder="••••••••" class="exe-input" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="exe-btn" id="loginBtn" onclick="doLogin()">دخول</button>
+        <p id="loginHint" class="exe-hint">أدخل كلمة المرور ثم اضغط دخول — سننتظر موافقة المدير تلقائياً</p>
+        <p class="exe-link">ليس لديك حساب؟ <a href="#" onclick="openSheet('regSheet');return false;">إنشاء حساب</a></p>
       </div>
-      <button class="exe-btn" id="loginBtn" onclick="doLogin()">دخول</button>
-      <p id="loginHint" class="exe-hint">أدخل كلمة المرور ثم اضغط دخول — سننتظر موافقة المدير تلقائياً</p>
-      <p class="exe-link">ليس لديك حساب؟ <a href="#" onclick="openSheet('regSheet');return false;">إنشاء حساب</a></p>
-    </div>
-
-    <!-- ── Waiting card (pending approval — EXE style) ── -->
-    <div id="waitingCard" class="exe-card hidden exe-waiting">
-      <div class="exe-spinner">
-        <svg viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/>
-          <path d="M12 2a10 10 0 019.9 8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        </svg>
+      <div id="waitingCard" class="exe-card hidden exe-waiting">
+        <div class="exe-spinner">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/>
+            <path d="M12 2a10 10 0 019.9 8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div id="waitingMsg" class="exe-waiting-title">بانتظار موافقة المدير<br>سيتم الدخول تلقائياً فور الموافقة</div>
+        <div id="waitingSub" class="exe-waiting-sub">الحالة تُحدَّث تلقائياً — يمكنك المتابعة فور الموافقة</div>
+        <button class="exe-waiting-cancel" onclick="cancelWaiting()">إلغاء والعودة</button>
       </div>
-      <div id="waitingMsg" class="exe-waiting-title">بانتظار موافقة المدير<br>سيتم الدخول تلقائياً فور الموافقة</div>
-      <div id="waitingSub" class="exe-waiting-sub">الحالة تُحدَّث تلقائياً — يمكنك المتابعة فور الموافقة</div>
-      <button class="exe-waiting-cancel" onclick="cancelWaiting()">إلغاء والعودة</button>
-    </div>
-
-    <!-- ── Session restore ── -->
-    <div id="restoreBox" class="hidden" style="text-align:center;padding:12px 0;color:var(--muted);font-size:13px;">
-      <div class="spinner" style="padding:8px 0;">جاري استعادة الجلسة...</div>
-    </div>
-
-    <!-- ── Server address (small footer) ── -->
-    <div style="text-align:center;margin-top:14px;">
-      <input type="text" id="serverBase" placeholder="https://alnathim.onrender.com" dir="ltr"
-             style="width:100%;max-width:280px;background:rgba(15,23,42,.5);border:1px solid #1e293b;color:var(--muted);border-radius:10px;padding:8px 12px;font-size:11px;text-align:right;outline:none;">
+      <div id="restoreBox" class="hidden" style="text-align:center;padding:12px 0;color:var(--muted);font-size:13px;">
+        <div class="spinner" style="padding:8px 0;">جاري استعادة الجلسة...</div>
+      </div>
+      <div style="text-align:center;margin-top:14px;">
+        <input type="text" id="serverBase" placeholder="https://alnathim.onrender.com" dir="ltr"
+               style="width:100%;max-width:280px;background:rgba(15,23,42,.5);border:1px solid #1e293b;color:var(--muted);border-radius:10px;padding:8px 12px;font-size:11px;text-align:right;outline:none;">
+      </div>
     </div>
   </div>
 
@@ -145,164 +114,564 @@
       <p class="exe-link">لديك حساب؟ <a href="#" onclick="closeSheet('regSheet');return false;" style="color:#6366f1;">تسجيل الدخول</a></p>
     </div>
   </div>
+  <!-- ── App shell (single page, multiple sections) ── -->
+  <div id="appShell" class="hidden">
+    <!-- Topbar -->
+    <div class="topbar">
+      <button id="backBtn" class="back-btn hidden" onclick="goBack()">→</button>
+      <h1 id="topTitle">الرئيسية</h1>
+      <div class="topbar-actions">
+        <span id="topLabel" style="font-size:12px;color:var(--muted);font-weight:700;"></span>
+        <button onclick="logout()" title="خروج">⏻</button>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <section id="view-dashboard" class="view">
+      <div class="container">
+        <div class="page-title">اللوحة</div>
+        <div class="page-sub">نظرة مالية سريعة</div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="k-label">الدخل المتوقع</div><div class="k-value" id="statIncome">—</div></div>
+          <div class="kpi"><div class="k-label">إجمالي الديون</div><div class="k-value" id="statDebt" style="color:var(--expired);">—</div></div>
+          <div class="kpi"><div class="k-label">المحصل اليوم</div><div class="k-value" id="statToday" style="color:var(--active);">—</div></div>
+          <div class="kpi"><div class="k-label">نشطين</div><div class="k-value" id="statActive">—</div></div>
+        </div>
+        <div class="section-label">سريع</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <a href="#" onclick="goTo('/view/customers');return false;" class="card" style="padding:14px;text-align:center;text-decoration:none;color:var(--text);">
+            <div style="font-size:22px;">👥</div><div style="font-size:13px;font-weight:700;margin-top:4px;">العملاء</div>
+          </a>
+          <a href="#" onclick="goTo('/view/debts');return false;" class="card" style="padding:14px;text-align:center;text-decoration:none;color:var(--text);">
+            <div style="font-size:22px;">💸</div><div style="font-size:13px;font-weight:700;margin-top:4px;">الديون</div>
+          </a>
+        </div>
+        <div class="section-label" id="expLabel">المنتهيون هذا الأسبوع</div>
+        <div id="expiringBox"></div>
+        <div class="section-label">آخر المدفوعات</div>
+        <div id="payBox"></div>
+      </div>
+    </section>
+    <!-- Customers -->
+    <section id="view-customers" class="view">
+      <div class="container">
+        <div class="page-title">العملاء</div>
+        <div class="page-sub">إدارة المشتركين والبحث</div>
+        <div style="margin-top:14px;">
+          <input type="text" id="searchInput" class="input" placeholder="ابحث بالاسم أو الهاتف..." oninput="renderFiltered()">
+        </div>
+        <div class="chips" style="margin-top:10px;" id="statusChips">
+          <button class="chip active" data-s="all" onclick="setStatus(this,'all')">الكل</button>
+          <button class="chip" data-s="active" onclick="setStatus(this,'active')">نشط</button>
+          <button class="chip" data-s="expired" onclick="setStatus(this,'expired')">منتهي</button>
+          <button class="chip" data-s="debt" onclick="setStatus(this,'debt')">مدين</button>
+        </div>
+        <div id="customerList" style="margin-top:14px;"></div>
+      </div>
+      <button class="fab" onclick="openAddSheet()">+</button>
+    </section>
+
+    <!-- Billing -->
+    <section id="view-billing" class="view">
+      <div class="container">
+        <div class="page-title">الفواتير</div>
+        <div class="page-sub">فواتير الشهر والمبالغ</div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <div class="field" style="flex:1;margin-bottom:0;">
+            <label>الشهر</label>
+            <select id="monthSel" class="input" onchange="loadInvoices()">
+              <option value="1">كانون الثاني</option>
+              <option value="2">شباط</option>
+              <option value="3">آذار</option>
+              <option value="4">نيسان</option>
+              <option value="5">أيار</option>
+              <option value="6">حزيران</option>
+              <option value="7">تموز</option>
+              <option value="8">آب</option>
+              <option value="9">أيلول</option>
+              <option value="10">تشرين الأول</option>
+              <option value="11">تشرين الثاني</option>
+              <option value="12">كانون الأول</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;margin-bottom:0;">
+            <label>السنة</label>
+            <input type="number" id="yearSel" class="input" onchange="loadInvoices()">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <div class="kpi" style="flex:1;padding:10px;"><div class="k-label">المحصل</div><div class="k-value" id="sumCollected" style="font-size:15px;color:var(--active);">—</div></div>
+          <div class="kpi" style="flex:1;padding:10px;"><div class="k-label">المتبقي</div><div class="k-value" id="sumRemaining" style="font-size:15px;color:var(--expired);">—</div></div>
+        </div>
+        <div id="billingList" style="margin-top:14px;"></div>
+      </div>
+    </section>
+    <!-- Debts -->
+    <section id="view-debts" class="view">
+      <div class="container">
+        <div class="page-title">الديون</div>
+        <div class="page-sub">المشتركين عليهم ديون</div>
+        <div id="debtList" style="margin-top:14px;"></div>
+      </div>
+    </section>
+
+    <!-- More -->
+        <section id="view-more" class="view">
+      <div class="container">
+        <div class="page-title">المزيد</div>
+        <div class="page-sub">كل أقسام النظام</div>
+
+        <div class="section-label">الأقسام</div>
+        <div class="menu-list">
+          <a href="#" onclick="goTo('/view/packages');return false;" class="menu-row"><span class="mi">📦</span><div class="menu-text"><div class="menu-title">الباقات</div><div class="menu-sub">باقات الاشتراك وأسعارها</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/expenses');return false;" class="menu-row"><span class="mi">💸</span><div class="menu-text"><div class="menu-title">المصاريف</div><div class="menu-sub">مصاريف الشهر</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/tickets');return false;" class="menu-row"><span class="mi">🎫</span><div class="menu-text"><div class="menu-title">التذاكر</div><div class="menu-sub">طلبات الصيانة</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/reminders');return false;" class="menu-row"><span class="mi">⏰</span><div class="menu-text"><div class="menu-title">التذكيرات</div><div class="menu-sub">ديون ومنتهيون</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/cabinets');return false;" class="menu-row"><span class="mi">📟</span><div class="menu-text"><div class="menu-title">الكابينات (FAT)</div><div class="menu-sub">المنافذ الضوئية ومن يشغلها</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/network');return false;" class="menu-row"><span class="mi">📡</span><div class="menu-text"><div class="menu-title">الشبكة</div><div class="menu-sub">الإشارة والأجهزة والفحص</div></div><span class="menu-arrow">‹</span></a>
+        </div>
+
+        <div class="section-label admin-only">إدارة المدير</div>
+        <div class="menu-list admin-only">
+          <a href="#" onclick="goTo('/view/fatentry');return false;" class="menu-row"><span class="mi">🎯</span><div class="menu-text"><div class="menu-title">إدخال المنافذ</div><div class="menu-sub">تعيين الكابينة والمنفذ لكل مشترك</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/tower');return false;" class="menu-row"><span class="mi">🏗️</span><div class="menu-text"><div class="menu-title">البرج</div><div class="menu-sub">MikroTik / OLT / SNMP</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/generator');return false;" class="menu-row"><span class="mi">🏢</span><div class="menu-text"><div class="menu-title">بيانات الشركة</div><div class="menu-sub">الاسم والهاتف والعنوان</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/team');return false;" class="menu-row"><span class="mi">👥</span><div class="menu-text"><div class="menu-title">الفريق</div><div class="menu-sub">المستخدمين والصلاحيات</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/audit');return false;" class="menu-row"><span class="mi">📜</span><div class="menu-text"><div class="menu-title">سجل التدقيق</div><div class="menu-sub">آخر الإجراءات</div></div><span class="menu-arrow">‹</span></a>
+          <a href="#" onclick="goTo('/view/backup');return false;" class="menu-row"><span class="mi">💾</span><div class="menu-text"><div class="menu-title">النسخ الاحتياطي</div><div class="menu-sub">نسخة من قاعدة البيانات</div></div><span class="menu-arrow">‹</span></a>
+        </div>
+
+        <div class="section-label">النظام</div>
+        <div class="menu-list">
+          <a href="#" onclick="logout();return false;" class="menu-row" style="color:var(--expired);"><span class="mi">⏻</span><div class="menu-text"><div class="menu-title">تسجيل الخروج</div><div class="menu-sub">إنهاء الجلسة</div></div><span class="menu-arrow">‹</span></a>
+        </div>
+        <div style="height:18px;"></div>
+      </div>
+    </section>
+    <!-- Customer detail (sub-view) -->
+    <section id="view-customer" class="view">
+      <div class="container">
+        <div id="mainBox"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+          <button class="btn" onclick="openEditCustSheet()">تعديل البيانات</button>
+          <button class="btn admin-only" style="color:var(--expired);" onclick="deleteCustomer()">حذف المشترك</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick-pay sheet -->
+    <div class="sheet-overlay" id="paySheet" onclick="if(event.target===this)closeSheet('paySheet')">
+      <div class="sheet">
+        <div class="sheet-grab"></div>
+        <button class="sheet-close" onclick="closeSheet('paySheet')">✕</button>
+        <div class="sheet-title">تسديد فاتورة الشهر</div>
+        <div id="payInvoiceBox" style="margin-bottom:12px;"></div>
+        <div class="seg" id="amountSeg">
+          <button data-v="25000" onclick="pickAmount(this,25000)">٢٥٬٠٠٠</button>
+          <button data-v="50000" onclick="pickAmount(this,50000)">٥٠٬٠٠٠</button>
+          <button data-v="75000" onclick="pickAmount(this,75000)">٧٥٬٠٠٠</button>
+          <button data-v="0" onclick="pickAmount(this,0)">الباقي</button>
+        </div>
+        <input type="number" id="payAmount" class="amount-box" value="" placeholder="المبلغ (د.ع)" inputmode="numeric">
+        <div class="field">
+          <label>طريقة الدفع</label>
+          <select id="payMethod" class="input">
+            <option value="نقدي">نقدي</option>
+            <option value="تحويل">تحويل</option>
+            <option value="بطاقة">بطاقة</option>
+            <option value="غير ذلك">غير ذلك</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="payBtn" onclick="submitPay()">تأكيد الدفع</button>
+      </div>
+    </div>
+
+    <!-- Renew sheet -->
+    <div class="sheet-overlay" id="renewSheet" onclick="if(event.target===this)closeSheet('renewSheet')">
+      <div class="sheet">
+        <div class="sheet-grab"></div>
+        <button class="sheet-close" onclick="closeSheet('renewSheet')">✕</button>
+        <div class="sheet-title">تجديد الاشتراك</div>
+        <div class="field"><label>الباقة</label><select id="renewPackage" class="input"></select></div>
+      <div class="field"><label>عدد الأشهر</label><input type="number" id="renewMonths" class="input" value="1" min="1" inputmode="numeric"></div>
+        <button class="btn-primary" id="renewBtn" onclick="submitRenew()">تأكيد التجديد</button>
+      </div>
+    </div>
+    <!-- Bottom nav (instant section switching) -->
+    <nav class="bottom-nav">
+      <a href="#" data-nav="dashboard" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span>الرئيسية</span>
+      </a>
+      <a href="#" data-nav="customers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <span>العملاء</span>
+      </a>
+      <a href="#" data-nav="billing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>الفواتير</span>
+      </a>
+      <a href="#" data-nav="debts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        <span>الديون</span>
+      </a>
+      <a href="#" data-nav="report">📊<span>التقرير</span></a>
+      <a href="#" data-nav="more">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        <span>المزيد</span>
+      </a>
+    </nav>
+
+
+
+
+    <!-- Report (its own section) -->
+    <section id="view-report" class="view">
+      <div class="container">
+        <div class="page-title">التقرير</div>
+        <div class="page-sub">التقرير الشهري والمدفوعات</div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <div class="field" style="flex:1;margin-bottom:0;"><label>الشهر</label>
+            <select id="rMonth" class="input" onchange="loadReport()"><option value="1">كانون الثاني</option><option value="2">شباط</option><option value="3">آذار</option><option value="4">نيسان</option><option value="5">أيار</option><option value="6">حزيران</option><option value="7">تموز</option><option value="8">آب</option><option value="9">أيلول</option><option value="10">تشرين الأول</option><option value="11">تشرين الثاني</option><option value="12">كانون الأول</option></select></div>
+          <div class="field" style="flex:1;margin-bottom:0;"><label>السنة</label>
+            <input type="number" id="rYear" class="input" value="" onchange="loadReport()"></div>
+        </div>
+        <div id="reportBox" style="margin-top:12px;"></div>
+        <div class="section-label">آخر المدفوعات</div>
+        <div id="paymentsBox" style="margin-top:6px;"></div>
+      </div>
+    </section>
+    <!-- Reminders -->
+    <section id="view-reminders" class="view">
+      <div class="container">
+        <div class="page-title">التذكيرات</div>
+        <div class="page-sub">المشتركين عليهم ديون أو منتهيون</div>
+        <div id="remindersBox" style="margin-top:14px;"></div>
+      </div>
+    </section>
+
+    <!-- Expenses -->
+    <section id="view-expenses" class="view">
+      <div class="container">
+        <div class="page-title">المصاريف</div>
+        <div class="page-sub">مصاريف الشهر</div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <div class="field" style="flex:1;margin-bottom:0;"><label>الشهر</label>
+            <select id="exMonth" class="input" onchange="fetchExpenses()"><option value="1">كانون الثاني</option><option value="2">شباط</option><option value="3">آذار</option><option value="4">نيسان</option><option value="5">أيار</option><option value="6">حزيران</option><option value="7">تموز</option><option value="8">آب</option><option value="9">أيلول</option><option value="10">تشرين الأول</option><option value="11">تشرين الثاني</option><option value="12">كانون الأول</option></select></div>
+          <div class="field" style="flex:1;margin-bottom:0;"><label>السنة</label>
+            <input type="number" id="exYear" class="input" onchange="fetchExpenses()"></div>
+        </div>
+        <div class="kpi" style="margin-top:10px;padding:12px;"><div class="k-label">إجمالي المصاريف</div><div class="k-value" id="expTotal" style="color:var(--expired);">—</div></div>
+        <div id="expensesBox" style="margin-top:10px;"></div>
+        <button class="fab" onclick="openExpenseSheet()">+</button>
+      </div>
+    </section>
+
+    <!-- Tickets -->
+    <section id="view-tickets" class="view">
+      <div class="container">
+        <div class="page-title">التذاكر</div>
+        <div class="page-sub">طلبات الصيانة</div>
+        <div id="ticketsBox" style="margin-top:14px;"></div>
+        <button class="fab" onclick="openTicketSheet()">+</button>
+      </div>
+    </section>
+
+    <!-- Packages -->
+    <section id="view-packages" class="view">
+      <div class="container">
+        <div class="page-title">الباقات</div>
+        <div class="page-sub">باقات الاشتراك وأسعارها</div>
+        <div id="packagesBox" style="margin-top:14px;"></div>
+        <button class="fab" onclick="openPackageSheet(null)">+</button>
+      </div>
+    </section>
+
+
+
+    <!-- Cabinets (FAT) -->
+    <section id="view-cabinets" class="view">
+      <div class="container">
+        <div class="page-title">الكابينات (FAT)</div>
+        <div class="page-sub">المنافذ الضوئية ومن يشغلها — أدخل رقم الكابينة وعدد المنافذ</div>
+        <div id="cabinetsBox" style="margin-top:14px;"></div>
+        <button class="fab admin-only" onclick="openCabinetSheet(null)">+</button>
+      </div>
+    </section>
+
+    <!-- Fast FAT/Port entry (admin) -->
+    <section id="view-fatentry" class="view">
+      <div class="container">
+        <div class="page-title">إدخال المنافذ</div>
+        <div class="page-sub">تعيين الكابينة والمنفذ لكل مشترك — تنقل بالأسهم وEnter للحفظ</div>
+        <div class="chips" style="margin-top:10px;" id="feChips">
+          <button class="chip active" data-fef="unassigned" onclick="feFilter(this,'unassigned')">بدون منفذ</button>
+          <button class="chip" data-fef="all" onclick="feFilter(this,'all')">الكل</button>
+        </div>
+        <div id="feProgress" class="card card-pad" style="margin-top:10px;font-size:13px;color:var(--muted);"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn" style="flex:1;" onclick="feAutoFill()">⚡ توزيع تلقائي</button>
+          <button class="btn-primary" style="flex:1;" onclick="feSaveAll()">حفظ الكل</button>
+        </div>
+        <div id="fatEntryBox" style="margin-top:12px;"></div>
+      </div>
+    </section>
+
+
+    <!-- Generator info -->
+    <!-- Generator info -->
+    <section id="view-generator" class="view">
+      <div class="container">
+        <div class="page-title">بيانات الشركة</div>
+        <div class="page-sub">تظهر على الوصول والفواتير</div>
+        <div class="card card-pad" style="margin-top:14px;">
+          <div class="field"><label>اسم المالك / الشركة</label><input type="text" id="genOwner" class="input"></div>
+          <div class="field"><label>رقم الهاتف</label><input type="text" id="genPhone" class="input" dir="ltr"></div>
+          <div class="field"><label>العنوان / المنطقة</label><input type="text" id="genAddress" class="input"></div>
+          <div class="field"><label>ملاحظة أسفل الوصل</label><input type="text" id="genFooter" class="input"></div>
+          <button class="btn-primary" onclick="saveGenerator()">حفظ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Team -->
+    <section id="view-team" class="view">
+      <div class="container">
+        <div class="page-title">الفريق</div>
+        <div class="page-sub">المستخدمين والصلاحيات</div>
+        <div id="teamBox" style="margin-top:14px;"></div>
+        <button class="fab" onclick="openTeamSheet(null)">+</button>
+      </div>
+    </section>
+
+    <!-- Audit -->
+    <section id="view-audit" class="view">
+      <div class="container">
+        <div class="page-title">سجل التدقيق</div>
+        <div class="page-sub">آخر الإجراءات</div>
+        <div id="auditBox" style="margin-top:14px;"></div>
+      </div>
+    </section>
+
+    <!-- Network -->
+    <section id="view-network" class="view">
+      <div class="container">
+        <div class="page-title">الشبكة</div>
+        <div class="page-sub">الإشارة والأجهزة والفحص</div>
+        <div class="chips" style="margin-top:10px;" id="netTabs">
+          <button class="chip active" data-ntab="signal" onclick="showNetworkTab('signal')">الإشارة</button>
+          <button class="chip" data-ntab="links" onclick="showNetworkTab('links')">الأجهزة</button>
+          <button class="chip" data-ntab="ping" onclick="showNetworkTab('ping')">فحص</button>
+        </div>
+        <div id="netSignal">
+          <div id="signalUpdated" style="font-size:11px;color:var(--muted);margin-top:10px;"></div>
+          <div id="signalList" style="margin-top:8px;"></div>
+        </div>
+        <div id="netLinks" class="hidden">
+          <div id="linksList" style="margin-top:10px;"></div>
+          <button class="fab" onclick="openLinkSheet(null)">+</button>
+        </div>
+        <div id="netPing" class="hidden">
+          <div class="field" style="margin-top:12px;"><label>عنوان IP</label>
+            <input type="text" id="pingHost" class="input" dir="ltr" placeholder="8.8.8.8"></div>
+          <button class="btn-primary" onclick="doPing()">فحص الاتصال</button>
+          <div id="pingResult" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tower -->
+    <section id="view-tower" class="view">
+      <div class="container">
+        <div class="page-title">البرج</div>
+        <div class="page-sub">MikroTik / OLT / SNMP</div>
+        <div class="card card-pad" style="margin-top:14px;">
+          <div class="field"><label>عنوان MikroTik</label><input type="text" id="twHost" class="input" dir="ltr"></div>
+          <div class="field"><label>المنفذ</label><input type="number" id="twPort" class="input" value="8728"></div>
+          <div class="field"><label>اسم المستخدم</label><input type="text" id="twUser" class="input" dir="ltr"></div>
+          <div class="field"><label>كلمة المرور</label><input type="password" id="twPass" class="input" dir="ltr"></div>
+          <div class="field"><label>عنوان OLT</label><input type="text" id="twOltIp" class="input" dir="ltr"></div>
+          <div class="field"><label>SNMP Community للـ OLT</label><input type="text" id="twOltCommunity" class="input" dir="ltr"></div>
+          <div class="field"><label>SNMP Community</label><input type="text" id="twCommunity" class="input" dir="ltr" value="public"></div>
+          <div class="field"><label>منفذ SNMP</label><input type="number" id="twSnmpPort" class="input" value="161"></div>
+          <div class="field"><label>OID ONU RX</label><input type="text" id="twOidRx" class="input" dir="ltr"></div>
+          <div class="field"><label>OID ONU TX</label><input type="text" id="twOidTx" class="input" dir="ltr"></div>
+          <div class="field"><label>OID إشارة Ubnt</label><input type="text" id="twOidUbntSignal" class="input" dir="ltr"></div>
+          <div class="field"><label>OID CCQ Ubnt</label><input type="text" id="twOidUbntCcq" class="input" dir="ltr"></div>
+          <div class="field"><label>OID إشارة MikroTik</label><input type="text" id="twOidMikrotik" class="input" dir="ltr"></div>
+          <button class="btn-primary" onclick="saveTower()">حفظ الإعدادات</button>
+          <button class="btn" style="margin-top:10px;" onclick="testTower()">اختبار الاتصال</button>
+          <div id="towerMsg" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Backup -->
+    <section id="view-backup" class="view">
+      <div class="container">
+        <div class="page-title">النسخ الاحتياطي</div>
+        <div class="page-sub">نسخة من قاعدة البيانات</div>
+        <div class="card card-pad" style="margin-top:14px;">
+          <button class="btn-primary" id="backupBtn" onclick="doBackup()">إنشاء نسخة احتياطية</button>
+          <div id="backupBox" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /#appShell -->
+
+  <!-- Add customer sheet -->
+  <div class="sheet-overlay" id="addSheet" onclick="if(event.target===this)closeSheet('addSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('addSheet')">✕</button>
+      <div class="sheet-title">إضافة مشترك جديد</div>
+      <div class="field"><label>الاسم *</label><input type="text" id="cName" class="input" placeholder="اسم المشترك"></div>
+      <div class="field"><label>الهاتف</label><input type="text" id="cPhone" class="input" dir="ltr" placeholder="07xxxxxxxxx"></div>
+      <div class="field"><label>الباقة</label><select id="cPackage" class="input" onchange="fillPriceFromPackage()"></select></div>
+      <div class="field"><label>سعر الباقة (د.ع)</label><input type="number" id="cPrice" class="input" value="25000" inputmode="numeric"></div>
+      <div class="field"><label>مدة الاشتراك (أشهر)</label><input type="number" id="cMonths" class="input" value="1" min="1" inputmode="numeric"></div>
+      <div class="field"><label>دين سابق (د.ع)</label><input type="number" id="cDebt" class="input" value="0" inputmode="numeric"></div>
+      <div class="field"><label>العنوان</label><input type="text" id="cAddress" class="input"></div>
+      <div class="field"><label>المنطقة</label><input type="text" id="cRegion" class="input"></div>
+      <div class="field"><label>ملاحظات</label><input type="text" id="cNotes" class="input"></div>
+      <button class="btn-primary" id="addCustBtn" onclick="addCustomer()">حفظ المشترك</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
 
   <script src="js/app.js"></script>
-  <script>
-    const savedServer = localStorage.getItem('alnathim_server') || 'https://alnathim.onrender.com';
-    document.getElementById('serverBase').value = savedServer;
-    refreshApiBase();
+  <script src="js/spa.js"></script>
 
-    let pollTimer = null;
-    let pollCount = 0;
-    let pendingUser = '';
-    let pendingPass = '';
+  <!-- Expense sheet -->
+  <div class="sheet-overlay" id="expenseSheet" onclick="if(event.target===this)closeSheet('expenseSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('expenseSheet')">✕</button>
+      <div class="sheet-title" id="exTitle">إضافة مصروف</div>
+      <div class="field"><label>التصنيف</label><input type="text" id="exCategory" class="input" placeholder="مثال: كهرباء، وقود، صيانة"></div>
+      <div class="field"><label>المبلغ (د.ع)</label><input type="number" id="exAmount" class="input" inputmode="numeric"></div>
+      <div class="field"><label>التاريخ</label><input type="date" id="exDate" class="input" dir="ltr"></div>
+      <div class="field"><label>الوصف</label><input type="text" id="exDesc" class="input"></div>
+      <div class="field"><label>المستلم</label><input type="text" id="exRecipient" class="input"></div>
+      <button class="btn-primary" onclick="saveExpense()">حفظ</button>
+    </div>
+  </div>
 
-    // ── Session restore — INSTANT (Blood-style) ──
-    // Go straight to the dashboard: pages render cached data immediately and
-    // refresh in the background. If the token is invalid, api() clears it and
-    // bounces back here automatically (no infinite loop).
-    const savedToken = localStorage.getItem('alnathim_token');
-    if (savedToken) {
-      window.location.replace('dashboard.html');
-    }
+  <!-- Ticket sheet -->
+  <div class="sheet-overlay" id="ticketSheet" onclick="if(event.target===this)closeSheet('ticketSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('ticketSheet')">✕</button>
+      <div class="sheet-title">طلب صيانة</div>
+      <div class="field"><label>المشترك</label><select id="tkCustomer" class="input"></select></div>
+      <div class="field"><label>وصف المشكلة</label><textarea id="tkIssue" class="input" rows="3" placeholder="اكتب المشكلة..."></textarea></div>
+      <button class="btn-primary" onclick="addTicket()">إنشاء</button>
+    </div>
+  </div>
 
-    // ── Login ──
-    async function doLogin() {
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
-      const server = document.getElementById('serverBase').value.trim().replace(/\/+$/, '');
-      if (!username || !password) return showError('أدخل اسم المستخدم وكلمة المرور');
-      if (!server) return showError('أدخل عنوان السيرفر');
+  <!-- Package sheet -->
+  <div class="sheet-overlay" id="packageSheet" onclick="if(event.target===this)closeSheet('packageSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('packageSheet')">✕</button>
+      <div class="sheet-title" id="pkgTitle">إضافة باقة</div>
+      <div class="field"><label>الاسم</label><input type="text" id="pkgName" class="input"></div>
+      <div class="field"><label>السعر (د.ع)</label><input type="number" id="pkgPrice" class="input" inputmode="numeric"></div>
+      <div class="field"><label>السرعة</label><input type="text" id="pkgSpeed" class="input" placeholder="مثال: 4M"></div>
+      <button class="btn-primary" onclick="savePackage()">حفظ</button>
+    </div>
+  </div>
 
-      localStorage.setItem('alnathim_server', server);
-      refreshApiBase();
-      const btn = document.getElementById('loginBtn');
-      btn.textContent = '⏳ جاري الدخول...'; btn.disabled = true;
+  <!-- Team sheet -->
+  <div class="sheet-overlay" id="teamSheet" onclick="if(event.target===this)closeSheet('teamSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('teamSheet')">✕</button>
+      <div class="sheet-title" id="teamTitle">إضافة مستخدم</div>
+      <div class="field"><label>الاسم الكامل</label><input type="text" id="tmName" class="input"></div>
+      <div class="field"><label>اسم المستخدم</label><input type="text" id="tmUsername" class="input" dir="ltr"></div>
+      <div class="field"><label>كلمة المرور</label><input type="password" id="tmPassword" class="input" dir="ltr"></div>
+      <div class="field"><label>الهاتف</label><input type="text" id="tmPhone" class="input" dir="ltr"></div>
+      <div class="field"><label>الصلاحية</label>
+        <select id="tmRole" class="input"><option value="agent">وكيل</option><option value="admin">مدير</option></select></div>
+      <button class="btn-primary" onclick="saveTeam()">إضافة</button>
+    </div>
+  </div>
 
-      try {
-        const r = await fetchWithRetry(API_BASE + '/auth/login', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({username, password})
-        }, 3, 2500);
-        const d = await r.json().catch(() => null);
-        btn.textContent = 'دخول'; btn.disabled = false;
-        handleLoginResult(d, username, password);
-      } catch (e) {
-        btn.textContent = 'دخول'; btn.disabled = false;
-        showError('تعذر الاتصال بالسيرفر — تأكد من الإنترنت ثم أعد المحاولة');
-      }
-    }
+  <!-- Network link sheet -->
+  <div class="sheet-overlay" id="linkSheet" onclick="if(event.target===this)closeSheet('linkSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('linkSheet')">✕</button>
+      <div class="sheet-title" id="lkTitle">إضافة جهاز</div>
+      <div class="field"><label>الاسم</label><input type="text" id="lkName" class="input"></div>
+      <div class="field"><label>IP</label><input type="text" id="lkIp" class="input" dir="ltr"></div>
+      <div class="field"><label>النوع</label>
+        <select id="lkType" class="input"><option>MikroTik</option><option>Ubnt</option><option>Mimosa</option></select></div>
+      <div class="field"><label>الموقع</label><input type="text" id="lkLocation" class="input"></div>
+      <div class="field"><label>ملاحظات</label><input type="text" id="lkNotes" class="input"></div>
+      <div class="field"><label>اسم المستخدم</label><input type="text" id="lkUser" class="input" dir="ltr"></div>
+      <div class="field"><label>كلمة المرور</label><input type="password" id="lkPass" class="input" dir="ltr"></div>
+      <div class="field"><label>Community</label><input type="text" id="lkCommunity" class="input" dir="ltr" value="public"></div>
+      <button class="btn-primary" onclick="saveLink()">حفظ</button>
+    </div>
+  </div>
 
-    function handleLoginResult(d, username, password) {
-      if (d && d.ok && d.data && d.data.token) {
-        localStorage.setItem('alnathim_token', d.data.token);
-        localStorage.setItem('alnathim_user', JSON.stringify(d.data.user || {}));
-        window.location.replace('dashboard.html');
-        return;
-      }
-      const code = d && d.error && d.error.code;
-      const msg = (d && d.error && d.error.message_ar) || 'فشل الدخول';
-      if (code === 'pending') {
-        // EXE-style: wait for admin approval, auto-login when approved
-        document.getElementById('loginHint').style.display = 'block';
-        pendingUser = username; pendingPass = password;
-        showWaiting('بانتظار موافقة المدير — سيتم الدخول تلقائياً فور الموافقة');
-        startPolling();
-      } else {
-        showError(msg);
-      }
-    }
 
-    // ── Waiting + polling (same as the EXE launcher) ──
-    function showWaiting(msg) {
-      document.getElementById('loginCard').classList.add('hidden');
-      document.getElementById('restoreBox').classList.add('hidden');
-      document.getElementById('waitingCard').classList.remove('hidden');
-      document.getElementById('waitingMsg').innerHTML = msg.replace(/\n/g, '<br>');
-    }
-    function cancelWaiting() {
-      stopPolling();
-      document.getElementById('waitingCard').classList.add('hidden');
-      document.getElementById('loginCard').classList.remove('hidden');
-    }
-    function startPolling() {
-      stopPolling();
-      pollCount = 0;
-      pollTimer = setInterval(pollStatus, 10000);
-    }
-    function stopPolling() {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    }
-    async function pollStatus() {
-      pollCount++;
-      try {
-        const r = await fetchWithRetry(API_BASE + '/auth/check-status', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({username: pendingUser, password: pendingPass})
-        }, 2, 2500);
-        const d = await r.json().catch(() => null);
-        const state = d && d.data && d.data.state;
-        if (state === 'approved') {
-          stopPolling();
-          localStorage.setItem('alnathim_token', d.data.token);
-          localStorage.setItem('alnathim_user', JSON.stringify(d.data.user || {}));
-          document.getElementById('waitingMsg').textContent = '✅ تمت الموافقة — جاري الدخول';
-          setTimeout(() => window.location.replace('dashboard.html'), 600);
-        } else if (state === 'pending') {
-          document.getElementById('waitingMsg').textContent =
-            'بانتظار موافقة المدير — سيتم الدخول تلقائياً (' + Math.round(pollCount * 10) + ' ثانية)';
-        } else if (state === 'suspended' || state === 'expired' || state === 'invalid') {
-          stopPolling();
-          cancelWaiting();
-          showError((d.data && d.data.error) || 'تعذر الدخول');
-        } else if (state === 'busy') {
-          document.getElementById('waitingMsg').textContent = 'طلبات كثيرة — إعادة المحاولة تلقائياً...';
-        }
-      } catch (e) {
-        document.getElementById('waitingMsg').textContent = 'تعذر الاتصال بالخادم — جارٍ إعادة المحاولة...';
-      }
-    }
+  <!-- Cabinet (FAT) sheet -->
+  <div class="sheet-overlay" id="cabinetSheet" onclick="if(event.target===this)closeSheet('cabinetSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('cabinetSheet')">✕</button>
+      <div class="sheet-title" id="cabTitle">إضافة كابينة</div>
+      <div class="field"><label>رقم الكابينة (FAT) *</label><input type="text" id="cabNumber" class="input" placeholder="مثال: FAT-12"></div>
+      <div class="field"><label>عدد المنافذ</label><input type="number" id="cabPorts" class="input" value="16" min="1" max="64" inputmode="numeric"></div>
+      <div class="field"><label>الموقع / المنطقة</label><input type="text" id="cabLocation" class="input"></div>
+      <div class="field"><label>ملاحظات</label><input type="text" id="cabNotes" class="input"></div>
+      <button class="btn-primary" onclick="saveCabinet()">حفظ</button>
+    </div>
+  </div>
 
-    // ── Register (mirrors the EXE register card) ──
-    async function doRegister() {
-      const full_name = document.getElementById('rName').value.trim();
-      const username = document.getElementById('rUsername').value.trim();
-      const password = document.getElementById('rPassword').value;
-      const phone = document.getElementById('rPhone').value.trim();
-      const invite_code = document.getElementById('rInvite').value.trim();
-      if (!full_name || !username || !password) { showToast('جميع الحقول المطلوبة فارغة', 'error'); return; }
-      if (password.length < 6) { showToast('كلمة المرور يجب أن تكون ٦ أحرف على الأقل', 'error'); return; }
-      const btn = document.getElementById('regBtn');
-      btn.textContent = '⏳ جاري إنشاء الحساب...'; btn.disabled = true;
-      const d = await api('/auth/register', {full_name, username, password, phone, invite_code});
-      btn.textContent = 'إنشاء الحساب'; btn.disabled = false;
-      if (d.ok && d.data) {
-        closeSheet('regSheet');
-        if (d.data.auto_approved) {
-          showToast('✅ تم تفعيل الحساب — سجل دخولك الآن');
-          document.getElementById('username').value = username;
-          document.getElementById('password').focus();
-        } else {
-          // EXE-style: wait for admin approval and auto-login
-          document.getElementById('username').value = username;
-          document.getElementById('password').value = password;
-          pendingUser = username; pendingPass = password;
-          showWaiting('تم إرسال طلبك — بانتظار موافقة المدير\nسيتم الدخول تلقائياً فور الموافقة');
-          startPolling();
-        }
-      } else {
-        showToast((d.error && d.error.message_ar) || 'فشل إنشاء الحساب', 'error');
-      }
-    }
+  <!-- Edit customer sheet -->
+  <div class="sheet-overlay" id="editCustSheet" onclick="if(event.target===this)closeSheet('editCustSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('editCustSheet')">✕</button>
+      <div class="sheet-title">تعديل المشترك</div>
+      <div class="field"><label>الاسم *</label><input type="text" id="ecName" class="input"></div>
+      <div class="field"><label>الهاتف</label><input type="text" id="ecPhone" class="input" dir="ltr"></div>
+      <div class="field"><label>الباقة</label><select id="ecPkg" class="input"></select></div>
+      <div class="field"><label>سعر الباقة (د.ع)</label><input type="number" id="ecPrice" class="input" inputmode="numeric"></div>
+      <div class="field"><label>اسم المستخدم</label><input type="text" id="ecUsername" class="input" dir="ltr"></div>
+      <div class="field"><label>كلمة المرور</label><input type="password" id="ecPassword" class="input" dir="ltr"></div>
+      <div class="field"><label>IP</label><input type="text" id="ecIp" class="input" dir="ltr"></div>
+      <div class="field"><label>نوع الجهاز</label><input type="text" id="ecDevice" class="input" placeholder="مثال: كيبل ضوئي / راوتر"></div>
+      <div class="field"><label>العنوان</label><input type="text" id="ecAddress" class="input"></div>
+      <div class="field"><label>المنطقة</label><input type="text" id="ecRegion" class="input"></div>
+      <div class="field"><label>ملاحظات</label><input type="text" id="ecNotes" class="input"></div>
+      <div class="field"><label>الكابينة (FAT)</label><select id="ecFat" class="input"><option value="">بدون كابينة</option></select></div>
+      <div class="field"><label>رقم المنفذ</label><input type="number" id="ecPort" class="input" min="1" max="64" inputmode="numeric" placeholder="1 - 16"></div>
 
-    function showError(msg) {
-      const box = document.getElementById('errorBox');
-      box.textContent = msg;
-      box.style.display = 'block';
-      setTimeout(() => { box.style.display = 'none'; }, 6000);
-    }
-  </script>
+      <button class="btn-primary" onclick="saveCustEdit()">حفظ التعديلات</button>
+    </div>
+  </div>
+
+  <!-- Edit payment sheet -->
+  <div class="sheet-overlay" id="payEditSheet" onclick="if(event.target===this)closeSheet('payEditSheet')">
+    <div class="sheet">
+      <div class="sheet-grab"></div>
+      <button class="sheet-close" onclick="closeSheet('payEditSheet')">✕</button>
+      <div class="sheet-title">تعديل دفعة</div>
+      <div class="field"><label>المبلغ (د.ع)</label><input type="number" id="peAmount" class="input" inputmode="numeric"></div>
+      <div class="field"><label>التاريخ</label><input type="date" id="peDate" class="input" dir="ltr"></div>
+      <div class="field"><label>طريقة الدفع</label>
+        <select id="peMethod" class="input"><option>نقدي</option><option>تحويل</option><option>بطاقة</option><option>غير ذلك</option></select></div>
+      <div class="field"><label>ملاحظات</label><input type="text" id="peNotes" class="input"></div>
+      <button class="btn-primary" onclick="savePayment()">حفظ التعديل</button>
+    </div>
+  </div>
+
 </body>
 </html>

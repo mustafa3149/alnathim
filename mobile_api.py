@@ -180,7 +180,11 @@ def mobile_login_required(fn):
         if user is None:
             return _err("unauthorized", "جلسة غير صالحة — سجل الدخول مرة أخرى", 401)
         g.mobile_user = user
-        return fn(*args, **kwargs)
+        db.set_current_owner(user["id"], user["role"])
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            db.set_current_owner(None)
     return wrapper
 
 
@@ -194,7 +198,11 @@ def mobile_admin_required(fn):
         if user["role"] != "admin":
             return _err("forbidden", "هذه العملية تتطلب صلاحيات المدير", 403)
         g.mobile_user = user
-        return fn(*args, **kwargs)
+        db.set_current_owner(user["id"], user["role"])
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            db.set_current_owner(None)
     return wrapper
 
 
@@ -237,6 +245,11 @@ def _customer_payload(c):
         "previous_debt": c["previous_debt"] or 0,
         "notes": c["notes"] or "",
         "created_at": c["created_at"],
+        "fat_id": c["fat_id"],
+        "port_number": c["port_number"],
+        "cabinet_number": c["cabinet_number"] or "",
+        "cabinet_location": c["cabinet_location"] or "",
+        "cabinet_ports": c["cabinet_ports"] or 0,
     }
 
 
@@ -266,7 +279,7 @@ def _invoice_payload(inv):
 
 
 def _payment_payload(p):
-    """Serialize a payment row."""
+    """Serialize a payment row (includes the collector for accountability)."""
     return {
         "id": p["id"],
         "invoice_id": p["invoice_id"],
@@ -275,7 +288,42 @@ def _payment_payload(p):
         "payment_date": p["payment_date"],
         "payment_method": p["payment_method"] or "",
         "notes": p["notes"] or "",
+        "collected_by": p["collected_by"],
+        "collected_by_name": p["collected_by_name"] or "",
     }
+
+
+def _port_values(data):
+    """Extract (fat_id, port_number) from request data as ints/None."""
+    try:
+        fat_id = int(data.get("fat_id")) if data.get("fat_id") is not None else None
+    except (ValueError, TypeError):
+        fat_id = None
+    try:
+        port = int(data.get("port_number")) if data.get("port_number") is not None else None
+    except (ValueError, TypeError):
+        port = None
+    return fat_id, port
+
+
+def _port_validation_error(data, exclude_customer_id=None):
+    """Validate a FAT/port assignment from request data.
+
+    Returns an Arabic error message string, or None when valid (or when no
+    assignment was sent). Prevents 'port 20 on a 16-port splitter'.
+    """
+    fat_id = data.get("fat_id")
+    port = data.get("port_number")
+    if fat_id is None and port is None:
+        return None
+    if fat_id is None or port is None:
+        return "يجب تحديد الكابينة والمنفذ معاً"
+    try:
+        fat_id = int(fat_id)
+    except (ValueError, TypeError):
+        return "رقم الكابينة غير صالح"
+    ok, err = db.validate_port(fat_id, port, exclude_customer_id=exclude_customer_id)
+    return None if ok else err
 
 
 # ── AUTH ─────────────────────────────────────────────────────
@@ -650,6 +698,11 @@ def mobile_customer_create():
     if db.get_customer_by_name(name):
         return _err("duplicate", "يوجد مشترك بنفس الاسم", 400)
 
+    port_err = _port_validation_error(data)
+    if port_err:
+        return _err("invalid_port", port_err, 400)
+    fat_id, port_number = _port_values(data)
+
     int_price = _to_int(data.get("package_price"))
     months = max(1, _to_int(data.get("duration_months"), 1) or 1)
     previous_debt = max(0, _to_int(data.get("previous_debt")))
@@ -677,6 +730,8 @@ def mobile_customer_create():
             status="active",
             previous_debt=previous_debt,
             notes=str(data.get("notes", "")).strip(),
+            fat_id=fat_id,
+            port_number=port_number,
         )
     except Exception as e:
         log.error("Mobile customer add failed: %s", e)
@@ -705,13 +760,18 @@ def mobile_customer_create():
 
 
 @mobile_bp.route("/customers/<int:customer_id>", methods=["PUT"])
-@mobile_login_required
+@mobile_admin_required
 def mobile_customer_update(customer_id):
-    """PUT /customers/{id} — edit a customer (mirrors /api/customers/edit)."""
+    """PUT /customers/{id} — edit a customer (admin only)."""
     data = request.get_json() or {}
     customer = db.get_customer(customer_id)
     if not customer:
         return _err("not_found", "المشترك غير موجود", 404)
+
+    port_err = _port_validation_error(data, exclude_customer_id=customer_id)
+    if port_err:
+        return _err("invalid_port", port_err, 400)
+    fat_id, port_number = _port_values(data)
 
     int_price = _to_int(data.get("package_price"))
     package_id = _resolve_package_id(str(data.get("package_name", "")).strip())
@@ -731,6 +791,8 @@ def mobile_customer_update(customer_id):
         device_type=str(data.get("device_type", "")).strip(),
         package_id=package_id,
         status=customer["subscription_status"],
+        fat_id=fat_id,
+        port_number=port_number,
     )
     # Keep legacy package fields on the customer's invoices consistent.
     db.update_customer_legacy_fields(
@@ -744,9 +806,9 @@ def mobile_customer_update(customer_id):
 
 
 @mobile_bp.route("/customers/<int:customer_id>/toggle", methods=["POST"])
-@mobile_login_required
+@mobile_admin_required
 def mobile_customer_toggle(customer_id):
-    """POST /customers/{id}/toggle — flip is_active (mirrors web toggle)."""
+    """POST /customers/{id}/toggle — flip is_active (admin only)."""
     customer = db.get_customer(customer_id)
     if not customer:
         return _err("not_found", "المشترك غير موجود", 404)
@@ -998,6 +1060,8 @@ def mobile_payment_create():
         amount=amount, payment_date=pay_date,
         payment_method=data.get("payment_method", "نقدي"),
         notes=str(data.get("notes", "")).strip(),
+        collected_by=g.mobile_user["id"],
+        collected_by_name=g.mobile_user["full_name"] or g.mobile_user["username"],
     )
     _audit("تسديد فاتورة", "payment", invoice_id,
            f"تم تسديد {amount} د.ع على فاتورة رقم {invoice_id}")
@@ -1150,6 +1214,8 @@ def mobile_quick_pay(customer_id):
         amount=pay_amount, payment_date=pay_date,
         payment_method=data.get("payment_method", "نقدي"),
         notes=str(data.get("notes", "")).strip(),
+        collected_by=g.mobile_user["id"],
+        collected_by_name=g.mobile_user["full_name"] or g.mobile_user["username"],
     )
     _audit("دفع", "payment", invoice["id"],
            f"تم استلام {pay_amount} د.ع من {customer['name']}")
@@ -1280,9 +1346,9 @@ def mobile_expense_create():
 
 
 @mobile_bp.route("/expenses/<int:expense_id>", methods=["PUT"])
-@mobile_login_required
+@mobile_admin_required
 def mobile_expense_edit(expense_id):
-    """PUT /expenses/{id} — edit an expense."""
+    """PUT /expenses/{id} — edit an expense (admin only)."""
     expense = db.get_expense(expense_id)
     if not expense:
         return _err("not_found", "المصروف غير موجود", 404)
@@ -1367,7 +1433,7 @@ def mobile_ticket_create():
 
 
 @mobile_bp.route("/tickets/<int:ticket_id>/status", methods=["PUT"])
-@mobile_login_required
+@mobile_admin_required
 def mobile_ticket_status(ticket_id):
     """PUT /tickets/{id}/status — toggle pending/resolved (mirrors web toggle)."""
     if not db.get_ticket(ticket_id):
@@ -1435,6 +1501,110 @@ def mobile_package_delete(package_id):
     db.delete_package(package_id)
     _audit("حذف باقة", "package", package_id, "تم حذف باقة")
     return _ok({"deleted": True})
+
+
+# ── FTTH CABINETS (FAT & Port mapping) ───────────────────────
+
+@mobile_bp.route("/cabinets")
+@mobile_login_required
+def mobile_cabinets_list():
+    """GET /cabinets — all FAT cabinets with live occupancy."""
+    items = []
+    for c in db.list_cabinets():
+        items.append({
+            "id": c["id"],
+            "fat_number": c["fat_number"],
+            "port_count": c["port_count"],
+            "location": c["location"] or "",
+            "region": c["region"] or "",
+            "notes": c["notes"] or "",
+            "used_ports": c["used_ports"] or 0,
+            "free_ports": max(0, c["port_count"] - (c["used_ports"] or 0)),
+        })
+    return _ok({"items": items})
+
+
+@mobile_bp.route("/cabinets", methods=["POST"])
+@mobile_admin_required
+def mobile_cabinet_create():
+    """POST /cabinets — add a cabinet (admin only)."""
+    data = request.get_json() or {}
+    fat_number = str(data.get("fat_number", "")).strip()
+    if not fat_number:
+        return _err("invalid_input", "رقم الكابينة مطلوب", 400)
+    if db.get_cabinet_by_number(fat_number):
+        return _err("duplicate", f"كابينة {fat_number} موجودة مسبقاً", 400)
+    try:
+        port_count = int(float(data.get("port_count", 16)))
+    except (ValueError, TypeError):
+        port_count = 16
+    if port_count < 1 or port_count > 64:
+        return _err("invalid_input", "عدد المنافذ يجب أن يكون بين 1 و 64", 400)
+    cabinet_id = db.add_cabinet(
+        fat_number, port_count,
+        location=str(data.get("location", "")).strip(),
+        region=str(data.get("region", "")).strip(),
+        notes=str(data.get("notes", "")).strip(),
+    )
+    _audit("اضافة كابينة", "cabinet", cabinet_id, f"تم اضافة كابينة {fat_number}")
+    return _ok({"cabinet_id": cabinet_id})
+
+
+@mobile_bp.route("/cabinets/<int:cabinet_id>", methods=["PUT"])
+@mobile_admin_required
+def mobile_cabinet_update(cabinet_id):
+    """PUT /cabinets/{id} — edit a cabinet (admin only)."""
+    data = request.get_json() or {}
+    cabinet = db.get_cabinet(cabinet_id)
+    if not cabinet:
+        return _err("not_found", "الكابينة غير موجودة", 404)
+    fat_number = str(data.get("fat_number", cabinet["fat_number"])).strip()
+    dup = db.get_cabinet_by_number(fat_number)
+    if dup and dup["id"] != cabinet_id:
+        return _err("duplicate", f"كابينة {fat_number} موجودة مسبقاً", 400)
+    db.update_cabinet(
+        cabinet_id,
+        fat_number=fat_number,
+        port_count=data.get("port_count", cabinet["port_count"]),
+        location=data.get("location", cabinet["location"]),
+        region=data.get("region", cabinet["region"]),
+        notes=data.get("notes", cabinet["notes"]),
+    )
+    _audit("تعديل كابينة", "cabinet", cabinet_id, f"تم تعديل كابينة {fat_number}")
+    return _ok({"cabinet_id": cabinet_id})
+
+
+@mobile_bp.route("/cabinets/<int:cabinet_id>", methods=["DELETE"])
+@mobile_admin_required
+def mobile_cabinet_delete(cabinet_id):
+    """DELETE /cabinets/{id} — delete a cabinet (admin only)."""
+    if not db.get_cabinet(cabinet_id):
+        return _err("not_found", "الكابينة غير موجودة", 404)
+    db.delete_cabinet(cabinet_id)
+    _audit("حذف كابينة", "cabinet", cabinet_id, "تم حذف كابينة")
+    return _ok({"deleted": True})
+
+
+# ── IMPORT (legacy data extraction → fast port assignment) ───
+
+@mobile_bp.route("/import/customers", methods=["POST"])
+@mobile_admin_required
+def mobile_import_customers():
+    """POST /import/customers — bulk import subscribers (admin only).
+
+    Body: {"rows": [{"full_name", "phone", "mikrotik_username",
+                     "mikrotik_password", "fat_number", "port_number"}, ...]}
+    Returns {added, updated, errors} so the operator can review conflicts.
+    """
+    data = request.get_json() or {}
+    rows = data.get("rows") or []
+    if not isinstance(rows, list) or not rows:
+        return _err("invalid_input", "لا توجد بيانات للاستيراد", 400)
+    result = db.bulk_import_customers(rows)
+    _audit("استيراد مشتركين", "customer", None,
+           f"استيراد: {result['added']} جديد، {result['updated']} محدّث، "
+           f"{len(result['errors'])} خطأ")
+    return _ok(result)
 
 
 # ── SETTINGS (admin) ─────────────────────────────────────────
@@ -1544,6 +1714,43 @@ def mobile_team_status(user_id):
     db.set_user_status(user_id, status)
     _audit("تغيير حالة مستخدم", "user", user_id, f"تم تغيير حالة المستخدم إلى {status}")
     return _ok({"user_id": user_id, "status": status})
+
+@mobile_bp.route("/team/<int:user_id>", methods=["PUT"])
+@mobile_admin_required
+def mobile_team_update(user_id):
+    """PUT /team/{id} — edit a team member (admin only)."""
+    data = request.get_json() or {}
+    user = db.get_user_by_id(user_id)
+    if not user:
+        return _err("not_found", "المستخدم غير موجود", 404)
+    fields = {}
+    if data.get("full_name") is not None:
+        fields["full_name"] = str(data["full_name"]).strip()
+    if data.get("phone") is not None:
+        fields["phone"] = str(data["phone"]).strip()
+    if data.get("role") in ("admin", "agent"):
+        fields["role"] = data["role"]
+    if data.get("password"):
+        if len(str(data["password"])) < 6:
+            return _err("invalid_input", "كلمة المرور يجب أن تكون ٦ أحرف على الأقل", 400)
+        fields["password"] = data["password"]
+    db.update_user(user_id, **fields)
+    _audit("تعديل مستخدم", "user", user_id, "تم تعديل بيانات المستخدم " + str(user["username"]))
+    return _ok({"user_id": user_id})
+
+
+@mobile_bp.route("/team/<int:user_id>", methods=["DELETE"])
+@mobile_admin_required
+def mobile_team_delete(user_id):
+    """DELETE /team/{id} — delete a team member (admin only)."""
+    user = db.get_user_by_id(user_id)
+    if not user:
+        return _err("not_found", "المستخدم غير موجود", 404)
+    if user_id == g.mobile_user["id"]:
+        return _err("invalid_input", "لا يمكنك حذف حسابك الحالي", 400)
+    db.delete_user(user_id)
+    _audit("حذف مستخدم", "user", user_id, "تم حذف المستخدم " + str(user["username"]))
+    return _ok({"deleted": True})
 
 
 @mobile_bp.route("/audit")
@@ -1904,9 +2111,9 @@ def mobile_network_links_add():
 
 
 @mobile_bp.route("/network/links/<int:link_id>", methods=["PUT"])
-@mobile_login_required
+@mobile_admin_required
 def mobile_network_links_edit(link_id):
-    """PUT /network/links/{id} — edit a network link (mirrors web edit)."""
+    """PUT /network/links/{id} — edit a network link (admin only)."""
     from network_tools.ping import validate_host
 
     link = db.get_network_link(link_id)
@@ -2041,6 +2248,7 @@ def mobile_report():
     expenses_total = db.total_expenses(month, year)
     remaining = expected - collected
     net_profit = collected - expenses_total
+    collectors = db.report_by_collector(month, year)
     return _ok({
         "month": month,
         "year": year,
@@ -2055,6 +2263,15 @@ def mobile_report():
         "expense_categories": db.expense_categories(month, year),
         "paid_count": db.count_paid_invoices(month, year),
         "total_invoices": db.count_invoices(month, year),
+        "collectors": [
+            {
+                "collected_by": c["collected_by"],
+                "name": c["collected_by_name"] or "—",
+                "payment_count": c["payment_count"] or 0,
+                "total": c["total"] or 0,
+            }
+            for c in collectors
+        ],
     })
 
 

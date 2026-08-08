@@ -66,3 +66,75 @@ private val APP_URL = "https://your-app.onrender.com"   // ← your real URL
 - Set a **health check** path (e.g. `/login`)
 - Set **HTTP Strict Transport Security** once live (Render handles TLS termination)
 - Keep `--workers 1` at all times (SQLite). Only a future Postgres migration would allow 2+ workers.
+## 5. Per-account data isolation (⚠️ REQUIRES REDEPLOY)
+
+The backend now supports **total per-account isolation**: every account
+(admin or agent) sees **only its own data**. This was implemented in
+`database.py` + `mobile_api.py`.
+
+### What changed
+- `database.py` has a per-request owner context (`set_current_owner()` /
+  `current_owner()` / `_owner_filter()`).
+- On startup, `init_db()` runs a migration: adds `owner_id` to
+  `customers`, `invoices`, `payments`, `expenses`, `maintenance_tickets`,
+  `packages`, `network_links`, `signal_cache` (idempotent, guarded).
+- All existing rows are assigned to the **superadmin** account, so the
+  superadmin keeps all current data.
+- The mobile API auth decorators (`mobile_login_required` /
+  `mobile_admin_required`) scope every request to the logged-in user and
+  clear the scope afterwards.
+- `generator_info` stays **shared** (single row, `CHECK(id = 1)`) — it is
+  the company profile, not per-account data.
+
+### ⚠️ Deploy steps (REQUIRED for isolation to work)
+1. Push `database.py` + `mobile_api.py` to the Render repo.
+2. Render will rebuild and restart; `init_db()` runs the migration once.
+3. After deploy, **re-test**: login as a non-superadmin account and verify
+   the list is empty; login as superadmin and verify all old data is still
+   there.
+
+### Behavioural note (updated after the FAT/payment module)
+- **Read visibility is now SHARED** across the company (customers, packages,
+  cabinets, invoices, expenses, tickets, network). Every account sees the
+  same subscriber data.
+- **Payment attribution**: agents see only their own collections; the admin
+  (master) sees all payments with the collector name.
+- **Editing/deleting is admin-only** (agents get 403 on PUT/DELETE).
+- The web UI (`app.py`) does not set an owner yet, so it keeps showing all
+  data (backward compatible).
+
+## 6. FTTH FAT/Port + Payment Attribution module (new)
+
+### What was added
+- **Cabinets (FAT)**: new `cabinets` table + `fat_id`/`port_number` on
+  `customers`. Ports are strictly validated (1..port_count, no duplicates
+  per cabinet) — this kills the "Port 20 on a 16-port splitter" bug.
+- **Payment attribution**: `payments` now carries `collected_by` +
+  `collected_by_name`. Every mobile payment/quick-pay is stamped with the
+  logged-in staff member automatically. Reports show a per-collector
+  breakdown (`/report` → `collectors`).
+- **Roles**: admin (master) sees everything and edits/deletes everything;
+  agents (staff) see all shared customer/cabinet data, see **only their own
+  payments**, and cannot edit or delete anything (403).
+- **Import**: `POST /api/mobile/v1/import/customers` (admin) bulk-imports
+  subscribers. Local helper: `tools/fat_import.py` converts legacy exports
+  (CSV/TSV/TXT) into an `import_bundle.json`.
+
+### API endpoints (mobile)
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| GET | /cabinets | all | list cabinets + occupancy |
+| POST | /cabinets | admin | add cabinet |
+| PUT/DELETE | /cabinets/{id} | admin | edit/delete cabinet |
+| POST | /import/customers | admin | bulk import |
+
+### ⚠️ Deploy steps
+1. Push `database.py`, `mobile_api.py`, `app.py` to Render.
+2. On restart, `init_db()` runs `_ensure_fat_columns()` automatically
+   (adds columns; creates `cabinets`; no data loss).
+3. `tools/fat_import.py` runs on the operator PC — NOT on Render.
+
+### Notes
+- `generator_info` remains shared (single row).
+- The web UI (app.py) still works as before (no session owner → sees all;
+  web payments have empty collector until web parity is wired).

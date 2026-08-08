@@ -299,3 +299,5 @@ table tr:last-child td { border-bottom:none; }
 @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
 @keyframes slideUp { from { transform:translateY(24px); opacity:0; } to { transform:translateY(0); opacity:1; } }
 .page-enter { animation:slideUp .2s ease; }
+
+.meter{height:6px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;max-width:220px;} .meter>div{height:100%;background:var(--active);border-radius:4px;} .fe-active{background:rgba(99,102,241,.10);} .fe-row .fe-fat:focus,.fe-row .fe-port:focus{outline:2px solid var(--accent, #6366f1);}
